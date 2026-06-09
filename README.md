@@ -1,6 +1,6 @@
 # Voxel Brownstone — Brooklyn Block
 
-An interactive voxel-art scene built with three.js, contained in a single HTML file:
+An interactive multiplayer voxel-art scene built with three.js, contained in a single HTML file:
 
 - A detailed Brooklyn brownstone with furnished interiors on every floor
 - A corner deli building with a striped awning, apartments, roof terrace, and water tower
@@ -9,14 +9,30 @@ An interactive voxel-art scene built with three.js, contained in a single HTML f
 - **Click any voxel to explode it** — debris cubes tumble with real collision against
   the voxel grid and settle back into the world as permanent rubble
 
+## Multiplayer — humans vs the corpo
+
+Served through `server.mjs` (which doubles as a zero-dependency WebSocket game
+server), the scene becomes a game. Join from the panel in the top right:
+
+- **Corpo** (1 seat): keeps the orbit/zoom camera, and is the only role with
+  the explosion ability. Clicking a human figure **lays them off** — the figure
+  goes up in flame and disappears. +50 points per layoff.
+- **Humans** (up to 4 seats): each possesses an FPV figure and earns
+  **1 point per second alive**. Laid-off humans can respawn after 10 s.
+
+The roster, roles, and live scores are shown in the top-right panel. World
+destruction is synchronized — explosions are broadcast and replayed to anyone
+who joins late. Opening `brownstone.html` directly (no server) gives the
+offline sandbox where all abilities are available.
+
 ## Run locally
 
-Open `brownstone.html` directly in a browser, or serve it:
-
 ```sh
-npm start            # serves on http://127.0.0.1:3101
+npm start            # serves on http://127.0.0.1:3101 (HTTP + WebSocket)
 PORT=8080 npm start  # custom port
 ```
+
+Or open `brownstone.html` directly in a browser for the offline sandbox.
 
 ## Controls
 

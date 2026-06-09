@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -9,7 +10,7 @@ const PORT = +(process.env.PORT || 3101);
 
 // Single-page app: every GET serves the scene, so it works mounted at any
 // base path (e.g. behind `tailscale serve` at /brownstone).
-createServer((req, res) => {
+const server = createServer((req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { allow: 'GET, HEAD' }).end();
     return;
@@ -20,6 +21,185 @@ createServer((req, res) => {
     'cache-control': 'no-cache',
   });
   res.end(req.method === 'HEAD' ? undefined : page);
-}).listen(PORT, HOST, () => {
-  console.log(`voxel-brownstone listening on http://${HOST}:${PORT}`);
+});
+
+/* ============================================================
+   Minimal WebSocket server (RFC 6455), zero dependencies.
+   Small JSON text frames only — ample for a 5-player game.
+   ============================================================ */
+const MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+function frame(data, op = 1) {
+  const payload = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const len = payload.length;
+  let head;
+  if (len < 126) head = Buffer.from([0x80 | op, len]);
+  else if (len < 65536) { head = Buffer.alloc(4); head[0] = 0x80 | op; head[1] = 126; head.writeUInt16BE(len, 2); }
+  else { head = Buffer.alloc(10); head[0] = 0x80 | op; head[1] = 127; head.writeBigUInt64BE(BigInt(len), 2); }
+  return Buffer.concat([head, payload]);
+}
+
+const sockets = new Set(); // all live conns (players + spectators)
+
+server.on('upgrade', (req, socket) => {
+  const key = req.headers['sec-websocket-key'];
+  if (!key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
+  const accept = createHash('sha1').update(key + MAGIC).digest('base64');
+  socket.write(
+    'HTTP/1.1 101 Switching Protocols\r\n' +
+    'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+    `Sec-WebSocket-Accept: ${accept}\r\n\r\n`);
+  socket.setNoDelay(true);
+
+  const conn = {
+    socket,
+    player: null,
+    closed: false,
+    send(obj) { if (!socket.destroyed) socket.write(frame(JSON.stringify(obj))); },
+  };
+  sockets.add(conn);
+
+  let buf = Buffer.alloc(0);
+  socket.on('data', d => {
+    buf = Buffer.concat([buf, d]);
+    while (true) {
+      if (buf.length < 2) break;
+      const op = buf[0] & 0x0f, masked = buf[1] & 0x80;
+      let len = buf[1] & 0x7f, off = 2;
+      if (len === 126) { if (buf.length < 4) break; len = buf.readUInt16BE(2); off = 4; }
+      else if (len === 127) { if (buf.length < 10) break; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+      const maskStart = off;
+      if (masked) off += 4;
+      if (buf.length < off + len) break;
+      let payload = Buffer.from(buf.subarray(off, off + len));
+      if (masked) { const m = buf.subarray(maskStart, maskStart + 4); for (let i = 0; i < payload.length; i++) payload[i] ^= m[i & 3]; }
+      buf = buf.subarray(off + len);
+      if (op === 8) { dropConn(conn); socket.destroy(); return; }
+      if (op === 9) { if (!socket.destroyed) socket.write(frame(payload, 10)); continue; } // ping -> pong
+      if (op === 10) continue;
+      if (op === 1) { try { onMessage(conn, JSON.parse(payload.toString('utf8'))); } catch { /* ignore bad msg */ } }
+    }
+  });
+  socket.on('close', () => dropConn(conn));
+  socket.on('error', () => dropConn(conn));
+
+  conn.send({ t: 'hello', booms, players: roster() });
+});
+
+/* ============================================================
+   Game state — 1 corpo, up to 4 humans
+   Humans: +1 point per second alive. Corpo: +50 per layoff.
+   ============================================================ */
+const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff];
+const SPAWNS = [[21.5, 2, 17.5], [40.5, 2, 18.5], [-8.5, 2, 16.5], [13.5, 2, 50.5]];
+const RESPAWN_MS = +(process.env.RESPAWN_MS || 10000);
+const players = new Map(); // id -> player
+const booms = [];          // [x,y,z] history, replayed to new connections
+let nextId = 1;
+
+const roster = () => [...players.values()].map(p => ({
+  id: p.id, name: p.name, role: p.role, score: p.score, alive: p.alive,
+  color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw,
+}));
+
+function broadcast(obj, except = null) {
+  const s = frame(JSON.stringify(obj));
+  for (const c of sockets) if (c !== except && !c.socket.destroyed) c.socket.write(s);
+}
+
+function dropConn(conn) {
+  if (conn.closed) return;
+  conn.closed = true;
+  sockets.delete(conn);
+  if (conn.player) {
+    players.delete(conn.player.id);
+    console.log(`left: ${conn.player.name} (${conn.player.role})`);
+    broadcast({ t: 'players', list: roster() });
+  }
+}
+
+function onMessage(conn, m) {
+  const p = conn.player;
+  switch (m.t) {
+    case 'join': {
+      if (p) return;
+      const name = String(m.name || '').trim().slice(0, 12) || 'player';
+      const corpoTaken = [...players.values()].some(q => q.role === 'corpo');
+      const humans = [...players.values()].filter(q => q.role === 'human').length;
+      let role;
+      if (m.want === 'corpo') {
+        if (corpoTaken) { conn.send({ t: 'denied', reason: 'corpo seat is taken' }); return; }
+        role = 'corpo';
+      } else {
+        if (humans >= 4) { conn.send({ t: 'denied', reason: 'all 4 human seats are full' }); return; }
+        role = 'human';
+      }
+      const id = nextId++;
+      const spawn = SPAWNS[humans % SPAWNS.length];
+      const pl = {
+        id, conn, name, role, score: 0,
+        alive: role === 'human', diedAt: 0,
+        color: role === 'corpo' ? 0x9aa0a6 : COLORS[humans % COLORS.length],
+        x: spawn[0], y: spawn[1], z: spawn[2], yaw: 0,
+      };
+      conn.player = pl;
+      players.set(id, pl);
+      console.log(`joined: ${name} as ${role}`);
+      conn.send({ t: 'welcome', id, role, color: pl.color, x: pl.x, y: pl.y, z: pl.z });
+      broadcast({ t: 'players', list: roster() });
+      break;
+    }
+    case 'pos':
+      if (p && p.role === 'human' && p.alive) {
+        p.x = +m.x || 0; p.y = +m.y || 0; p.z = +m.z || 0; p.yaw = +m.yaw || 0;
+        broadcast({ t: 'pos', id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, conn);
+      }
+      break;
+    case 'boom': // corpo-only ability
+      if (p && p.role === 'corpo') {
+        const b = [Math.round(+m.x || 0), Math.round(+m.y || 0), Math.round(+m.z || 0)];
+        booms.push(b);
+        broadcast({ t: 'boom', x: b[0], y: b[1], z: b[2] });
+      }
+      break;
+    case 'fire': // corpo lays off a human
+      if (p && p.role === 'corpo') {
+        const tgt = players.get(+m.target);
+        if (tgt && tgt.role === 'human' && tgt.alive) {
+          tgt.alive = false;
+          tgt.diedAt = Date.now();
+          p.score += 50;
+          console.log(`layoff: ${tgt.name} by ${p.name}`);
+          broadcast({ t: 'layoff', id: tgt.id, by: p.id, x: tgt.x, y: tgt.y, z: tgt.z });
+          broadcast({ t: 'players', list: roster() });
+        }
+      }
+      break;
+    case 'respawn':
+      if (p && p.role === 'human' && !p.alive && Date.now() - p.diedAt >= RESPAWN_MS) {
+        p.alive = true;
+        const s = SPAWNS[Math.floor(Math.random() * SPAWNS.length)];
+        p.x = s[0]; p.y = s[1]; p.z = s[2];
+        broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z });
+        broadcast({ t: 'players', list: roster() });
+      }
+      break;
+    case 'ping':
+      break;
+  }
+}
+
+// survival pay: +1/sec to every living human; rebroadcast the roster
+setInterval(() => {
+  let changed = false;
+  for (const p of players.values()) if (p.role === 'human' && p.alive) { p.score++; changed = true; }
+  if (changed) broadcast({ t: 'players', list: roster() });
+}, 1000);
+
+// protocol-level keepalive so idle proxies don't drop us
+setInterval(() => {
+  for (const c of sockets) if (!c.socket.destroyed) c.socket.write(frame(Buffer.alloc(0), 9));
+}, 30000);
+
+server.listen(PORT, HOST, () => {
+  console.log(`voxel-brownstone (multiplayer) listening on http://${HOST}:${PORT}`);
 });

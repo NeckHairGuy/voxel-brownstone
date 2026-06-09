@@ -33,6 +33,54 @@
     color:#fff;font:300 22px/1 monospace;text-shadow:0 1px 3px rgba(0,0,0,.8);
     display:none;pointer-events:none;user-select:none;
   }
+  #mp{
+    position:fixed;top:14px;right:14px;z-index:10;
+    background:rgba(12,14,20,.78);backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08);border-radius:12px;
+    padding:12px 14px;color:#e9e4d8;
+    font:12px/1.5 -apple-system,Segoe UI,system-ui,sans-serif;
+    min-width:220px;user-select:none;
+  }
+  #mp-head{font-weight:650;font-size:13px;}
+  #mp-status{font-size:11px;opacity:.62;margin-bottom:6px;}
+  #mp input{
+    width:100%;box-sizing:border-box;margin-bottom:6px;padding:5px 8px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);
+    color:#e9e4d8;font:12px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  .mp-btns{display:flex;gap:6px;}
+  .mp-btns button{
+    flex:1;padding:6px 0;border:none;border-radius:6px;cursor:pointer;
+    background:#e0a85a;color:#221608;font:650 11px/1 -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  .mp-btns button:disabled{opacity:.35;cursor:default;}
+  #mp-list{list-style:none;margin:8px 0 0;padding:0;}
+  #mp-list li{display:flex;align-items:center;gap:7px;padding:3px 0;}
+  #mp-list .dot{width:9px;height:9px;border-radius:2px;flex:none;}
+  #mp-list .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #mp-list .role{font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:.5px;}
+  #mp-list .sc{font-variant-numeric:tabular-nums;font-weight:650;}
+  #mp-list li.dead{opacity:.4;}
+  #mp-list li.dead .nm{text-decoration:line-through;}
+  #laidoff{
+    position:fixed;inset:0;z-index:20;display:none;
+    flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(12,4,4,.55);backdrop-filter:blur(2px);
+  }
+  #laidoff .lo-title{
+    font:800 64px/1 -apple-system,Segoe UI,system-ui,sans-serif;
+    color:#ff5040;letter-spacing:5px;text-shadow:0 2px 22px rgba(255,40,20,.65);
+  }
+  #laidoff .lo-sub{
+    color:#e9e4d8;opacity:.75;margin:12px 0 24px;
+    font:14px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #laidoff button{
+    padding:10px 28px;border:none;border-radius:10px;cursor:pointer;
+    background:#e0a85a;color:#221608;
+    font:700 14px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #laidoff button:disabled{opacity:.4;cursor:default;}
 </style>
 </head>
 <body>
@@ -49,6 +97,23 @@
   <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
 </div>
 <div id="xhair">+</div>
+<div id="mp">
+  <div id="mp-head">players</div>
+  <div id="mp-status">connecting&hellip;</div>
+  <div id="mp-join" style="display:none">
+    <input id="mp-name" placeholder="your name" maxlength="12">
+    <div class="mp-btns">
+      <button id="join-human">join as human</button>
+      <button id="join-corpo">join as corpo</button>
+    </div>
+  </div>
+  <ul id="mp-list"></ul>
+</div>
+<div id="laidoff">
+  <div class="lo-title">LAID OFF</div>
+  <div class="lo-sub">the corpo restructured you out of the org chart</div>
+  <button id="respawn">respawn</button>
+</div>
 
 <script type="importmap">
 { "imports": {
@@ -1628,12 +1693,29 @@ function spawnSparks(cx, cy, cz) {
     sparkArr.push({
       x: cx + 0.5, y: cy + 0.5, z: cz + 0.5,
       vx: Math.cos(a) * Math.cos(e) * s, vy: Math.sin(e) * s + 6, vz: Math.sin(a) * Math.cos(e) * s,
-      age: 0,
+      age: 0, life: 0.55, rise: false,
     });
   }
 }
 
-function explode(cx, cy, cz) {
+// a figure going up in flame: a rising column of embers + a flash
+function flamesAt(x, y, z) {
+  for (let i = 0; i < 80 && sparkArr.length < SPARK_MAX; i++) {
+    sparkArr.push({
+      x: x + (Math.random() - 0.5) * 1.4,
+      y: y + Math.random() * 4,
+      z: z + (Math.random() - 0.5) * 1.4,
+      vx: (Math.random() - 0.5) * 3,
+      vy: 3 + Math.random() * 9,
+      vz: (Math.random() - 0.5) * 3,
+      age: 0, life: 0.8 + Math.random() * 0.8, rise: true,
+    });
+  }
+  flashLight.position.set(x, y + 2.5, z);
+  flashT = 0;
+}
+
+function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for late joiners
   const dirty = new Set();
   const rI = Math.ceil(BLAST_R + 1.2);
   let removed = 0;
@@ -1646,11 +1728,12 @@ function explode(cx, cy, cz) {
         if (!v) continue;
         removeVox(x, y, z);
         markDirty(x, z, dirty);
-        spawnDebris(v, cx, cy, cz, d);
+        if (!quiet) spawnDebris(v, cx, cy, cz, d);
         removed++;
       }
   if (!removed) return;
   for (const ck of dirty) meshChunk(ck);
+  if (quiet) return;
   flashLight.position.set(cx + 0.5, cy + 1.5, cz + 0.5);
   flashT = 0;
   spawnSparks(cx, cy, cz);
@@ -1663,18 +1746,31 @@ const _ndc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointerdown', e => { pDownX = e.clientX; pDownY = e.clientY; });
 renderer.domElement.addEventListener('pointerup', e => {
   if (e.button !== 0) return;
+  // FPV with the mouse released: clicking the scene re-captures it
+  if (player.active && document.pointerLockElement !== renderer.domElement) {
+    renderer.domElement.requestPointerLock();
+    return;
+  }
   if (player.active) _ndc.set(0, 0);   // FPV: fire from the crosshair
   else {
     if (Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > 4) return;
     _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   }
+  // online, only the corpo can act; offline it's a sandbox
+  if (net.online && net.role !== 'corpo') return;
   _ray.setFromCamera(_ndc, camera);
   const targets = [];
+  if (net.online) for (const r of remotes.values())
+    if (r.alive) for (const c of r.group.children) if (c.isMesh) targets.push(c);
   for (const ms of chunkMeshes.values()) for (const m of ms) if (m.visible) targets.push(m);
   const hit = _ray.intersectObjects(targets, false)[0];
-  if (!hit || !hit.face) return;
+  if (!hit) return;
+  const pid = hit.object.userData.pid;
+  if (pid) { nsend({ t: 'fire', target: pid }); return; }   // clicked a human figure
+  if (!hit.face) return;
   const p = hit.point.clone().addScaledVector(hit.face.normal, -0.5);
-  explode(fl(p.x), fl(p.y), fl(p.z));
+  if (net.online) nsend({ t: 'boom', x: fl(p.x), y: fl(p.y), z: fl(p.z) });
+  else explode(fl(p.x), fl(p.y), fl(p.z));
 });
 
 function writeDebrisMatrix(i) {
@@ -1739,12 +1835,12 @@ function stepExplosions(dt) {
   for (let i = sparkArr.length - 1; i >= 0; i--) {
     const S = sparkArr[i];
     S.age += dt;
-    if (S.age > 0.55) { sparkArr[i] = sparkArr[sparkArr.length - 1]; sparkArr.pop(); continue; }
-    S.vy -= 22 * dt;
+    if (S.age > S.life) { sparkArr[i] = sparkArr[sparkArr.length - 1]; sparkArr.pop(); continue; }
+    if (!S.rise) S.vy -= 22 * dt;
     S.x += S.vx * dt; S.y += S.vy * dt; S.z += S.vz * dt;
     _dummy.position.set(S.x, S.y, S.z);
     _dummy.rotation.set(0, 0, 0);
-    _dummy.scale.setScalar(Math.max(0.05, 1 - S.age / 0.55));
+    _dummy.scale.setScalar(Math.max(0.05, 1 - S.age / S.life));
     _dummy.updateMatrix();
     sparkMesh.setMatrixAt(i, _dummy.matrix);
   }
@@ -1817,7 +1913,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('mousemove', e => {
-  if (!player.active) return;
+  if (!player.active || document.pointerLockElement !== renderer.domElement) return;
   player.yaw -= e.movementX * 0.0024;
   player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * 0.0024));
 });
@@ -1835,8 +1931,16 @@ fpvBtn.addEventListener('click', () => {
 });
 document.addEventListener('pointerlockchange', () => {
   const on = document.pointerLockElement === renderer.domElement;
-  if (on && !player.active) enterFPV();
-  else if (!on && player.active) exitFPV();
+  if (on) {
+    // online, FPV is only for living humans; offline it's the solo mode
+    if (!player.active && (!net.online || (net.role === 'human' && net.alive))) enterFPV();
+  } else if (player.active) {
+    if (net.online && net.role === 'human' && net.alive) {
+      hintEl.textContent = 'mouse freed — click the scene to re-capture';
+    } else {
+      exitFPV();
+    }
+  }
 });
 
 function enterFPV() {
@@ -1908,6 +2012,238 @@ function stepPlayer(dt) {
   camera.position.set(player.x, player.y + P_EYE, player.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
 }
+
+/* ============================================================
+   17D. MULTIPLAYER — 1 corpo (orbit camera, explosions,
+   layoffs) vs up to 4 humans (FPV figures earning 1 pt/sec).
+   Zero-dependency WebSocket protocol against server.mjs;
+   falls back to the offline sandbox when no server is there.
+   ============================================================ */
+const net = { ws: null, online: false, id: 0, role: null, alive: false };
+const remotes = new Map();   // id -> {group, alive, x,y,z,yaw, tx,ty,tz,tyaw}
+const mpStatus = document.getElementById('mp-status');
+const mpJoinEl = document.getElementById('mp-join');
+const mpListEl = document.getElementById('mp-list');
+const mpNameEl = document.getElementById('mp-name');
+const joinHumanBtn = document.getElementById('join-human');
+const joinCorpoBtn = document.getElementById('join-corpo');
+const laidoffEl = document.getElementById('laidoff');
+const respawnBtn = document.getElementById('respawn');
+let diedAtLocal = 0;
+
+mpNameEl.value = localStorage.getItem('vb-name') || '';
+
+function nsend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
+
+function wsConnect() {
+  if (!location.host) { mpStatus.textContent = 'offline sandbox (open via the server for multiplayer)'; return; }
+  const base = location.pathname.replace(/\/+$/, '');
+  let ws;
+  try {
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + base + '/ws');
+  } catch { mpStatus.textContent = 'offline sandbox'; return; }
+  net.ws = ws;
+  mpStatus.textContent = 'connecting…';
+  ws.onopen = () => {
+    net.online = true;
+    mpStatus.textContent = 'pick a side';
+    mpJoinEl.style.display = 'block';
+    fpvBtn.style.display = 'none';
+  };
+  ws.onclose = () => {
+    const retry = net.online || net.ws === ws;
+    net.online = false; net.role = null; net.id = 0; net.alive = false;
+    for (const r of remotes.values()) scene.remove(r.group);
+    remotes.clear();
+    mpJoinEl.style.display = 'none';
+    mpListEl.innerHTML = '';
+    laidoffEl.style.display = 'none';
+    fpvBtn.style.display = '';
+    if (player.active) { document.exitPointerLock(); exitFPV(); }
+    mpStatus.textContent = 'disconnected — retrying…';
+    if (retry) setTimeout(wsConnect, 3000);
+  };
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    handleNet(m);
+  };
+}
+
+function handleNet(m) {
+  switch (m.t) {
+    case 'hello':
+      for (const b of m.booms || []) explode(b[0], b[1], b[2], true);
+      updateRoster(m.players || []);
+      break;
+    case 'welcome':
+      net.id = m.id; net.role = m.role; net.alive = m.role === 'human';
+      mpJoinEl.style.display = 'none';
+      if (m.role === 'corpo') {
+        mpStatus.textContent = 'you are the CORPO — click a human to lay them off';
+      } else {
+        mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
+        player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
+        playerGroup.children[0].material.color.set(m.color);
+        if (!player.active) enterFPV();   // pointer lock was requested by the join click
+      }
+      break;
+    case 'denied':
+      mpStatus.textContent = 'denied: ' + m.reason;
+      document.exitPointerLock();
+      break;
+    case 'players':
+      updateRoster(m.list || []);
+      break;
+    case 'pos': {
+      const r = remotes.get(m.id);
+      if (r) { r.tx = m.x; r.ty = m.y; r.tz = m.z; r.tyaw = m.yaw; }
+      break;
+    }
+    case 'boom':
+      explode(m.x, m.y, m.z);
+      break;
+    case 'layoff': {
+      flamesAt(m.x, m.y, m.z);
+      const r = remotes.get(m.id);
+      if (r) { r.alive = false; r.group.visible = false; }
+      if (m.id === net.id) localLayoff();
+      break;
+    }
+    case 'respawn':
+      if (m.id === net.id) {
+        net.alive = true;
+        player.x = m.x; player.y = m.y; player.z = m.z; player.vy = 0;
+        laidoffEl.style.display = 'none';
+        if (!player.active) enterFPV();
+        playerGroup.visible = true;
+      } else {
+        const r = remotes.get(m.id);
+        if (r) { r.alive = true; r.group.visible = true; r.x = r.tx = m.x; r.y = r.ty = m.y; r.z = r.tz = m.z; }
+      }
+      break;
+  }
+}
+
+function makeRemote(p) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: p.color });
+  const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+  for (let i = 0; i < 4; i++) {
+    const cube = new THREE.Mesh(geo, mat);
+    cube.position.y = i + 0.5;
+    cube.castShadow = true;
+    cube.userData.pid = p.id;
+    group.add(cube);
+  }
+  // floating name tag
+  const cnv = document.createElement('canvas');
+  cnv.width = 256; cnv.height = 64;
+  const ctx = cnv.getContext('2d');
+  ctx.font = '600 34px -apple-system, Segoe UI, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const tw = Math.min(244, ctx.measureText(p.name).width + 28);
+  ctx.fillStyle = 'rgba(10,12,18,0.55)';
+  ctx.fillRect(128 - tw / 2, 8, tw, 48);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(p.name, 128, 34);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cnv), transparent: true }));
+  spr.scale.set(7, 1.75, 1);
+  spr.position.y = 5.2;
+  group.add(spr);
+  scene.add(group);
+  group.position.set(p.x, p.y, p.z);
+  return { group, alive: p.alive, x: p.x, y: p.y, z: p.z, yaw: p.yaw, tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw };
+}
+
+function updateRoster(list) {
+  // sync remote figures (every human that isn't us)
+  const seen = new Set();
+  for (const p of list) {
+    if (p.role !== 'human' || p.id === net.id) continue;
+    seen.add(p.id);
+    let r = remotes.get(p.id);
+    if (!r) { r = makeRemote(p); remotes.set(p.id, r); }
+    r.alive = p.alive;
+    r.group.visible = p.alive;
+  }
+  for (const [id, r] of remotes) if (!seen.has(id)) { scene.remove(r.group); remotes.delete(id); }
+  // seat availability
+  joinCorpoBtn.disabled = list.some(p => p.role === 'corpo');
+  joinHumanBtn.disabled = list.filter(p => p.role === 'human').length >= 4;
+  // scoreboard
+  mpListEl.innerHTML = '';
+  for (const p of [...list].sort((a, b) => b.score - a.score)) {
+    const li = document.createElement('li');
+    if (p.role === 'human' && !p.alive) li.className = 'dead';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = '#' + p.color.toString(16).padStart(6, '0');
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = p.name + (p.id === net.id ? ' (you)' : '');
+    const role = document.createElement('span');
+    role.className = 'role';
+    role.textContent = p.role;
+    const sc = document.createElement('span');
+    sc.className = 'sc';
+    sc.textContent = p.score;
+    li.append(dot, nm, role, sc);
+    mpListEl.appendChild(li);
+  }
+}
+
+function localLayoff() {
+  net.alive = false;
+  diedAtLocal = performance.now();
+  playerGroup.visible = false;
+  laidoffEl.style.display = 'flex';
+  respawnBtn.disabled = true;
+  document.exitPointerLock();
+  if (player.active) exitFPV();   // spectate in orbit while benched
+}
+
+function doJoin(want) {
+  const name = (mpNameEl.value || '').trim() || 'player';
+  localStorage.setItem('vb-name', name);
+  if (want === 'human') renderer.domElement.requestPointerLock();   // must happen in the click gesture
+  nsend({ t: 'join', name, want });
+}
+joinHumanBtn.addEventListener('click', () => doJoin('human'));
+joinCorpoBtn.addEventListener('click', () => doJoin('corpo'));
+respawnBtn.addEventListener('click', () => {
+  renderer.domElement.requestPointerLock();   // gesture-bound; FPV resumes on the server's ack
+  nsend({ t: 'respawn' });
+});
+setInterval(() => {   // respawn cooldown countdown
+  if (net.online && net.role === 'human' && !net.alive && laidoffEl.style.display !== 'none') {
+    const left = Math.ceil(10 - (performance.now() - diedAtLocal) / 1000);
+    respawnBtn.disabled = left > 0;
+    respawnBtn.textContent = left > 0 ? 'respawn in ' + left : 'respawn';
+  }
+}, 300);
+setInterval(() => nsend({ t: 'ping' }), 25000);
+
+let posTimer = 0;
+function stepNet(dt) {
+  for (const r of remotes.values()) {
+    if (!r.alive) continue;
+    const k = Math.min(1, dt * 12);
+    r.x += (r.tx - r.x) * k; r.y += (r.ty - r.y) * k; r.z += (r.tz - r.z) * k;
+    let dy = r.tyaw - r.yaw;
+    dy = ((dy + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    r.yaw += dy * k;
+    r.group.position.set(r.x, r.y, r.z);
+    r.group.rotation.y = r.yaw;
+  }
+  if (net.online && net.role === 'human' && net.alive && player.active) {
+    posTimer += dt;
+    if (posTimer > 0.066) {
+      posTimer = 0;
+      nsend({ t: 'pos', x: +player.x.toFixed(2), y: +player.y.toFixed(2), z: +player.z.toFixed(2), yaw: +player.yaw.toFixed(2) });
+    }
+  }
+}
+wsConnect();
 
 /* ============================================================
    18. LIGHTS
@@ -2068,6 +2404,7 @@ renderer.setAnimationLoop(() => {
   controls.update();
   stepExplosions(dt);
   stepPlayer(dt);
+  stepNet(dt);
 
   if (playBox.checked) {
     let t = +slider.value + dt * 90; // ~16 s per full day
