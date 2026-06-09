@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxel Block — Brooklyn</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;}
+  canvas{display:block;}
+  #ui{
+    position:fixed;top:14px;left:14px;z-index:10;
+    background:rgba(12,14,20,.78);backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08);border-radius:12px;
+    padding:14px 18px;color:#e9e4d8;font:13px/1.5 -apple-system,Segoe UI,system-ui,sans-serif;
+    min-width:270px;user-select:none;
+  }
+  #ui h1{font-size:15px;margin:0 0 2px;font-weight:650;letter-spacing:.2px;}
+  #ui .sub{font-size:11px;opacity:.62;margin-bottom:10px;}
+  #clock{font-size:22px;font-weight:300;font-variant-numeric:tabular-nums;margin:2px 0 4px;}
+  input[type=range]{width:100%;accent-color:#e0a85a;cursor:pointer;}
+  .row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;}
+  .row label{cursor:pointer;display:flex;align-items:center;gap:6px;}
+  #ui .hint{font-size:11px;opacity:.5;margin-top:10px;}
+  #ui input[type=checkbox]{accent-color:#e0a85a;}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Brooklyn Block</h1>
+  <div class="sub">brownstone &middot; corner deli &middot; construction site</div>
+  <div id="clock">2:30 PM</div>
+  <input id="time" type="range" min="0" max="1439" step="1" value="870">
+  <div class="row">
+    <label><input id="play" type="checkbox"> cycle day</label>
+    <label><input id="facade" type="checkbox"> hide facades (dollhouse)</label>
+  </div>
+  <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   1. RENDERER / SCENE / CAMERA
+   ============================================================ */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.5, 700);
+camera.position.set(80, 42, 102);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(13, 15, -2);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.497;
+controls.minDistance = 6;
+controls.maxDistance = 260;
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ============================================================
+   2. VOXEL STORE
+   types t: 0 opaque | 1 glass | 2 emissive (always) | 3 emissive (night)
+   groups g: 0 world | 1 facade (hideable)
+   ============================================================ */
+const vox = new Map();
+let G = 0; // current build group
+// chunk index: "cx|cz" -> Set of voxel keys (16x16 columns, for partial remeshing)
+const chunkIndex = new Map();
+const ckOf = (x, z) => (x >> 4) + '|' + (z >> 4);
+
+// deterministic per-voxel hash for color jitter
+function h3(x, y, z) {
+  let n = (x * 374761393 + y * 668265263 + z * 1274126177) | 0;
+  n = ((n ^ (n >>> 13)) * 1103515245) | 0;
+  n = n ^ (n >>> 16);
+  return ((n >>> 0) % 1024) / 1024;
+}
+
+const _c = new THREE.Color();
+function V(x, y, z, hex, o = {}) {
+  _c.set(hex);
+  const j = o.j !== undefined ? o.j : 0.06;
+  const f = 1 + (h3(x, y, z) - 0.5) * 2 * j;
+  const k = x + '|' + y + '|' + z;
+  vox.set(k, {
+    x, y, z,
+    r: Math.min(1, _c.r * f), g: Math.min(1, _c.g * f), b: Math.min(1, _c.b * f),
+    t: o.t || 0, gr: o.g !== undefined ? o.g : G
+  });
+  const ck = ckOf(x, z);
+  let cs = chunkIndex.get(ck);
+  if (!cs) { cs = new Set(); chunkIndex.set(ck, cs); }
+  cs.add(k);
+}
+function fillB(x0, y0, z0, x1, y1, z1, hex, o = {}) {
+  const [xa, xb] = x0 <= x1 ? [x0, x1] : [x1, x0];
+  const [ya, yb] = y0 <= y1 ? [y0, y1] : [y1, y0];
+  const [za, zb] = z0 <= z1 ? [z0, z1] : [z1, z0];
+  for (let x = xa; x <= xb; x++) for (let y = ya; y <= yb; y++) for (let z = za; z <= zb; z++)
+    V(x, y, z, hex, o);
+}
+function clearB(x0, y0, z0, x1, y1, z1) {
+  const [xa, xb] = x0 <= x1 ? [x0, x1] : [x1, x0];
+  const [ya, yb] = y0 <= y1 ? [y0, y1] : [y1, y0];
+  const [za, zb] = z0 <= z1 ? [z0, z1] : [z1, z0];
+  for (let x = xa; x <= xb; x++) for (let y = ya; y <= yb; y++) for (let z = za; z <= zb; z++)
+    removeVox(x, y, z);
+}
+function removeVox(x, y, z) {
+  const k = x + '|' + y + '|' + z;
+  if (!vox.delete(k)) return false;
+  const cs = chunkIndex.get(ckOf(x, z));
+  if (cs) cs.delete(k);
+  return true;
+}
+function getV(x, y, z) { return vox.get(x + '|' + y + '|' + z); }
+function solid(x, y, z) { const v = getV(x, y, z); return !!v && v.t !== 1; }
+
+// seeded PRNG for procedural props (trees etc.)
+function mulberry(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ============================================================
+   3. PALETTE
+   ============================================================ */
+const P = {
+  brownstone: 0x7a4a36, brownstoneDk: 0x63392a, brownstoneLt: 0x96604a,
+  stoneTrim: 0x8a563f, brick: 0x8a4d3a, mortarRow: 0x7c4434,
+  cornice: 0x4c3a2a, corniceLt: 0x5c4836,
+  sash: 0x2b2724, doorWood: 0x45291a, brass: 0xc9a227,
+  glass: 0x9fc6da, mirror: 0xbdd2da,
+  iron: 0x23262a, ironGreen: 0x2e3b32,
+  roof: 0x6e6e72, roofTrim: 0x8c8c90, chimney: 0x74402f, terracotta: 0xb06a3c,
+  floorA: 0xa87848, floorB: 0x95673b, stairWood: 0x8a5e33,
+  wallCream: 0xe6dcc8, wallSage: 0xb9c2a8, wallBlue: 0x9fb4c4, ceiling: 0xeae6da,
+  tileA: 0xe8e8e2, tileB: 0x3c4248,
+  asphalt: 0x36363a, asphaltPatch: 0x2e2e32, lineY: 0xc8a02a, lineW: 0xb8bcbe,
+  bluestone: 0x6f7b84, bluestoneDk: 0x5f6b74, curb: 0x8a8f94, concrete: 0x9a9a96,
+  soil: 0x43321f, grass: 0x5d7a3a, grassDk: 0x506b32,
+  bark: 0x5a4327, leafA: 0x4f7a2e, leafB: 0x5f8c38, leafC: 0x44691f,
+  hydrant: 0xb52a20, hydrantCap: 0xd8d8da,
+  mailbox: 0x2a4f8a,
+  skin: 0xd9a47e,
+  fence: 0x6b5640,
+  fireAmber: 0xffa028, lampWarm: 0xffd9a0, lampWhite: 0xfff4e0,
+};
+
+/* ============================================================
+   4. GROUND PLAN
+   world x: -34..60   z: -56..54
+   road surface y=0 (z 22..46), sidewalks y=1, yards y=0
+   building x 0..26, facade z=0, rear z=-33
+   ============================================================ */
+const X0 = -34, X1 = 60;
+
+// earth base
+fillB(X0, -2, -56, X1, -1, 54, 0x4a3a2a, { j: 0.05 });
+// default grass everywhere on top
+fillB(X0, 0, -56, X1, 0, 54, P.grass, { j: 0.12 });
+
+/* ---- road ---- */
+fillB(X0, 0, 22, X1, 0, 46, P.asphalt, { j: 0.05 });
+// worn patches
+{
+  const r = mulberry(77);
+  for (let i = 0; i < 26; i++) {
+    const px = X0 + 4 + Math.floor(r() * 86), pz = 23 + Math.floor(r() * 21);
+    fillB(px, 0, pz, px + 2 + Math.floor(r() * 4), 0, pz + 1 + Math.floor(r() * 2), P.asphaltPatch, { j: 0.06 });
+  }
+}
+// double yellow center line (broken at the crosswalk)
+for (let x = X0; x <= 42; x++) { V(x, 0, 33, P.lineY, { j: 0.04 }); V(x, 0, 35, P.lineY, { j: 0.04 }); }
+// dashed white parking-lane lines
+for (let x = X0; x <= X1; x += 6) {
+  if (x > 42 && x < 60) continue;
+  for (let d = 0; d < 3 && x + d <= X1; d++) { V(x + d, 0, 29, P.lineW, { j: 0.08 }); V(x + d, 0, 41, P.lineW, { j: 0.08 }); }
+}
+// zebra crosswalk + stop line
+for (const sx of [46, 49, 52, 55]) fillB(sx, 0, 23, sx + 1, 0, 45, 0xc4c4c0, { j: 0.1 });
+fillB(43, 0, 23, 44, 0, 33, 0xc4c4c0, { j: 0.1 });
+// manhole
+fillB(15, 0, 36, 17, 0, 38, 0x2a2a2c, { j: 0.04 });
+V(15, 0, 36, P.asphalt); V(17, 0, 36, P.asphalt); V(15, 0, 38, P.asphalt); V(17, 0, 38, P.asphalt);
+V(16, 0, 37, 0x222224);
+
+/* ---- near sidewalk (z 13..20) + curb z=21 ---- */
+fillB(X0, 0, 13, X1, 0, 21, 0x7a7a76, { j: 0.04 });          // sub-slab, shows as curb face
+fillB(X0, 1, 13, X1, 1, 20, P.bluestone, { j: 0.07 });
+fillB(X0, 1, 21, X1, 1, 21, P.curb, { j: 0.05 });
+// slab joints
+for (let x = X0; x <= X1; x += 6) fillB(x, 1, 13, x, 1, 20, P.bluestoneDk, { j: 0.04 });
+// storm drain at the corner curb
+fillB(38, 0, 22, 42, 0, 22, 0x1c1e20, { j: 0.04 });
+fillB(38, 1, 21, 42, 1, 21, 0x55595e, { j: 0.04 });
+
+/* ---- far sidewalk (z 47..54) ---- */
+fillB(X0, 0, 47, X1, 0, 54, 0x7a7a76, { j: 0.04 });
+fillB(X0, 1, 47, X1, 1, 54, P.bluestone, { j: 0.07 });
+fillB(X0, 1, 47, X1, 1, 47, P.curb, { j: 0.05 });
+for (let x = X0 + 3; x <= X1; x += 6) fillB(x, 1, 48, x, 1, 54, P.bluestoneDk, { j: 0.04 });
+
+/* ---- tree pits in the near sidewalk ---- */
+function treePit(px, pz) {
+  fillB(px, 1, pz, px + 3, 1, pz + 3, P.soil, { j: 0.1 });
+  // cast-iron tree guard
+  for (let x = px - 1; x <= px + 4; x++) for (let z = pz - 1; z <= pz + 4; z++) {
+    const edge = (x === px - 1 || x === px + 4 || z === pz - 1 || z === pz + 4);
+    if (edge && ((x + z) % 2 === 0)) fillB(x, 2, z, x, 3, z, P.iron, { j: 0.03 });
+  }
+}
+treePit(-11, 16); treePit(30, 16);
+fillB(8, 1, 49, 11, 1, 52, P.soil, { j: 0.1 }); // far-side pit
+
+/* ============================================================
+   5. AREAWAY, FENCE & STOOP   (front yard z 1..12)
+   ============================================================ */
+// bluestone paving
+fillB(0, 1, 1, 26, 1, 12, P.bluestone, { j: 0.08 });
+// planting bed left of the stoop
+fillB(1, 1, 8, 16, 1, 11, P.soil, { j: 0.1 });
+{
+  const r = mulberry(31);
+  for (let i = 0; i < 9; i++) {
+    const bx = 2 + Math.floor(r() * 13), bz = 8 + Math.floor(r() * 3);
+    const leaf = [P.leafA, P.leafB, P.leafC][Math.floor(r() * 3)];
+    fillB(bx, 2, bz, bx + 1, 2 + Math.floor(r() * 2), bz + 1, leaf, { j: 0.14 });
+    if (r() < 0.5) V(bx, 3 + Math.floor(r() * 2), bz, [0xd86a8a, 0xe0d05a, 0xd4523a][Math.floor(r() * 3)], { j: 0.1 });
+  }
+}
+// wrought-iron areaway fence at z=12 (gate gap where the stoop lands x18..24)
+for (let x = 0; x <= 26; x++) {
+  if (x >= 18 && x <= 24) continue;
+  fillB(x, 4, 12, x, 4, 12, P.iron, { j: 0.03 });                 // top rail
+  if (x % 2 === 0) fillB(x, 2, 12, x, 3, 12, P.iron, { j: 0.03 }); // pickets
+  if (x % 8 === 0) { fillB(x, 2, 12, x, 5, 12, P.iron, { j: 0.03 }); } // posts + finial
+}
+// brownstone fence piers at lot corners
+fillB(0, 2, 11, 0, 5, 12, P.brownstoneDk, { j: 0.05 });
+fillB(26, 2, 11, 26, 5, 12, P.brownstoneDk, { j: 0.05 });
+// trash cans + bags tucked in the areaway corner
+fillB(1, 2, 2, 2, 4, 3, P.ironGreen, { j: 0.08 });
+fillB(1, 5, 2, 2, 5, 3, 0x222c24, { j: 0.05 });
+fillB(4, 2, 2, 5, 3, 3, P.ironGreen, { j: 0.08 });
+fillB(4, 4, 2, 5, 4, 3, 0x222c24, { j: 0.05 });
+V(7, 2, 2, 0x17171a, { j: 0.1 }); V(7, 2, 3, 0x17171a, { j: 0.1 }); V(7, 3, 2, 0x1c1c1f, { j: 0.1 });
+
+/* ---- the stoop: landing z1..4 at y10, nine steps down to the sidewalk ---- */
+function stepTop(z) { return z <= 4 ? 10 : 10 - (z - 4); } // z 5..12 -> 9..2
+// landing slab (hollow below = under-stoop passage feel) carried on cheek walls
+fillB(19, 9, 1, 23, 10, 4, P.brownstone, { j: 0.05 });
+// steps (solid masses)
+for (let z = 5; z <= 12; z++) fillB(19, 1, z, 23, stepTop(z), z, P.brownstone, { j: 0.05 });
+// cheek walls follow the steps, +2 high, with iron rail on top
+for (let z = 1; z <= 12; z++) {
+  const t = stepTop(z);
+  for (const x of [18, 24]) {
+    fillB(x, 1, z, x, Math.min(t + 2, 12), z, P.brownstone, { j: 0.05 });
+    V(x, Math.min(t + 2, 12) + 1, z, P.iron, { j: 0.03 });
+  }
+}
+// newel posts at the foot
+for (const x of [18, 24]) {
+  fillB(x, 1, 12, x, 5, 12, P.brownstoneDk, { j: 0.05 });
+  V(x, 6, 12, P.brownstoneLt, { j: 0.05 });
+}
+// under-stoop iron gate hinted on the left cheek wall face
+fillB(18, 2, 1, 18, 6, 3, P.iron, { j: 0.04 });
+fillB(18, 3, 2, 18, 4, 2, 0x101214, { j: 0.04 });
+
+/* ============================================================
+   6. BUILDING SHELL
+   floors (slab y): garden 1, parlor 10, third 21, fourth 30, roof 39
+   ============================================================ */
+const FLOORS = { garden: 1, parlor: 10, third: 21, fourth: 30, roof: 39 };
+
+// ---- side walls (brick party walls) with subtle coursing ----
+for (let y = 2; y <= 39; y++) {
+  const c = (y % 3 === 0) ? P.mortarRow : P.brick;
+  fillB(0, y, -33, 0, y, -1, c, { j: 0.08 });
+  fillB(26, y, -33, 26, y, -1, c, { j: 0.08 });
+}
+// ---- rear wall ----
+for (let y = 2; y <= 39; y++) fillB(0, y, -33, 26, y, -33, (y % 3 === 0) ? P.mortarRow : P.brick, { j: 0.08 });
+
+// ---- floor slabs (wood plank pattern on top face) ----
+function slab(y) {
+  for (let x = 1; x <= 25; x++) for (let z = -32; z <= -1; z++)
+    V(x, y, z, ((x + (z >> 2)) % 2 === 0) ? P.floorA : P.floorB, { j: 0.05 });
+}
+slab(FLOORS.garden); slab(FLOORS.parlor); slab(FLOORS.third); slab(FLOORS.fourth);
+// roof slab (gray membrane), inset behind parapet
+fillB(1, 39, -32, 25, 39, -1, P.roof, { j: 0.04 });
+
+// stairwell openings in each slab (stairs occupy x22..25, runs alternate direction)
+clearB(22, FLOORS.parlor, -10, 25, FLOORS.parlor, -16);
+clearB(22, FLOORS.third, -6, 25, FLOORS.third, -11);
+clearB(22, FLOORS.fourth, -10, 25, FLOORS.fourth, -15);
+clearB(22, FLOORS.roof, -4, 25, FLOORS.roof, -9);
+
+/* ============================================================
+   7. FACADE  (group 1 — hideable)
+   ============================================================ */
+G = 1;
+// brownstone face with banded coursing; garden level rusticated (darker bands)
+for (let y = 2; y <= 39; y++) {
+  let c = P.brownstone;
+  if (y <= 9) c = (y % 2 === 0) ? P.brownstoneDk : P.brownstone; // rustication
+  else if (y % 3 === 0) c = 0x744636;
+  fillB(0, y, 0, 26, y, 0, c, { j: 0.05 });
+}
+// belt course above garden level + thin string courses
+fillB(0, 10, 1, 26, 10, 1, P.brownstoneLt, { j: 0.05 });
+fillB(0, 21, 1, 26, 21, 1, P.stoneTrim, { j: 0.05 });
+fillB(0, 30, 1, 26, 30, 1, P.stoneTrim, { j: 0.05 });
+
+// ---- front window builder (wall plane z=0, ornament at z=1) ----
+function frontWindow(x0, y0, w, h, opts = {}) {
+  clearB(x0, y0, 0, x0 + w - 1, y0 + h - 1, 0);
+  fillB(x0, y0, 0, x0 + w - 1, y0 + h - 1, 0, P.glass, { t: 1, j: 0.02 });
+  const midY = y0 + Math.floor(h / 2), midX = x0 + (w >> 1);
+  fillB(x0, midY, 0, x0 + w - 1, midY, 0, P.sash, { j: 0.03 });          // meeting rail
+  fillB(midX, y0, 0, midX, y0 + h - 1, 0, P.sash, { j: 0.03 });          // center muntin
+  // sill
+  fillB(x0 - 1, y0 - 1, 1, x0 + w, y0 - 1, 1, P.brownstoneLt, { j: 0.05 });
+  // carved lintel + keystone
+  if (!opts.noLintel) {
+    fillB(x0 - 1, y0 + h, 1, x0 + w, y0 + h, 1, P.brownstoneDk, { j: 0.05 });
+    V(midX, y0 + h + 1, 1, P.brownstoneDk, { j: 0.05 });
+  }
+  // security bars on garden windows
+  if (opts.bars) for (let x = x0; x <= x0 + w - 1; x += 2) fillB(x, y0, 1, x, y0 + h - 1, 1, P.iron, { j: 0.03 });
+  // window box planter
+  if (opts.planter) {
+    fillB(x0, y0 - 1, 2, x0 + w - 1, y0 - 1, 2, P.ironGreen, { j: 0.06 });
+    const r = mulberry(x0 * 7 + y0);
+    for (let x = x0; x <= x0 + w - 1; x++) {
+      V(x, y0, 2, [P.leafB, P.leafA][Math.floor(r() * 2)], { j: 0.15 });
+      if (r() < 0.55) V(x, y0 + 1, 2, [0xd86a8a, 0xd4523a, 0xe0d05a][Math.floor(r() * 3)], { j: 0.1 });
+    }
+  }
+}
+
+// garden level: two windows (bars + planters)
+frontWindow(3, 3, 5, 6, { bars: true, planter: true });
+frontWindow(11, 3, 5, 6, { bars: true, planter: true });
+// parlor level: two grand windows
+frontWindow(3, 12, 5, 8);
+frontWindow(11, 12, 5, 8);
+// third floor
+frontWindow(3, 23, 5, 6);
+frontWindow(11, 23, 5, 6);
+frontWindow(19, 23, 5, 6);
+// fourth floor
+frontWindow(3, 31, 5, 6);
+frontWindow(11, 31, 5, 6);
+frontWindow(19, 31, 5, 6);
+
+// window AC unit hanging from a third-floor window
+fillB(20, 23, 1, 22, 24, 2, 0x9aa0a6, { j: 0.05 });
+fillB(20, 23, 2, 22, 23, 2, 0x83898f, { j: 0.05 });
+
+/* ---- entry: double doors, transom, surround, sconces ---- */
+clearB(19, 11, 0, 23, 19, 0);
+// double wood doors with panels
+fillB(19, 11, 0, 23, 17, 0, P.doorWood, { j: 0.05 });
+fillB(21, 11, 0, 21, 17, 0, 0x331d10, { j: 0.04 });           // center stile
+V(20, 13, 0, 0x573522, { j: 0.03 }); V(22, 13, 0, 0x573522, { j: 0.03 }); // panels
+V(20, 16, 0, 0x573522, { j: 0.03 }); V(22, 16, 0, 0x573522, { j: 0.03 });
+V(20, 14, 1, P.brass, { j: 0.02, t: 2 }); V(22, 14, 1, P.brass, { j: 0.02, t: 2 }); // knobs
+// transom
+fillB(19, 18, 0, 23, 19, 0, P.glass, { t: 1, j: 0.02 });
+V(21, 18, 0, P.sash, { j: 0.03 }); V(21, 19, 0, P.sash, { j: 0.03 });
+// surround: pilasters + bracketed hood
+fillB(18, 11, 1, 18, 20, 1, P.brownstoneLt, { j: 0.05 });
+fillB(24, 11, 1, 24, 20, 1, P.brownstoneLt, { j: 0.05 });
+fillB(18, 20, 1, 24, 20, 1, P.brownstoneDk, { j: 0.05 });
+fillB(17, 21, 1, 25, 21, 2, P.brownstoneDk, { j: 0.05 });
+V(18, 20, 2, P.brownstoneDk); V(24, 20, 2, P.brownstoneDk);   // hood brackets
+// gas-lamp sconces flanking the door (warm at night)
+V(17, 16, 1, P.iron, { j: 0.03 }); V(25, 16, 1, P.iron, { j: 0.03 });
+V(17, 17, 1, P.lampWarm, { t: 3, j: 0 }); V(25, 17, 1, P.lampWarm, { t: 3, j: 0 });
+// house number "31" plaque
+V(20, 19, 1, P.brass, { t: 2, j: 0 }); V(22, 19, 1, P.brass, { t: 2, j: 0 });
+
+/* ---- cornice: dentils, brackets, crown ---- */
+for (let x = 0; x <= 26; x += 2) V(x, 37, 1, P.corniceLt, { j: 0.04 });   // dentil row
+fillB(0, 38, 1, 26, 39, 1, P.cornice, { j: 0.04 });                       // fascia
+for (const bx of [0, 2, 9, 13, 17, 24, 26]) fillB(bx, 37, 1, bx, 38, 2, P.cornice, { j: 0.04 }); // brackets
+fillB(0, 40, 0, 26, 40, 2, P.corniceLt, { j: 0.04 });                     // crown / drip edge
+G = 0;
+
+// parapets (roof edges, not hideable)
+fillB(0, 40, -33, 0, 41, -1, P.brick, { j: 0.07 });
+fillB(26, 40, -33, 26, 41, -1, P.brick, { j: 0.07 });
+fillB(0, 40, -33, 26, 41, -33, P.brick, { j: 0.07 });
+fillB(0, 42, -33, 0, 42, -1, P.bluestone, { j: 0.05 });   // coping
+fillB(26, 42, -33, 26, 42, -1, P.bluestone, { j: 0.05 });
+fillB(0, 42, -33, 26, 42, -33, P.bluestone, { j: 0.05 });
+fillB(0, 41, -1, 26, 41, -1, P.brick, { j: 0.07 });        // low front parapet behind cornice
+/* ============================================================
+   8. REAR ELEVATION + ROOFSCAPE
+   ============================================================ */
+function rearWindow(x0, y0, w, h) {
+  clearB(x0, y0, -33, x0 + w - 1, y0 + h - 1, -33);
+  fillB(x0, y0, -33, x0 + w - 1, y0 + h - 1, -33, P.glass, { t: 1, j: 0.02 });
+  const midY = y0 + Math.floor(h / 2), midX = x0 + (w >> 1);
+  fillB(x0, midY, -33, x0 + w - 1, midY, -33, P.sash, { j: 0.03 });
+  fillB(midX, y0, -33, midX, y0 + h - 1, -33, P.sash, { j: 0.03 });
+  fillB(x0, y0 - 1, -34, x0 + w - 1, y0 - 1, -34, P.bluestone, { j: 0.05 }); // stone sill
+}
+rearWindow(3, 3, 5, 6);  rearWindow(11, 3, 5, 6);
+rearWindow(3, 12, 5, 8); rearWindow(11, 12, 5, 8); rearWindow(19, 12, 5, 7);
+rearWindow(3, 23, 5, 6); rearWindow(11, 23, 5, 6); rearWindow(19, 23, 5, 6);
+rearWindow(3, 31, 5, 6); rearWindow(11, 31, 5, 6); rearWindow(19, 31, 5, 6);
+// garden-level back door to the yard (glazed)
+clearB(19, 2, -33, 22, 8, -33);
+fillB(19, 2, -33, 22, 8, -33, P.doorWood, { j: 0.05 });
+fillB(20, 4, -33, 21, 7, -33, P.glass, { t: 1, j: 0.02 });
+V(19, 4, -34, P.brass, { t: 2, j: 0 });
+fillB(18, 1, -36, 23, 1, -34, P.bluestone, { j: 0.06 }); // back steps/pad
+
+/* ---- roofscape ---- */
+// stair bulkhead over the top run
+fillB(20, 40, -11, 25, 44, -3, P.brick, { j: 0.07 });
+clearB(21, 40, -10, 24, 43, -4);
+fillB(20, 45, -12, 25, 45, -2, P.roofTrim, { j: 0.04 });
+fillB(22, 40, -11, 24, 43, -11, 0x2a2018, { j: 0.04 });   // bulkhead door
+// chimney on the west party wall (serves both fireplaces below)
+fillB(0, 40, -24, 2, 46, -20, P.chimney, { j: 0.08 });
+fillB(0, 47, -24, 2, 47, -20, 0x5e3424, { j: 0.06 });
+V(1, 48, -23, P.terracotta, { j: 0.06 }); V(1, 48, -21, P.terracotta, { j: 0.06 }); // clay pots
+// skylight over the stair of the top floor
+fillB(6, 40, -18, 10, 40, -14, P.roofTrim, { j: 0.03 });
+clearB(7, 40, -17, 9, 40, -15);
+clearB(7, 39, -17, 9, 39, -15);
+fillB(7, 40, -17, 9, 40, -15, P.glass, { t: 1, j: 0.02 });
+// vent pipes + small AC condenser
+fillB(4, 40, -28, 4, 42, -28, 0x808488, { j: 0.04 });
+fillB(14, 40, -26, 14, 41, -26, 0x808488, { j: 0.04 });
+fillB(16, 40, -29, 18, 41, -27, 0xa8acb0, { j: 0.05 });
+
+/* ============================================================
+   9. INTERIOR — STAIRS (x22..25, runs alternate direction)
+   ============================================================ */
+function stair(yFloor, yTop, zStart, dir) {
+  const rises = yTop - yFloor;
+  for (let i = 1; i <= rises; i++) {
+    const z = zStart + dir * i;
+    fillB(22, yFloor + 1, z, 25, yFloor + i, z, P.stairWood, { j: 0.05 });
+    // open-side balustrade at x=22
+    if (i % 2 === 1) fillB(22, yFloor + i + 1, z, 22, yFloor + i + 2, z, P.iron, { j: 0.03 });
+    V(22, yFloor + i + 3, z, P.doorWood, { j: 0.04 }); // stepped handrail
+  }
+}
+stair(FLOORS.garden, FLOORS.parlor, -5, -1);   // garden -> parlor, rearward
+stair(FLOORS.parlor, FLOORS.third, -17, +1);   // parlor -> third, frontward
+stair(FLOORS.third, FLOORS.fourth, -5, -1);    // third  -> fourth, rearward
+stair(FLOORS.fourth, FLOORS.roof, -16, +1);    // fourth -> roof bulkhead, frontward
+
+/* ============================================================
+   10. INTERIOR — GARDEN LEVEL (kitchen + family room)
+   floor y=1, room y 2..9
+   ============================================================ */
+{
+  const fy = 2; // first occupiable y
+  // dividing wall with cased opening
+  fillB(1, fy, -16, 21, 9, -16, P.wallSage, { j: 0.04 });
+  clearB(6, fy, -16, 10, 8, -16);
+  // hearth + fireplace on the west wall (kitchen side)
+  fillB(1, fy, -24, 2, 8, -20, P.brick, { j: 0.08 });
+  clearB(2, fy, -23, 2, 4, -21);
+  fillB(2, fy, -23, 2, 2, -21, 0x1c1410, { j: 0.05 });
+  fillB(2, 3, -22, 2, 3, -22, P.fireAmber, { t: 2, j: 0.05 });
+  V(2, 3, -23, 0xe07818, { t: 2 }); V(2, 3, -21, 0xe07818, { t: 2 });
+  fillB(1, 5, -24, 3, 5, -20, P.stairWood, { j: 0.05 });  // mantel shelf
+  // ---- kitchen (rear room) ----
+  fillB(3, fy, -32, 16, 3, -31, 0x5a6e5a, { j: 0.05 });          // base cabinets
+  fillB(3, 4, -32, 16, 4, -31, 0xd9d4c8, { j: 0.04 });           // counter
+  fillB(8, 4, -31, 9, 4, -31, 0xa8b0b6, { j: 0.03 });            // sink
+  V(8, 5, -32, 0x888e94, { j: 0.03 });                           // faucet
+  fillB(12, fy, -32, 14, 4, -31, 0x2e2e30, { j: 0.04 });         // range
+  V(12, 4, -31, 0x141414); V(14, 4, -31, 0x141414);              // burners
+  fillB(12, 7, -32, 14, 8, -31, 0x9aa0a6, { j: 0.04 });          // vent hood
+  fillB(4, 6, -32, 10, 7, -32, 0x5a6e5a, { j: 0.05 });           // upper cabinets
+  fillB(17, fy, -32, 19, 7, -31, 0xb8bcc2, { j: 0.04 });         // fridge
+  V(17, 5, -31, 0x70757a);                                        // fridge handle
+  // island + stools + pendants
+  fillB(7, fy, -27, 12, 3, -25, 0x4a3826, { j: 0.05 });
+  fillB(6, 4, -28, 13, 4, -24, 0xd9d4c8, { j: 0.04 });
+  for (const sx of [7, 10]) { fillB(sx, fy, -23, sx, 2, -23, 0x3a2e22); V(sx, 3, -23, 0x6e5a3e); }
+  for (const px of [8, 11]) {
+    V(px, 9, -26, P.iron, { j: 0 });
+    V(px, 8, -26, P.lampWarm, { t: 3, j: 0 });
+  }
+  // ---- family/dining room (front) ----
+  // rug
+  fillB(6, 1, -12, 15, 1, -4, 0x8e3a3a, { j: 0.05 });
+  fillB(6, 1, -12, 15, 1, -12, 0xc9b07a, { j: 0.05 }); fillB(6, 1, -4, 15, 1, -4, 0xc9b07a, { j: 0.05 });
+  // dining table + chairs
+  fillB(9, 4, -10, 13, 4, -7, 0x6e4a28, { j: 0.05 });
+  V(9, fy, -10, 0x4a3220); V(13, fy, -10, 0x4a3220); V(9, fy, -7, 0x4a3220); V(13, fy, -7, 0x4a3220);
+  fillB(9, 3, -10, 9, 3, -10, 0x4a3220); fillB(13, 3, -7, 13, 3, -7, 0x4a3220);
+  for (const [cx, cz] of [[8, -9], [14, -8], [10, -11], [12, -6]]) {
+    fillB(cx, fy, cz, cx, 2, cz, 0x4a3220, { j: 0.06 }); V(cx, 3, cz, 0x6e4a28, { j: 0.06 });
+  }
+  // bookcase on the east wall of the front room
+  fillB(20, fy, -12, 21, 7, -12, 0x4a3220, { j: 0.04 });
+  const r = mulberry(91);
+  for (let y = 3; y <= 6; y += 2) for (let x = 20; x <= 21; x++)
+    V(x, y, -12, [0x8a3030, 0x30608a, 0x3a7a4a, 0xc9a227, 0x7a4a8a][Math.floor(r() * 5)], { j: 0.1 });
+  // floor lamp by the window
+  fillB(17, fy, -3, 17, 5, -3, P.iron, { j: 0 });
+  V(17, 6, -3, P.lampWarm, { t: 3, j: 0 });
+  // ceiling fixture
+  V(10, 9, -8, P.lampWhite, { t: 3, j: 0 });
+}
+
+/* ============================================================
+   11. INTERIOR — PARLOR FLOOR (double parlor + entry hall)
+   floor y=10, room y 11..20
+   ============================================================ */
+{
+  const fy = 11;
+  // entry-hall wall with arched opening
+  fillB(18, fy, -14, 18, 20, -1, P.wallCream, { j: 0.03 });
+  clearB(18, fy, -12, 18, 17, -9);
+  V(18, 17, -10, P.wallCream); V(18, 17, -11, P.wallCream); // arch shoulders
+  // pocket-door wall between parlors
+  fillB(1, fy, -16, 25, 20, -16, P.wallCream, { j: 0.03 });
+  clearB(5, fy, -16, 11, 18, -16);
+  fillB(4, fy, -16, 4, 18, -16, P.doorWood, { j: 0.04 });   // pocket doors ajar
+  fillB(12, fy, -16, 12, 18, -16, P.doorWood, { j: 0.04 });
+  // ---- front parlor ----
+  // rug
+  fillB(3, 10, -13, 14, 10, -3, 0x2f4858, { j: 0.05 });
+  fillB(3, 10, -13, 14, 10, -13, 0xc9b07a, { j: 0.05 }); fillB(3, 10, -3, 14, 10, -3, 0xc9b07a, { j: 0.05 });
+  // sofa under the windows
+  fillB(5, fy, -3, 12, fy, -2, 0x2f5f5a, { j: 0.06 });
+  fillB(5, 12, -2, 12, 13, -2, 0x2f5f5a, { j: 0.06 });       // back
+  fillB(5, 12, -3, 5, 12, -3, 0x2f5f5a); fillB(12, 12, -3, 12, 12, -3, 0x2f5f5a); // arms
+  V(6, 12, -3, 0xc9a227, { j: 0.08 }); V(11, 12, -3, 0x8e3a3a, { j: 0.08 });      // throw pillows
+  // coffee table
+  fillB(7, 12, -7, 10, 12, -6, 0x6e4a28, { j: 0.05 });
+  V(7, fy, -7, 0x4a3220); V(10, fy, -6, 0x4a3220);
+  V(8, 13, -6, 0xb04a3a, { j: 0.05 });                        // book on the table
+  // pair of armchairs facing the sofa
+  for (const ax of [4, 12]) {
+    fillB(ax, fy, -10, ax + 1, fy, -9, 0x8a4a2e, { j: 0.06 });
+    fillB(ax, 12, -10, ax + 1, 13, -10, 0x8a4a2e, { j: 0.06 });
+  }
+  // upright piano against the hall wall
+  fillB(15, fy, -9, 17, 15, -4, 0x1c1c1e, { j: 0.03 });
+  fillB(15, 13, -8, 15, 13, -5, 0xe8e4da, { j: 0.02 });       // keys
+  fillB(13, fy, -7, 14, fy, -6, 0x3a2e22, { j: 0.05 });       // bench
+  V(16, 16, -6, 0xc9a227, { j: 0.05 });                        // metronome
+  // chandelier
+  V(9, 19, -8, P.iron, { j: 0 });
+  fillB(8, 18, -8, 10, 18, -8, P.lampWarm, { t: 3, j: 0 });
+  V(9, 18, -9, P.lampWarm, { t: 3, j: 0 }); V(9, 18, -7, P.lampWarm, { t: 3, j: 0 });
+  // curtains on the parlor windows
+  for (const wx of [2, 8, 10, 16]) fillB(wx, fy + 1, -1, wx, 19, -1, 0x7a3040, { j: 0.06 });
+  fillB(2, 19, -1, 16, 19, -1, 0x5e2432, { j: 0.05 });        // valance
+  // ---- rear parlor (dining/library) ----
+  // marble fireplace on the west wall
+  fillB(1, fy, -24, 2, 16, -20, 0xded8cc, { j: 0.04 });
+  clearB(2, fy, -23, 2, 13, -21);
+  fillB(2, fy, -23, 2, 11, -21, 0x1c1410, { j: 0.05 });
+  fillB(2, 12, -23, 2, 12, -21, 0x2a1e16, { j: 0.05 });
+  V(2, 12, -22, P.fireAmber, { t: 2 });
+  fillB(1, 16, -24, 3, 16, -20, 0xc9c2b4, { j: 0.04 });        // mantel
+  fillB(1, 17, -23, 1, 19, -21, P.mirror, { j: 0.02 });        // gilt mirror
+  fillB(1, 17, -24, 1, 19, -24, P.brass, { j: 0.04 }); fillB(1, 17, -20, 1, 19, -20, P.brass, { j: 0.04 });
+  // dining table + chairs
+  fillB(8, 13, -26, 14, 13, -23, 0x5e3a20, { j: 0.04 });
+  fillB(9, fy, -25, 9, 12, -25, 0x3a2516); fillB(13, fy, -24, 13, 12, -24, 0x3a2516);
+  V(11, 14, -24, 0xc9a227, { j: 0.05 });                        // candlesticks
+  for (const [cx, cz] of [[7, -25], [15, -24], [10, -27], [12, -22], [10, -22], [12, -27]]) {
+    fillB(cx, fy, cz, cx, 12, cz, 0x3a2516, { j: 0.06 }); V(cx, 13, cz, 0x5e3a20, { j: 0.06 });
+  }
+  // bookshelf wall between the rear windows
+  fillB(8, fy, -32, 10, 18, -32, 0x4a3220, { j: 0.04 });
+  const r = mulberry(55);
+  for (let y = 12; y <= 17; y++) for (let x = 8; x <= 10; x++)
+    if (r() < 0.8) V(x, y, -32, [0x8a3030, 0x30608a, 0x3a7a4a, 0xc9a227, 0x7a4a8a, 0xa86a32][Math.floor(r() * 6)], { j: 0.1 });
+  // rear parlor ceiling light
+  V(11, 19, -24, P.lampWarm, { t: 3, j: 0 });
+  // potted fern by the rear window
+  fillB(16, fy, -31, 16, 11, -31, P.terracotta, { j: 0.06 });
+  fillB(15, 12, -31, 17, 13, -31, P.leafB, { j: 0.15 }); V(16, 14, -31, P.leafA, { j: 0.15 });
+}
+/* ============================================================
+   12. INTERIOR — THIRD FLOOR (master bedroom, bath, kid's room)
+   floor y=21, room y 22..29
+   ============================================================ */
+{
+  const fy = 22;
+  // hall wall + bath partitions
+  fillB(1, fy, -16, 21, 29, -16, P.wallBlue, { j: 0.03 });
+  clearB(16, fy, -16, 19, 27, -16);                          // door to rear hall
+  fillB(13, fy, -24, 13, 29, -17, P.wallCream, { j: 0.03 }); // bath west wall
+  clearB(13, fy, -21, 13, 27, -19);                          // bath door
+  fillB(14, fy, -25, 25, 29, -25, P.wallCream, { j: 0.03 }); // bath south wall
+  // ---- master bedroom (front) ----
+  fillB(2, 21, -12, 12, 21, -2, 0xcec4ae, { j: 0.04 });      // rug
+  // bed: headboard at the west wall
+  fillB(2, fy, -9, 2, 25, -4, 0x4a3220, { j: 0.04 });        // headboard
+  fillB(3, fy, -9, 9, fy, -4, 0x3a2516, { j: 0.04 });        // frame
+  fillB(3, 23, -9, 9, 23, -4, 0xe8e4da, { j: 0.03 });        // mattress
+  fillB(5, 23, -9, 9, 23, -4, 0x5a6e8a, { j: 0.05 });        // duvet
+  V(3, 24, -8, 0xf2eee4); V(3, 24, -5, 0xf2eee4);            // pillows
+  // nightstands + lamps
+  for (const nz of [-2, -11]) {
+    fillB(3, fy, nz, 4, 23, nz, 0x4a3220, { j: 0.05 });
+    V(3, 24, nz, P.lampWarm, { t: 3, j: 0 });
+  }
+  // dresser with mirror
+  fillB(10, fy, -15, 15, 24, -14, 0x5e3a20, { j: 0.04 });
+  fillB(12, 25, -15, 14, 27, -15, P.mirror, { j: 0.02 });
+  // wardrobe
+  fillB(17, fy, -4, 19, 28, -2, 0x4a3220, { j: 0.04 });
+  V(18, 25, -4, P.brass, { j: 0.03 });
+  // ceiling light
+  V(8, 28, -8, P.lampWhite, { t: 3, j: 0 });
+  // ---- bathroom (x14..25, z -17..-24) ----
+  for (let x = 14; x <= 25; x++) for (let z = -24; z <= -17; z++)
+    V(x, 21, z, ((x + z) % 2 === 0) ? P.tileA : P.tileB, { j: 0.03 });
+  fillB(15, fy, -23, 18, 23, -21, 0xf2efe8, { j: 0.02 });    // clawfoot tub
+  fillB(16, 23, -22, 17, 23, -22, 0xbcd4dc, { j: 0.03 });    // water
+  V(15, 24, -23, 0x9aa0a6);                                   // faucet
+  fillB(21, fy, -18, 22, 23, -18, 0xf2efe8, { j: 0.02 });    // toilet
+  fillB(21, 24, -17, 22, 25, -17, 0xf2efe8, { j: 0.02 });    // tank
+  fillB(24, fy, -22, 24, 24, -21, 0xf2efe8, { j: 0.02 });    // pedestal sink
+  fillB(25, 25, -22, 25, 27, -21, P.mirror, { j: 0.02 });    // mirror on east wall
+  V(14, 25, -19, 0xb04a3a, { j: 0.05 });                      // towel on the wall
+  V(19, 28, -20, P.lampWhite, { t: 3, j: 0 });
+  // ---- kid's room (rear) ----
+  fillB(15, 21, -31, 22, 21, -27, 0x6a8a5a, { j: 0.06 });    // green rug
+  fillB(17, fy, -31, 21, fy, -29, 0xc05a3a, { j: 0.05 });    // bed frame
+  fillB(17, 23, -31, 21, 23, -29, 0xe8e4da, { j: 0.03 });
+  fillB(18, 23, -31, 21, 23, -29, 0x6ab04a, { j: 0.06 });    // green blanket
+  V(17, 24, -30, 0xf2eee4);                                   // pillow
+  // toy blocks + toy chest
+  V(15, fy, -28, 0xc03030); V(16, fy, -28, 0x3060c0); V(15, 23, -28, 0xc0a030);
+  fillB(2, fy, -31, 4, 23, -29, 0x8a6a3a, { j: 0.05 });
+  // desk under the rear window
+  fillB(6, 24, -32, 9, 24, -31, 0x6e4a28, { j: 0.05 });
+  V(6, fy, -32, 0x4a3220); V(9, fy, -31, 0x4a3220);
+  V(7, 25, -31, P.lampWarm, { t: 3, j: 0 });                  // desk lamp
+  V(8, fy, -29, 0x3a2e22); V(8, 23, -29, 0xb04a3a);           // chair
+  V(18, 28, -29, P.lampWhite, { t: 3, j: 0 });
+}
+
+/* ============================================================
+   13. INTERIOR — FOURTH FLOOR (study + guest room)
+   floor y=30, room y 31..38
+   ============================================================ */
+{
+  const fy = 31;
+  fillB(1, fy, -16, 21, 38, -16, P.wallCream, { j: 0.03 });
+  clearB(8, fy, -16, 11, 36, -16);
+  // ---- study (front) ----
+  fillB(3, 30, -12, 16, 30, -3, 0x7a3040, { j: 0.05 });      // oxblood rug
+  fillB(3, 30, -12, 16, 30, -12, 0xc9b07a, { j: 0.05 }); fillB(3, 30, -3, 16, 30, -3, 0xc9b07a, { j: 0.05 });
+  // desk facing the front windows
+  fillB(5, 33, -4, 10, 33, -3, 0x5e3a20, { j: 0.04 });
+  fillB(5, fy, -4, 5, 32, -3, 0x3a2516); fillB(10, fy, -4, 10, 32, -3, 0x3a2516);
+  V(7, 34, -3, 0x2a2a2e);                                     // typewriter
+  V(9, 34, -4, P.lampWarm, { t: 3, j: 0 });                   // banker's lamp
+  V(6, fy, -6, 0x3a2e22); fillB(6, 32, -6, 6, 33, -7, 0x6e4a28); // desk chair
+  // full-height bookshelves on the west wall
+  fillB(1, fy, -13, 2, 37, -3, 0x4a3220, { j: 0.04 });
+  const r = mulberry(123);
+  for (let z = -13; z <= -3; z++) for (let y = 32; y <= 36; y++)
+    if (r() < 0.78) V(2, y, z, [0x8a3030, 0x30608a, 0x3a7a4a, 0xc9a227, 0x7a4a8a, 0xa86a32, 0x607a8a][Math.floor(r() * 7)], { j: 0.12 });
+  // reading chair + floor lamp
+  fillB(13, fy, -9, 14, fy, -8, 0x3f6650, { j: 0.05 });
+  fillB(13, 32, -10, 14, 33, -10, 0x3f6650, { j: 0.05 });
+  fillB(16, fy, -10, 16, 34, -10, P.iron, { j: 0 });
+  V(16, 35, -10, P.lampWarm, { t: 3, j: 0 });
+  // telescope aimed out the window
+  fillB(13, fy, -3, 13, 32, -3, P.iron, { j: 0 });
+  V(13, 33, -3, 0x8a6a2a); V(13, 34, -2, 0x8a6a2a);
+  // globe
+  V(17, fy, -13, 0x3a2e22); V(17, 32, -13, 0x4a7aa0, { j: 0.08 });
+  // ---- guest room (rear) ----
+  fillB(4, fy, -31, 9, fy, -28, 0x4a3220, { j: 0.04 });
+  fillB(4, 32, -31, 9, 32, -28, 0xe8e4da, { j: 0.03 });
+  fillB(5, 32, -31, 9, 32, -28, 0x8a6a4a, { j: 0.05 });      // quilt
+  V(4, 33, -30, 0xf2eee4);
+  fillB(12, fy, -32, 14, 35, -31, 0x4a3220, { j: 0.04 });    // tall dresser
+  // guitar leaning in the corner
+  V(20, fy, -31, 0xa86a32); V(20, 32, -31, 0xa86a32); V(20, 33, -32, 0x6e4a28);
+  // potted plant
+  V(17, fy, -31, P.terracotta); fillB(16, 32, -31, 18, 33, -31, P.leafA, { j: 0.15 });
+  V(7, 37, -29, P.lampWhite, { t: 3, j: 0 });
+  V(9, 37, -8, P.lampWhite, { t: 3, j: 0 });
+}
+
+/* ============================================================
+   14. BACKYARD  (z -34..-52)
+   ============================================================ */
+fillB(0, 0, -52, 26, 0, -34, P.grass, { j: 0.14 });
+// wood deck off the kitchen door
+fillB(4, 1, -40, 22, 1, -35, P.fence, { j: 0.07 });
+// bistro set
+fillB(12, 3, -38, 13, 3, -37, 0x2e2e30, { j: 0.04 });
+V(12, 2, -38, 0x232325); V(13, 2, -37, 0x232325);
+V(10, 2, -38, 0x8a3030); V(15, 2, -37, 0x30608a);
+// grill
+fillB(19, 2, -39, 20, 3, -38, 0x232325, { j: 0.04 }); V(19, 4, -38, 0x3a3a3e);
+// planting beds along the fences
+fillB(1, 1, -51, 25, 1, -50, P.soil, { j: 0.1 });
+{
+  const r = mulberry(208);
+  for (let x = 2; x <= 24; x += 2) {
+    fillB(x, 2, -51, x + 1, 2 + Math.floor(r() * 2), -50, [P.leafA, P.leafB, P.leafC][Math.floor(r() * 3)], { j: 0.14 });
+    if (r() < 0.4) V(x, 4, -50, [0xd86a8a, 0xe0d05a][Math.floor(r() * 2)], { j: 0.1 });
+  }
+}
+// fences: rear + sides of the lot
+for (let x = -1; x <= 27; x++) { fillB(x, 1, -53, x, 4, -53, P.fence, { j: 0.09 }); if (x % 4 === 0) V(x, 5, -53, P.fence, { j: 0.06 }); }
+for (let z = -52; z <= 0; z++) {
+  fillB(-1, 1, z, -1, 4, z, P.fence, { j: 0.09 });
+  fillB(27, 1, z, 27, 4, z, P.fence, { j: 0.09 });
+}
+// string lights across the yard (two sagging strands)
+for (const lx of [8, 18]) {
+  for (let z = -35; z >= -52; z--) {
+    const sag = Math.round(Math.sin((z + 35) / -17 * Math.PI) * 2);
+    const y = 9 - sag;
+    V(lx, y, z, 0x2a2a2c, { j: 0 });
+    if ((z + 35) % 3 === 0) V(lx, y - 1, z, P.fireAmber, { t: 3, j: 0 });
+  }
+}
+// backyard maple
+treeAt(6, -46, 4242, 15);
+
+/* ============================================================
+   15. STREET PROPS
+   ============================================================ */
+/* ---- branching street trees ---- */
+function treeAt(cx, cz, seed, h) {
+  const r = mulberry(seed);
+  let x = cx, z = cz;
+  for (let y = 1; y <= h; y++) {
+    fillB(x, y, z, x, y, z, P.bark, { j: 0.1 });
+    if (y > 4 && r() < 0.22) { x += r() < 0.5 ? 1 : -1; V(x, y, z, P.bark, { j: 0.1 }); }
+  }
+  const blob = (bx, by, bz, rad) => {
+    for (let dx = -rad; dx <= rad; dx++) for (let dy = -rad; dy <= rad; dy++) for (let dz = -rad; dz <= rad; dz++) {
+      const d = dx * dx + dy * dy * 1.7 + dz * dz;
+      if (d <= rad * rad + (h3(bx + dx, by + dy, bz + dz) - 0.5) * rad * 2)
+        V(bx + dx, by + dy, bz + dz, [P.leafA, P.leafB, P.leafC][Math.floor(h3(bx + dx, by * 3 + dy, bz + dz) * 3)], { j: 0.12 });
+    }
+  };
+  const nBr = 4 + Math.floor(r() * 3);
+  for (let i = 0; i < nBr; i++) {
+    const ang = r() * Math.PI * 2, len = 3 + Math.floor(r() * 4);
+    const dx = Math.round(Math.cos(ang)), dz = Math.round(Math.sin(ang));
+    let bx = x, by = h - 2 - Math.floor(r() * 3), bz = z;
+    for (let s = 0; s < len; s++) {
+      bx += dx; bz += dz; if (r() < 0.7) by++;
+      V(bx, by, bz, P.bark, { j: 0.1 });
+    }
+    blob(bx, by + 1, bz, 2 + Math.floor(r() * 2));
+  }
+  blob(x, h + 2, z, 4);
+}
+treeAt(-9, 18, 101, 16);
+treeAt(32, 18, 202, 14);
+treeAt(9, 51, 303, 13);
+
+/* ---- fire hydrant ---- */
+{
+  const hx = 2, hz = 17;
+  fillB(hx, 2, hz, hx, 4, hz, P.hydrant, { j: 0.05 });
+  V(hx, 5, hz, P.hydrantCap, { j: 0.04 });
+  V(hx - 1, 3, hz, P.hydrantCap, { j: 0.04 }); V(hx + 1, 3, hz, P.hydrantCap, { j: 0.04 });
+  V(hx, 3, hz + 1, P.hydrantCap, { j: 0.04 });
+}
+
+/* ---- bishop's-crook streetlamp ---- */
+fillB(-15, 2, 19, -15, 15, 19, 0x2a3a2e, { j: 0.03 });
+fillB(-15, 15, 20, -15, 15, 22, 0x2a3a2e, { j: 0.03 });
+V(-15, 14, 23, 0x2a3a2e, { j: 0.03 });
+V(-15, 13, 23, P.lampWhite, { t: 3, j: 0 });
+V(-15, 5, 19, 0x1e2a22, { j: 0.03 }); // base collar
+
+/* ---- USPS mailbox ---- */
+fillB(-6, 2, 16, -4, 4, 17, P.mailbox, { j: 0.05 });
+fillB(-6, 5, 16, -4, 5, 17, 0x21406e, { j: 0.05 });
+fillB(-5, 4, 16, -5, 4, 16, 0x16335c);
+V(-6, 1, 16, 0x2a2a2c); V(-4, 1, 17, 0x2a2a2c);
+
+/* ---- traffic light at the corner (bulbs are live meshes, added later) ---- */
+fillB(52, 2, 20, 52, 16, 20, 0x3a3a32, { j: 0.03 });
+fillB(52, 16, 21, 52, 16, 33, 0x3a3a32, { j: 0.03 });          // mast arm
+fillB(52, 12, 30, 52, 16, 32, 0x23231e, { j: 0.03 });          // signal head
+// pedestrian signal on the pole
+fillB(52, 8, 21, 52, 9, 21, 0x23231e, { j: 0.03 });
+V(52, 9, 22, 0xe06a20, { t: 2, j: 0 });                         // orange hand
+// control box
+fillB(54, 2, 19, 55, 5, 20, 0x6a6e72, { j: 0.05 });
+
+/* ---- parked cars ---- */
+function car(x0, z0, hex, opts = {}) {
+  const len = opts.len || 11, dir = opts.dir || 1;
+  const front = dir > 0 ? x0 + len - 1 : x0, rear = dir > 0 ? x0 : x0 + len - 1;
+  // wheels
+  for (const wx of [x0 + 2, x0 + len - 3]) for (const wz of [z0, z0 + 5]) {
+    fillB(wx, 1, wz, wx + 1, 2, wz, 0x141416, { j: 0.04 });
+    V(wx, 2, wz, 0x505054, { j: 0.04 });
+  }
+  // body
+  fillB(x0, 2, z0, x0 + len - 1, 2, z0 + 5, 0x1c1c1e, { j: 0.04 });          // chassis shadow line
+  fillB(x0, 3, z0, x0 + len - 1, 4, z0 + 5, hex, { j: 0.06 });
+  // cabin with glass
+  const c0 = x0 + 3, c1 = x0 + len - 4;
+  fillB(c0, 5, z0 + 1, c1, 6, z0 + 4, P.glass, { t: 1, j: 0.02 });
+  fillB(c0, 5, z0 + 1, c0, 6, z0 + 1, hex, { j: 0.05 }); fillB(c0, 5, z0 + 4, c0, 6, z0 + 4, hex, { j: 0.05 });
+  fillB(c1, 5, z0 + 1, c1, 6, z0 + 1, hex, { j: 0.05 }); fillB(c1, 5, z0 + 4, c1, 6, z0 + 4, hex, { j: 0.05 });
+  fillB(c0, 7, z0 + 1, c1, 7, z0 + 4, hex, { j: 0.05 });                      // roof
+  // lights + bumpers
+  V(front, 4, z0 + 1, 0xf6f1cf, { j: 0 }); V(front, 4, z0 + 4, 0xf6f1cf, { j: 0 });
+  V(rear, 4, z0 + 1, 0x8a1414, { j: 0 }); V(rear, 4, z0 + 4, 0x8a1414, { j: 0 });
+  fillB(front, 3, z0, front, 3, z0 + 5, 0x9aa0a6, { j: 0.04 });
+  fillB(rear, 3, z0, rear, 3, z0 + 5, 0x9aa0a6, { j: 0.04 });
+  if (opts.taxi) {
+    for (let x = x0 + 1; x <= x0 + len - 2; x++) V(x, 4, z0, (x % 2 === 0) ? 0x1c1c1e : hex, { j: 0.03 }); // checker band
+    for (let x = x0 + 1; x <= x0 + len - 2; x++) V(x, 4, z0 + 5, (x % 2 === 0) ? 0x1c1c1e : hex, { j: 0.03 });
+    fillB(x0 + 5, 8, z0 + 2, x0 + 6, 8, z0 + 3, 0xe8e4da, { j: 0.03 });        // medallion sign
+  }
+}
+car(-26, 23, 0xb03030);                 // red sedan
+car(2, 23, 0x2a4a7a);                   // navy sedan
+car(20, 23, 0xe8b020, { taxi: true });  // yellow cab
+car(-2, 41, 0xd0d0d4, { dir: -1 });     // silver, far side
+// boxy delivery van, far side
+{
+  const vx = 18, vz = 41;
+  for (const wx of [vx + 2, vx + 10]) for (const wz of [vz, vz + 5]) fillB(wx, 1, wz, wx + 1, 2, wz, 0x141416, { j: 0.04 });
+  fillB(vx, 2, vz, vx + 12, 2, vz + 5, 0x1c1c1e, { j: 0.04 });
+  fillB(vx, 3, vz, vx + 12, 7, vz + 5, 0x6e4a26, { j: 0.05 });
+  fillB(vx, 5, vz + 1, vx, 6, vz + 4, P.glass, { t: 1, j: 0.02 });            // windshield (faces -x)
+  fillB(vx + 3, 4, vz, vx + 10, 6, vz, 0x5e3e1e, { j: 0.04 });                 // cargo door
+  V(vx, 4, vz + 1, 0xf6f1cf, { j: 0 }); V(vx, 4, vz + 4, 0xf6f1cf, { j: 0 });
+  V(vx + 12, 4, vz + 1, 0x8a1414); V(vx + 12, 4, vz + 4, 0x8a1414);
+}
+
+/* ---- people + dog + pigeons ---- */
+function person(x, z, shirt, pants) {
+  fillB(x, 2, z, x, 3, z, pants, { j: 0.05 });
+  fillB(x, 4, z, x, 5, z, shirt, { j: 0.05 });
+  V(x, 6, z, P.skin, { j: 0.04 });
+  V(x, 7, z, [0x2a2018, 0x6e4a26, 0x111114][Math.floor(h3(x, 7, z) * 3)], { j: 0.05 });
+}
+person(13, 16, 0x8a3030, 0x2a3038);
+person(-20, 15, 0x3a7a4a, 0x3a3a3e);
+person(40, 50, 0x30608a, 0x2a2018);
+// dog on a walk next to the person at x -20
+fillB(-18, 2, 15, -17, 2, 15, 0x6e4a26, { j: 0.06 });
+V(-16, 3, 15, 0x6e4a26); V(-18, 3, 15, 0x5e3e1e);   // head + tail up
+function pigeon(x, y, z) { V(x, y, z, 0x6e7076, { j: 0.06 }); V(x, y + 1, z, 0x53555c, { j: 0.06 }); }
+pigeon(5, 41, 1); pigeon(8, 41, 1);
+pigeon(-15, 16, 21);                                  // on the lamp arm
+V(24, 2, 15, 0x6e7076, { j: 0.06 });                  // one pecking at the sidewalk
+
+/* ============================================================
+   15B. CORNER BUILDING (east of the brownstone)
+   buff-brick mixed-use: DELI storefront + striped awning,
+   apartment, artist's loft, roof terrace, water tower
+   lot x 30..56 — facade z=12 (flush to the sidewalk), rear z=-22
+   floors: ground y1 (rooms 2..10), 2nd y11 (12..18),
+           3rd y19 (20..26), roof y27
+   ============================================================ */
+{
+  const B2 = {
+    brick: 0xc4a368, mortar: 0xb5945c,
+    paint: 0x2e5444, paintDk: 0x244438,
+    stone: 0xe0d8c6, sign: 0x1d3a2e, cream: 0xf2e8c8,
+    awnA: 0xe8e0cc, awnB: 0x2e5440,
+    tank: 0x7a5a38,
+  };
+
+  /* ---- shell ---- */
+  for (let y = 2; y <= 27; y++) {
+    const c = (y % 3 === 0) ? B2.mortar : B2.brick;
+    fillB(30, y, -22, 30, y, 11, c, { j: 0.07 });   // west party wall
+    fillB(56, y, -22, 56, y, 11, c, { j: 0.07 });   // east party wall
+    fillB(31, y, -22, 55, y, -22, c, { j: 0.07 });  // rear wall
+  }
+  // ground floor: checkerboard shop tile
+  for (let x = 31; x <= 55; x++) for (let z = -21; z <= 11; z++)
+    V(x, 1, z, ((x + z) % 2 === 0) ? P.tileA : P.tileB, { j: 0.03 });
+  // upper slabs with plank tops
+  for (const sy of [11, 19])
+    for (let x = 31; x <= 55; x++) for (let z = -21; z <= 11; z++)
+      V(x, sy, z, ((x + (z >> 2)) % 2 === 0) ? P.floorA : P.floorB, { j: 0.05 });
+  fillB(31, 27, -21, 55, 27, 11, P.roof, { j: 0.04 });   // roof slab
+
+  /* ---- stairwell: straight runs against the rear wall (x52..55) ---- */
+  fillB(51, 2, -21, 51, 26, -13, P.wallCream, { j: 0.03 });
+  clearB(51, 2, -15, 51, 7, -13);
+  clearB(51, 12, -15, 51, 17, -13);
+  clearB(51, 20, -15, 51, 25, -13);
+  for (let i = 1; i <= 10; i++) fillB(52, 2, -11 - i, 55, 1 + i, -11 - i, P.stairWood, { j: 0.05 });
+  clearB(52, 11, -21, 55, 11, -14);
+  for (let i = 1; i <= 8; i++) fillB(52, 12, -13 - i, 55, 11 + i, -13 - i, P.stairWood, { j: 0.05 });
+  clearB(52, 19, -21, 55, 19, -15);
+  for (let i = 1; i <= 8; i++) fillB(52, 20, -13 - i, 55, 19 + i, -13 - i, P.stairWood, { j: 0.05 });
+  clearB(52, 27, -21, 55, 27, -15);
+
+  /* ---- street facade (group 1 — dollhouse-hideable) ---- */
+  G = 1;
+  fillB(30, 1, 12, 56, 1, 12, 0x3c3c40, { j: 0.04 });   // granite water table
+  for (let y = 2; y <= 27; y++)
+    fillB(30, y, 12, 56, y, 12, (y % 3 === 0) ? B2.mortar : B2.brick, { j: 0.06 });
+  // storefront: painted piers, big glass, kick panels
+  for (const px of [30, 43, 55]) fillB(px, 2, 12, px + 1, 8, 12, B2.paintDk, { j: 0.04 });
+  clearB(32, 2, 12, 42, 8, 12);
+  fillB(32, 2, 12, 42, 2, 12, B2.paint, { j: 0.05 });
+  fillB(32, 3, 12, 42, 8, 12, P.glass, { t: 1, j: 0.02 });
+  fillB(37, 3, 12, 37, 8, 12, P.sash, { j: 0.03 });
+  clearB(45, 2, 12, 54, 8, 12);
+  fillB(49, 2, 12, 54, 2, 12, B2.paint, { j: 0.05 });
+  fillB(49, 3, 12, 54, 8, 12, P.glass, { t: 1, j: 0.02 });
+  fillB(51, 3, 12, 51, 8, 12, P.sash, { j: 0.03 });
+  // glass entry door + transom
+  fillB(45, 2, 12, 45, 8, 12, B2.paintDk, { j: 0.04 });
+  fillB(48, 2, 12, 48, 8, 12, B2.paintDk, { j: 0.04 });
+  fillB(46, 2, 12, 47, 2, 12, B2.paint, { j: 0.04 });
+  fillB(46, 3, 12, 47, 7, 12, P.glass, { t: 1, j: 0.02 });
+  fillB(46, 5, 12, 47, 5, 12, P.sash, { j: 0.03 });
+  fillB(46, 8, 12, 47, 8, 12, P.glass, { t: 1, j: 0.02 });
+  V(47, 4, 13, P.brass, { t: 2, j: 0 });
+  // sign band + channel letters (glow at night)
+  fillB(30, 9, 12, 56, 11, 12, B2.sign, { j: 0.03 });
+  {
+    const FONT = { D: ['##.', '#.#', '##.'], E: ['###', '##.', '###'], L: ['#..', '#..', '###'], I: ['#', '#', '#'] };
+    let lx = 37;
+    for (const ch of 'DELI') {
+      const rows = FONT[ch];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
+        if (rows[ry][cx] === '#') V(lx + cx, 11 - ry, 13, B2.cream, { t: 3, j: 0 });
+      lx += rows[0].length + 1;
+    }
+  }
+  // striped awning over the sidewalk
+  for (let x = 31; x <= 55; x++) {
+    const s = (x % 4 < 2), cA = s ? B2.awnA : B2.awnB;
+    V(x, 8, 13, cA, { j: 0.04 }); V(x, 8, 14, cA, { j: 0.04 });
+    V(x, 7, 15, cA, { j: 0.04 }); V(x, 7, 16, cA, { j: 0.04 });
+    V(x, 6, 16, s ? B2.awnB : B2.awnA, { j: 0.04 });   // valance
+  }
+  // upper-floor windows with limestone sills + lintels
+  function bWindow(x0, y0, w, h) {
+    clearB(x0, y0, 12, x0 + w - 1, y0 + h - 1, 12);
+    fillB(x0, y0, 12, x0 + w - 1, y0 + h - 1, 12, P.glass, { t: 1, j: 0.02 });
+    const midY = y0 + Math.floor(h / 2), midX = x0 + (w >> 1);
+    fillB(x0, midY, 12, x0 + w - 1, midY, 12, P.sash, { j: 0.03 });
+    fillB(midX, y0, 12, midX, y0 + h - 1, 12, P.sash, { j: 0.03 });
+    fillB(x0 - 1, y0 - 1, 13, x0 + w, y0 - 1, 13, B2.stone, { j: 0.04 });
+    fillB(x0 - 1, y0 + h, 13, x0 + w, y0 + h, 13, B2.stone, { j: 0.04 });
+  }
+  for (const wx of [32, 38, 44, 50]) bWindow(wx, 13, 4, 5);
+  for (const wx of [32, 38, 44, 50]) bWindow(wx, 21, 4, 4);
+  // pressed-metal cornice, painted green
+  for (let x = 30; x <= 56; x += 2) V(x, 26, 13, B2.paintDk, { j: 0.04 });
+  fillB(30, 27, 13, 56, 28, 13, B2.paint, { j: 0.04 });
+  for (const bx of [30, 36, 43, 50, 56]) fillB(bx, 26, 13, bx, 28, 14, B2.paintDk, { j: 0.04 });
+  fillB(30, 29, 12, 56, 29, 14, B2.paintDk, { j: 0.04 });
+  G = 0;
+
+  /* ---- parapets + terrace guard rail ---- */
+  fillB(30, 28, 11, 56, 28, 11, B2.brick, { j: 0.06 });
+  fillB(30, 28, -22, 30, 28, 11, B2.brick, { j: 0.06 });
+  fillB(56, 28, -22, 56, 28, 11, B2.brick, { j: 0.06 });
+  fillB(30, 28, -22, 56, 28, -22, B2.brick, { j: 0.06 });
+  fillB(30, 29, 11, 56, 29, 11, P.bluestone, { j: 0.04 });
+  fillB(30, 29, -22, 30, 29, 11, P.bluestone, { j: 0.04 });
+  fillB(56, 29, -22, 56, 29, 11, P.bluestone, { j: 0.04 });
+  fillB(30, 29, -22, 56, 29, -22, P.bluestone, { j: 0.04 });
+  for (let x = 30; x <= 56; x++) { V(x, 31, 11, P.iron, { j: 0 }); if (x % 3 === 0) V(x, 30, 11, P.iron, { j: 0 }); }
+  for (let z = -12; z <= 11; z++) {
+    V(30, 31, z, P.iron, { j: 0 }); V(56, 31, z, P.iron, { j: 0 });
+    if (z % 3 === 0) { V(30, 30, z, P.iron, { j: 0 }); V(56, 30, z, P.iron, { j: 0 }); }
+  }
+
+  /* ---- rear wall openings ---- */
+  function bWindowRear(x0, y0, w, h) {
+    clearB(x0, y0, -22, x0 + w - 1, y0 + h - 1, -22);
+    fillB(x0, y0, -22, x0 + w - 1, y0 + h - 1, -22, P.glass, { t: 1, j: 0.02 });
+    const midY = y0 + Math.floor(h / 2), midX = x0 + (w >> 1);
+    fillB(x0, midY, -22, x0 + w - 1, midY, -22, P.sash, { j: 0.03 });
+    fillB(midX, y0, -22, midX, y0 + h - 1, -22, P.sash, { j: 0.03 });
+    fillB(x0, y0 - 1, -23, x0 + w - 1, y0 - 1, -23, B2.stone, { j: 0.04 });
+  }
+  bWindowRear(33, 13, 4, 5); bWindowRear(40, 13, 4, 5);
+  bWindowRear(33, 21, 4, 4); bWindowRear(40, 21, 4, 4); bWindowRear(46, 21, 4, 4);
+  // steel service door + barred storeroom window
+  clearB(40, 2, -22, 42, 7, -22);
+  fillB(40, 2, -22, 42, 6, -22, 0x6a6e72, { j: 0.04 });
+  fillB(40, 7, -22, 42, 7, -22, P.glass, { t: 1, j: 0.02 });
+  V(42, 4, -23, P.brass, { t: 2, j: 0 });
+  clearB(44, 4, -22, 46, 6, -22);
+  fillB(44, 4, -22, 46, 6, -22, P.glass, { t: 1, j: 0.02 });
+  for (const bx of [44, 46]) fillB(bx, 4, -23, bx, 6, -23, P.iron, { j: 0.03 });
+
+  /* ---- ground floor: the deli/cafe ---- */
+  // service counter with butcher-block top
+  fillB(33, 2, -1, 45, 3, 1, B2.paintDk, { j: 0.05 });
+  fillB(32, 4, -2, 46, 4, 2, 0x9a6a3a, { j: 0.04 });
+  fillB(40, 5, -1, 42, 6, 0, 0x8a8e94, { j: 0.04 });          // espresso machine
+  V(34, 5, 0, 0x2a2a2e); V(34, 6, 0, 0x3a3a3e);               // register
+  fillB(43, 5, -1, 45, 6, 1, P.glass, { t: 1, j: 0.02 });     // pastry case
+  V(43, 5, 0, 0xc9923a); V(44, 5, 0, 0xb06a48); V(45, 5, 0, 0xe0d05a);
+  // the bodega cat, asleep by the register
+  V(36, 5, 0, 0xd8943a, { j: 0.05 }); V(36, 5, 1, 0xb87828, { j: 0.05 });
+  // back-bar shelves stocked with goods
+  fillB(33, 2, -5, 45, 7, -5, 0x4a3220, { j: 0.04 });
+  {
+    const r = mulberry(73);
+    for (let y = 3; y <= 6; y++) for (let x = 34; x <= 44; x++)
+      if (r() < 0.72) V(x, y, -5, [0xc9a227, 0x8a3030, 0x3a7a4a, 0x30608a, 0xe8e4da, 0xb06a48][Math.floor(r() * 6)], { j: 0.1 });
+  }
+  // pendants over the counter
+  for (const px of [35, 39, 43]) { V(px, 9, 0, P.iron, { j: 0 }); V(px, 8, 0, P.lampWarm, { t: 3, j: 0 }); }
+  // window bar + stools
+  fillB(33, 4, 10, 41, 4, 11, 0x9a6a3a, { j: 0.05 });
+  for (const sx of [34, 37, 40]) fillB(sx, 2, 8, sx, 3, 8, 0x2a2a2e, { j: 0.05 });
+  // two cafe tables east of the door
+  for (const [tx, tz] of [[50, 7], [53, 2]]) {
+    fillB(tx, 2, tz, tx, 3, tz, 0x2a2a2e);
+    fillB(tx - 1, 4, tz - 1, tx + 1, 4, tz + 1, 0x9a6a3a, { j: 0.05 });
+    V(tx - 2, 2, tz, 0x2a2a2e); V(tx - 2, 3, tz, 0x6e4a28);
+    V(tx + 2, 2, tz, 0x2a2a2e); V(tx + 2, 3, tz, 0x6e4a28);
+  }
+  // neon sign glowing in the window
+  for (let nx = 34; nx <= 37; nx++) V(nx, 7, 11, 0xff4060, { t: 2, j: 0 });
+  // upright drink cooler on the east wall
+  fillB(54, 2, -4, 55, 8, 1, 0x2e3236, { j: 0.03 });
+  {
+    const r = mulberry(58);
+    for (let y = 3; y <= 7; y++) for (let z = -3; z <= 0; z++)
+      V(55, y, z, [0xd03030, 0x3070d0, 0x30b050, 0xe8b020][Math.floor(r() * 4)], { j: 0.08 });
+  }
+  fillB(54, 3, -3, 54, 7, 0, P.glass, { t: 1, j: 0.02 });
+  fillB(54, 8, -3, 54, 8, 0, 0xd8ecff, { t: 2, j: 0 });
+  // partition to the storeroom
+  fillB(31, 2, -6, 55, 10, -6, P.wallCream, { j: 0.03 });
+  clearB(47, 2, -6, 50, 8, -6);
+  // storeroom racking with boxes
+  for (const sz of [-11, -16]) {
+    for (let x = 33; x <= 45; x++) {
+      if (x % 4 === 1) fillB(x, 2, sz, x, 7, sz, P.iron, { j: 0.03 });
+      for (const sy of [3, 5, 7]) V(x, sy, sz, 0x9a9ea2, { j: 0.04 });
+    }
+    const r = mulberry(sz * 13);
+    for (let x = 33; x <= 45; x++) for (const sy of [4, 6])
+      if (r() < 0.6) V(x, sy, sz, [0x8a6a3a, 0xa8845a, 0x6e5436][Math.floor(r() * 3)], { j: 0.1 });
+  }
+  // kegs, walk-in fridge front, mop bucket
+  fillB(47, 2, -21, 48, 4, -20, 0xb8bcc2, { j: 0.05 });
+  fillB(47, 2, -18, 48, 3, -17, 0xb8bcc2, { j: 0.05 });
+  fillB(34, 2, -21, 37, 7, -21, 0xaeb2b8, { j: 0.03 });
+  V(37, 4, -20, 0x6a6e74);
+  V(31, 2, -20, 0xc8c032); V(31, 3, -20, 0x8a8e92);
+  V(40, 9, -13, P.lampWarm, { t: 3, j: 0 });                   // bare bulb
+
+  /* ---- 2nd floor: apartment ---- */
+  {
+    const fy = 12;
+    fillB(31, fy, -6, 55, 18, -6, P.wallSage, { j: 0.03 });
+    clearB(46, fy, -6, 49, 17, -6);
+    // living room rug
+    fillB(35, 11, -2, 46, 11, 7, 0x4a5e6e, { j: 0.05 });
+    fillB(35, 11, -2, 46, 11, -2, 0xc9b07a, { j: 0.05 }); fillB(35, 11, 7, 46, 11, 7, 0xc9b07a, { j: 0.05 });
+    // sofa under the front windows, facing the TV wall
+    fillB(36, fy, 9, 43, fy, 10, 0xa05a32, { j: 0.06 });
+    fillB(36, 13, 10, 43, 14, 10, 0xa05a32, { j: 0.06 });
+    V(37, 13, 9, 0xe0d05a, { j: 0.08 }); V(42, 13, 9, 0x2f5f5a, { j: 0.08 });
+    // console + wall-mounted TV on the partition
+    fillB(37, fy, -5, 44, 12, -5, 0x4a3220, { j: 0.04 });
+    fillB(38, 14, -5, 43, 16, -5, 0x0c0c10, { j: 0.02 });
+    // coffee table + armchair
+    fillB(38, 13, 2, 41, 13, 3, 0x6e4a28, { j: 0.05 });
+    V(38, fy, 2, 0x4a3220); V(41, fy, 3, 0x4a3220);
+    fillB(33, fy, 1, 34, fy, 2, 0x3f6650, { j: 0.05 }); fillB(33, 13, 3, 34, 14, 3, 0x3f6650, { j: 0.05 });
+    // kitchenette along the east wall
+    fillB(53, fy, -4, 55, 13, 3, 0x4a5e6a, { j: 0.04 });
+    fillB(53, 14, -4, 55, 14, 3, 0xd9d4c8, { j: 0.03 });
+    V(54, 14, 0, 0xa8b0b6); V(54, 15, 0, 0x888e94);
+    fillB(54, 14, -3, 55, 14, -2, 0x141414);
+    fillB(55, 16, -4, 55, 17, 1, 0x4a5e6a, { j: 0.04 });
+    fillB(53, fy, 5, 55, 17, 7, 0xb8bcc2, { j: 0.04 });
+    V(53, 15, 5, 0x70757a);
+    // small dining table
+    fillB(49, 13, 8, 50, 13, 9, 0x9a6a3a, { j: 0.05 }); V(49, fy, 8, 0x4a3220); V(50, fy, 9, 0x4a3220);
+    V(48, fy, 9, 0x2a2a2e); V(51, fy, 8, 0x2a2a2e);
+    // plants + floor lamp
+    V(33, fy, 10, P.terracotta); fillB(32, 13, 10, 34, 14, 10, P.leafB, { j: 0.15 });
+    fillB(46, fy, 10, 46, 15, 10, P.iron, { j: 0 }); V(46, 16, 10, P.lampWarm, { t: 3, j: 0 });
+    V(40, 18, 2, P.lampWhite, { t: 3, j: 0 });
+    // bedroom (rear)
+    fillB(33, 11, -19, 43, 11, -10, 0xb8a888, { j: 0.05 });
+    fillB(31, fy, -16, 31, 15, -12, 0x4a3220, { j: 0.04 });    // headboard
+    fillB(32, fy, -16, 37, fy, -12, 0x3a2516, { j: 0.04 });
+    fillB(32, 13, -16, 37, 13, -12, 0xe8e4da, { j: 0.03 });
+    fillB(34, 13, -16, 37, 13, -12, 0x6a4a72, { j: 0.05 });    // plum duvet
+    V(32, 14, -15, 0xf2eee4); V(32, 14, -13, 0xf2eee4);
+    fillB(32, fy, -11, 33, 13, -11, 0x4a3220, { j: 0.05 }); V(32, 14, -11, P.lampWarm, { t: 3, j: 0 });
+    fillB(32, fy, -17, 33, 13, -17, 0x4a3220, { j: 0.05 });
+    fillB(45, fy, -21, 48, 14, -20, 0x5e3a20, { j: 0.04 });    // dresser
+    fillB(46, 15, -21, 47, 17, -21, P.mirror, { j: 0.02 });
+    V(39, fy, -20, 0xc8c8c2);                                   // laundry basket
+    V(37, 18, -14, P.lampWhite, { t: 3, j: 0 });
+  }
+
+  /* ---- 3rd floor: artist's loft (open plan) ---- */
+  {
+    const fy = 20;
+    // paint-splattered drop cloth
+    fillB(34, 19, -3, 42, 19, 5, 0xd8d2c2, { j: 0.05 });
+    {
+      const r = mulberry(217);
+      for (let i = 0; i < 14; i++)
+        V(34 + Math.floor(r() * 9), 19, -3 + Math.floor(r() * 9), [0xc03838, 0x3060c0, 0xe0b020, 0x30a060][Math.floor(r() * 4)], { j: 0.05 });
+    }
+    // easel + work in progress
+    for (const ex of [36, 38]) fillB(ex, fy, 1, ex, 24, 1, 0x8a6a3a, { j: 0.04 });
+    fillB(35, 21, 2, 39, 24, 2, 0xf2efe6, { j: 0.02 });
+    V(36, 22, 2, 0xc03838); V(37, 23, 2, 0x3060c0); V(38, 22, 2, 0xe0b020);
+    // paint cart
+    fillB(41, fy, 0, 42, 21, 1, 0x8a3030, { j: 0.05 });
+    V(41, 22, 0, 0x3060c0); V(42, 22, 1, 0xe0b020);
+    // finished canvases leaning on the west wall
+    fillB(31, fy, -8, 31, 23, -5, 0xe8e2d2, { j: 0.03 });
+    V(31, 21, -7, 0xc03838); V(31, 22, -6, 0x30a060);
+    fillB(31, fy, -3, 31, 22, -1, 0x9aa8c8, { j: 0.06 });
+    // long work table, jars, stool
+    fillB(33, 23, -14, 39, 23, -12, 0x9a6a3a, { j: 0.04 });
+    V(33, fy, -14, 0x4a3220); V(39, fy, -12, 0x4a3220);
+    V(34, 24, -13, 0xc9a227); V(36, 24, -13, 0x3a7a4a); V(38, 24, -12, 0x30608a);
+    V(36, fy, -10, 0x2a2a2e); V(36, 21, -10, 0x6e4a28);
+    // record player on a crate + vinyl
+    fillB(44, fy, 9, 45, 21, 10, 0x6e5436, { j: 0.05 });
+    V(44, 22, 10, 0x1c1c1e); V(45, 22, 9, 0xc9a227);
+    fillB(47, fy, 9, 48, 21, 10, 0x8a6a3a, { j: 0.05 });
+    V(47, 22, 9, 0x2a2a2e); V(48, 22, 10, 0x8a3030);
+    // daybed by the rear windows
+    fillB(44, fy, -20, 48, fy, -18, 0x3a2516, { j: 0.04 });
+    fillB(44, 21, -20, 48, 21, -18, 0xe8e4da, { j: 0.03 });
+    fillB(46, 21, -20, 48, 21, -18, 0x8e3a3a, { j: 0.05 });
+    V(44, 22, -19, 0xf2eee4);
+    // monstera in the corner
+    V(33, fy, -20, P.terracotta); fillB(32, 21, -21, 34, 23, -19, P.leafA, { j: 0.16 });
+    // track lighting
+    fillB(36, 26, -6, 42, 26, -6, P.iron, { j: 0 });
+    for (const tx of [37, 39, 41]) V(tx, 25, -6, P.lampWarm, { t: 3, j: 0 });
+    V(43, 26, -15, P.lampWhite, { t: 3, j: 0 });
+  }
+
+  /* ---- roof terrace ---- */
+  for (let x = 31; x <= 55; x++) for (let z = -12; z <= 10; z++)
+    V(x, 28, z, (((x >> 1) + z) % 2 === 0) ? 0x8a6038 : 0x7a5430, { j: 0.06 });
+  // planters along the front rail
+  for (const px of [32, 40, 48]) {
+    fillB(px, 29, 9, px + 3, 30, 10, P.ironGreen, { j: 0.06 });
+    const r = mulberry(px * 3);
+    for (let x = px; x <= px + 3; x++) {
+      V(x, 31, 9, [P.leafA, P.leafB][Math.floor(r() * 2)], { j: 0.14 });
+      V(x, 31, 10, [P.leafB, P.leafC][Math.floor(r() * 2)], { j: 0.14 });
+      if (r() < 0.5) V(x, 32, 10, [0xd86a8a, 0xe0d05a][Math.floor(r() * 2)], { j: 0.1 });
+    }
+  }
+  // pair of loungers
+  for (const cz of [0, 4]) {
+    fillB(33, 29, cz, 37, 29, cz + 1, 0x8a6a4a, { j: 0.06 });
+    fillB(33, 30, cz, 33, 31, cz + 1, 0x8a6a4a, { j: 0.06 });
+    fillB(35, 30, cz, 37, 30, cz + 1, 0x2f5f5a, { j: 0.06 });
+  }
+  // umbrella table + chairs
+  fillB(44, 30, 1, 46, 30, 3, 0x9a6a3a, { j: 0.05 });
+  fillB(45, 29, 2, 45, 32, 2, P.iron, { j: 0 });
+  fillB(43, 33, 0, 47, 33, 4, 0xc05a3a, { j: 0.06 });
+  clearB(43, 33, 0, 43, 33, 0); clearB(47, 33, 0, 47, 33, 0);
+  clearB(43, 33, 4, 43, 33, 4); clearB(47, 33, 4, 47, 33, 4);
+  for (const [cx, cz] of [[43, 2], [47, 2], [45, 4]]) { V(cx, 29, cz, 0x2a2a2e); V(cx, 30, cz, 0x6e4a28); }
+  // small grill + doormat + pot by the bulkhead door
+  fillB(53, 29, 8, 54, 30, 9, 0x232325, { j: 0.04 }); V(53, 31, 8, 0x3a3a3e);
+  fillB(52, 28, -13, 54, 28, -13, 0x6e3a30, { j: 0.05 });
+  V(50, 29, -12, P.terracotta); V(50, 30, -12, P.leafB, { j: 0.15 });
+  // string-light poles + two sagging strands
+  for (const px of [37, 47]) {
+    fillB(px, 29, 10, px, 32, 10, P.iron, { j: 0 });
+    fillB(px, 29, -12, px, 32, -12, P.iron, { j: 0 });
+    for (let z = -12; z <= 10; z++) {
+      const y = 32 - Math.round(Math.sin((z + 12) / 22 * Math.PI));
+      V(px, y, z, 0x2a2a2c, { j: 0 });
+      if ((z + 12) % 3 === 1) V(px, y - 1, z, P.fireAmber, { t: 3, j: 0 });
+    }
+  }
+  /* ---- stair bulkhead ---- */
+  fillB(50, 28, -21, 55, 32, -14, B2.brick, { j: 0.07 });
+  clearB(51, 28, -20, 54, 32, -15);
+  clearB(52, 28, -14, 54, 31, -14);
+  fillB(50, 33, -21, 55, 33, -14, P.roofTrim, { j: 0.04 });
+  /* ---- water tower ---- */
+  for (const [lx, lz] of [[34, -20], [40, -20], [34, -14], [40, -14]])
+    fillB(lx, 28, lz, lx, 33, lz, 0x4a3a28, { j: 0.05 });
+  fillB(34, 30, -20, 40, 30, -20, 0x4a3a28, { j: 0.05 });
+  fillB(34, 30, -14, 40, 30, -14, 0x4a3a28, { j: 0.05 });
+  fillB(34, 30, -19, 34, 30, -15, 0x4a3a28, { j: 0.05 });
+  fillB(40, 30, -19, 40, 30, -15, 0x4a3a28, { j: 0.05 });
+  for (let y = 34; y <= 40; y++) for (let x = 33; x <= 41; x++) for (let z = -21; z <= -13; z++) {
+    const dx = Math.abs(x - 37), dz = Math.abs(z + 17);
+    if (dx + dz > 6 || dx > 4 || dz > 4) continue;
+    V(x, y, z, (y === 35 || y === 38) ? 0x5a4026 : B2.tank, { j: 0.08 });
+  }
+  for (let x = 35; x <= 39; x++) for (let z = -19; z <= -15; z++)
+    if (Math.abs(x - 37) + Math.abs(z + 17) <= 3) V(x, 41, z, 0x55585e, { j: 0.05 });
+  for (let x = 36; x <= 38; x++) for (let z = -18; z <= -16; z++)
+    if (Math.abs(x - 37) + Math.abs(z + 17) <= 1) V(x, 42, z, 0x55585e, { j: 0.05 });
+  V(37, 43, -17, 0x3a3a3e);
+
+  /* ---- ghost sign on the east flank ---- */
+  fillB(56, 13, -16, 56, 23, -4, 0x9a9182, { j: 0.09 });
+  {
+    const r = mulberry(606);
+    for (const sy of [21, 18, 15]) for (let z = -14; z <= -6; z++)
+      if (r() < 0.55) fillB(56, sy, z, 56, sy + 1, z, 0x7a4a3c, { j: 0.1 });
+  }
+
+  /* ---- service yard behind the corner building ---- */
+  fillB(31, 1, -28, 44, 1, -23, P.concrete, { j: 0.05 });
+  fillB(33, 2, -27, 35, 3, -26, 0xa8acb0, { j: 0.05 }); V(34, 3, -26, 0x70757a);
+  fillB(37, 2, -27, 39, 3, -26, 0xa8acb0, { j: 0.05 }); V(38, 3, -26, 0x70757a);
+  fillB(47, 2, -26, 48, 4, -25, P.ironGreen, { j: 0.08 });
+  fillB(50, 2, -26, 51, 3, -25, P.ironGreen, { j: 0.08 });
+  for (let x = 30; x <= 57; x++) { fillB(x, 1, -30, x, 4, -30, P.fence, { j: 0.09 }); if (x % 4 === 0) V(x, 5, -30, P.fence, { j: 0.06 }); }
+  for (let z = -29; z <= -22; z++) fillB(57, 1, z, 57, 4, z, P.fence, { j: 0.09 });
+}
+
+/* ============================================================
+   15C. CONSTRUCTION SITE (west of the brownstone)
+   lot x -32..-4, z -28..11 — green plywood hoarding, footing
+   pit, concrete frame going up, scaffold, tower crane, props
+   ============================================================ */
+{
+  // churned dirt over the old lawn
+  fillB(-32, 0, -28, -4, 0, 11, 0x5c4832, { j: 0.12 });
+  {
+    const r = mulberry(909);
+    for (let i = 0; i < 18; i++) {
+      const dx = -31 + Math.floor(r() * 24), dz = -27 + Math.floor(r() * 35);
+      fillB(dx, 0, dz, dx + 1 + Math.floor(r() * 3), 0, dz + 1 + Math.floor(r() * 2),
+        r() < 0.5 ? 0x4e3c28 : 0x6a5640, { j: 0.08 });
+    }
+  }
+  // tire ruts in from the gate
+  for (let z = -2; z <= 10; z++) { V(-13, 0, z, 0x44341f, { j: 0.06 }); V(-10, 0, z, 0x44341f, { j: 0.06 }); }
+  // walk boards from the gate
+  fillB(-13, 1, 3, -10, 1, 10, 0x9a7a4a, { j: 0.08 });
+
+  /* ---- hunter-green plywood hoarding with rolling gate ---- */
+  for (let x = -32; x <= -4; x++) {
+    if (x >= -14 && x <= -9) continue;
+    fillB(x, 1, 11, x, 4, 11, 0x39584a, { j: 0.06 });
+    if (x % 4 === 0) fillB(x, 1, 11, x, 5, 11, 0x2c4438, { j: 0.04 });
+  }
+  for (let x = -14; x <= -9; x++) for (let y = 1; y <= 3; y++)
+    if ((x + y) % 2 === 0) V(x, y, 11, 0x9aa0a6, { j: 0.04 });
+  fillB(-14, 4, 11, -9, 4, 11, 0x9aa0a6, { j: 0.04 });
+  for (let z = -28; z <= 10; z++) {
+    fillB(-32, 1, z, -32, 4, z, 0x39584a, { j: 0.06 });
+    fillB(-4, 1, z, -4, 4, z, 0x39584a, { j: 0.06 });
+  }
+  for (let x = -31; x <= -5; x++) fillB(x, 1, -28, x, 4, -28, 0x39584a, { j: 0.06 });
+  // permit board + orange warning diamond on the street face
+  fillB(-26, 2, 12, -24, 3, 12, 0xe8e4da, { j: 0.03 });
+  V(-19, 2, 12, 0xe07020); V(-19, 4, 12, 0xe07020); V(-20, 3, 12, 0xe07020); V(-18, 3, 12, 0xe07020);
+  V(-19, 3, 12, 0xe8e4da);
+
+  /* ---- excavated footing pit with forms + rebar ---- */
+  clearB(-14, 0, -6, -6, 0, 2);
+  fillB(-14, -1, -6, -6, -1, 2, 0x3a2c1c, { j: 0.08 });
+  for (let x = -13; x <= -7; x++) { V(x, 0, -5, 0x8a6a3a, { j: 0.06 }); V(x, 0, 1, 0x8a6a3a, { j: 0.06 }); }
+  for (let z = -5; z <= 1; z++) { V(-13, 0, z, 0x8a6a3a, { j: 0.06 }); V(-7, 0, z, 0x8a6a3a, { j: 0.06 }); }
+  for (let x = -12; x <= -8; x += 2) for (let z = -4; z <= 0; z += 2)
+    fillB(x, 0, z, x, 2, z, 0x7a4a30, { j: 0.05 });
+  // caution-tape perimeter around the pit
+  for (const [px, pz] of [[-15, -7], [-5, -7], [-15, 3], [-5, 3]]) fillB(px, 1, pz, px, 3, pz, 0x8a6a3a, { j: 0.05 });
+  for (let x = -15; x <= -5; x += 2) { V(x, 3, -7, 0xe8d020, { j: 0 }); V(x, 3, 3, 0xe8d020, { j: 0 }); }
+  for (let z = -7; z <= 3; z += 2) { V(-15, 3, z, 0xe8d020, { j: 0 }); V(-5, 3, z, 0xe8d020, { j: 0 }); }
+
+  /* ---- the frame going up: slab, columns, deck, CMU, netting ---- */
+  fillB(-28, 1, -24, -10, 1, -10, 0xa6a6a0, { j: 0.04 });
+  for (const cx of [-27, -22, -17, -12]) for (const cz of [-23, -17, -11]) {
+    fillB(cx, 2, cz, cx, 9, cz, 0xb2b2ac, { j: 0.04 });
+    if (cz === -11) fillB(cx, 10, cz, cx, 11, cz, 0x7a4a30, { j: 0.06 });   // rebar stubs
+  }
+  fillB(-28, 10, -24, -10, 10, -16, 0xa6a6a0, { j: 0.04 });                 // second-level deck
+  fillB(-28, 10, -11, -10, 10, -11, 0x8a3a2a, { j: 0.05 });                 // red-oxide steel beam
+  for (let x = -27; x <= -11; x += 3) fillB(x, 10, -15, x, 10, -12, 0x8a3a2a, { j: 0.05 }); // joists
+  for (const cx of [-27, -17]) {                                            // second-lift columns
+    fillB(cx, 11, -23, cx, 16, -23, 0xb2b2ac, { j: 0.04 });
+    fillB(cx, 17, -23, cx, 18, -23, 0x7a4a30, { j: 0.05 });
+  }
+  for (let y = 2; y <= 6; y++) for (let z = -23; z <= -17; z++)              // CMU wall, staggered top
+    if (!(y === 6 && z > -20)) V(-28, y, z, (y % 2 === 0) ? 0x9c9c94 : 0x8e8e86, { j: 0.05 });
+  for (let x = -28; x <= -10; x++) for (let y = 11; y <= 13; y++)            // orange safety netting
+    if ((x + y) % 2 === 0) V(x, y, -16, 0xe07020, { j: 0.06 });
+
+  /* ---- scaffold along the slab front ---- */
+  for (const sx of [-28, -22, -16, -10]) fillB(sx, 1, -8, sx, 12, -8, 0xb8bcc0, { j: 0.03 });
+  for (const sy of [5, 11]) fillB(-28, sy, -8, -10, sy, -8, 0xb8bcc0, { j: 0.03 });
+  fillB(-28, 6, -9, -10, 6, -8, 0x9a7a4a, { j: 0.07 });
+  fillB(-28, 12, -9, -10, 12, -8, 0x9a7a4a, { j: 0.07 });
+  // worker up on the boards
+  fillB(-20, 13, -9, -20, 14, -9, 0x2a3038); fillB(-20, 15, -9, -20, 16, -9, 0xe07020);
+  V(-20, 17, -9, P.skin); V(-20, 18, -9, 0xe8c020);
+
+  /* ---- tower crane ---- */
+  fillB(-31, 1, -27, -28, 1, -24, 0xa6a6a0, { j: 0.04 });
+  const MX = -30, MZ = -26;
+  for (let y = 2; y <= 33; y++) {
+    if (y % 3 === 0) fillB(MX, y, MZ, MX + 1, y, MZ + 1, 0xd8a020, { j: 0.04 });
+    else { V(MX, y, MZ, 0xd8a020, { j: 0.04 }); V(MX + 1, y, MZ + 1, 0xd8a020, { j: 0.04 }); }
+  }
+  fillB(MX - 1, 34, MZ - 1, MX + 2, 34, MZ + 2, 0xc89018, { j: 0.04 });      // slewing deck
+  fillB(MX + 2, 34, MZ, MX + 3, 35, MZ + 1, 0x3a4248, { j: 0.04 });          // operator cab
+  V(MX + 3, 35, MZ, P.glass, { t: 1, j: 0.02 }); V(MX + 3, 35, MZ + 1, P.glass, { t: 1, j: 0.02 });
+  for (let z = MZ; z <= 8; z++) {                                            // jib over the site
+    V(MX, 35, z, 0xd8a020, { j: 0.04 });
+    if (z % 2 === 0) V(MX, 36, z, 0xd8a020, { j: 0.04 });
+  }
+  for (let z = MZ - 1; z >= MZ - 7; z--) {                                   // counter-jib
+    V(MX, 35, z, 0xd8a020, { j: 0.04 });
+    if (z % 2 === 0) V(MX, 36, z, 0xd8a020, { j: 0.04 });
+  }
+  fillB(MX - 1, 33, MZ - 7, MX + 1, 34, MZ - 5, 0x8a8a84, { j: 0.05 });      // counterweights
+  fillB(MX, 37, MZ, MX, 39, MZ, 0xd8a020, { j: 0.04 });                      // apex
+  for (let y = 16; y <= 34; y++) V(MX, y, 2, 0x2a2a2c, { j: 0 });            // hoist cable
+  fillB(MX - 2, 14, 1, MX + 2, 15, 3, 0x8a3a2a, { j: 0.06 });                // beam bundle mid-air
+  pigeon(MX, 37, 6);
+
+  /* ---- machines + props ---- */
+  // cement mixer
+  fillB(-8, 1, -13, -6, 1, -12, 0x3a3a3e, { j: 0.04 });
+  fillB(-8, 2, -13, -6, 4, -12, 0xe8a020, { j: 0.06 });
+  V(-6, 4, -12, 0x2a2a2c);
+  // sand + gravel piles
+  fillB(-26, 1, 2, -22, 1, 6, 0xd0b070, { j: 0.08 }); fillB(-25, 2, 3, -23, 2, 5, 0xd0b070, { j: 0.08 }); V(-24, 3, 4, 0xd0b070, { j: 0.08 });
+  fillB(-31, 1, 0, -28, 1, 3, 0x8a8e92, { j: 0.1 }); fillB(-30, 2, 1, -29, 2, 2, 0x8a8e92, { j: 0.1 });
+  // lumber stack + brick pallet
+  fillB(-21, 1, 3, -16, 1, 5, 0xc8a060, { j: 0.1 }); fillB(-20, 2, 3, -17, 2, 5, 0xb89050, { j: 0.1 });
+  fillB(-18, 1, -4, -16, 1, -2, 0x8a6a3a, { j: 0.06 }); fillB(-18, 2, -4, -16, 3, -2, 0x9a4030, { j: 0.12 });
+  // wheelbarrow
+  fillB(-17, 2, -10, -16, 2, -9, 0xe07020, { j: 0.06 }); V(-18, 1, -10, 0x141416); V(-15, 1, -9, 0x6e5436);
+  // dumpster + porta-potty by the gate
+  fillB(-8, 1, 6, -5, 3, 9, 0x5e442e, { j: 0.08 });
+  V(-7, 4, 7, 0x8a6a3a); V(-6, 4, 8, 0x9a9ea2);
+  fillB(-6, 1, 3, -5, 5, 4, 0x2a6ac0, { j: 0.05 });
+  fillB(-6, 6, 3, -5, 6, 4, 0xd8dce0, { j: 0.04 });
+  fillB(-6, 2, 4, -6, 4, 4, 0x1e54a0, { j: 0.04 });
+  // site office container (window glows at night)
+  fillB(-32, 1, -19, -29, 5, -13, 0x4a7ab0, { j: 0.06 });
+  for (let z = -19; z <= -13; z += 2) fillB(-29, 1, z, -29, 5, z, 0x3f6da0, { j: 0.05 });
+  fillB(-29, 2, -18, -29, 3, -16, P.lampWarm, { t: 3, j: 0 });
+  fillB(-29, 1, -15, -29, 4, -14, 0x35608f, { j: 0.04 });
+  V(-28, 1, -14, 0x9a7a4a);
+  // portable light tower
+  fillB(-23, 1, -8, -23, 8, -8, 0xe8c020, { j: 0.04 });
+  fillB(-24, 9, -8, -22, 9, -8, P.lampWhite, { t: 3, j: 0 });
+  // workers in hi-vis + hard hats
+  person(-20, -12, 0xe07020, 0x2a3038); V(-20, 7, -12, 0xe8c020);
+  person(-12, 5, 0xe8c020, 0x3a3a3e); V(-12, 7, 5, 0xe8c020);
+  // traffic cones out on the sidewalk
+  for (const [cx, cz] of [[-15, 14], [-8, 15]]) { V(cx, 2, cz, 0xe06a20, { j: 0 }); V(cx, 3, cz, 0xe06a20, { j: 0 }); }
+}
+/* ============================================================
+   16. MESHER — face culling + baked ambient occlusion
+   ============================================================ */
+const FACES = [
+  { dir: [-1, 0, 0], corners: [[0, 1, 0], [0, 0, 0], [0, 1, 1], [0, 0, 1]] },
+  { dir: [1, 0, 0],  corners: [[1, 1, 1], [1, 0, 1], [1, 1, 0], [1, 0, 0]] },
+  { dir: [0, -1, 0], corners: [[1, 0, 1], [0, 0, 1], [1, 0, 0], [0, 0, 0]] },
+  { dir: [0, 1, 0],  corners: [[0, 1, 1], [1, 1, 1], [0, 1, 0], [1, 1, 0]] },
+  { dir: [0, 0, -1], corners: [[1, 0, 0], [0, 0, 0], [1, 1, 0], [0, 1, 0]] },
+  { dir: [0, 0, 1],  corners: [[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]] },
+];
+
+const matOpaque = new THREE.MeshLambertMaterial({ vertexColors: true });
+const matGlass = new THREE.MeshPhongMaterial({
+  vertexColors: true, transparent: true, opacity: 0.34, depthWrite: false,
+  shininess: 90, specular: 0x668899,
+});
+const matEmissive = new THREE.MeshBasicMaterial({ vertexColors: true });
+const matNight = new THREE.MeshBasicMaterial({ vertexColors: true });
+
+const chunkMeshes = new Map();   // "cx|cz" -> [meshes]
+const facadeMeshes = new Set();
+let facadeHidden = false;
+
+function meshChunk(ck) {
+  const old = chunkMeshes.get(ck);
+  if (old) for (const m of old) { scene.remove(m); m.geometry.dispose(); facadeMeshes.delete(m); }
+  const list = [];
+  chunkMeshes.set(ck, list);
+  const keys = chunkIndex.get(ck);
+  if (!keys || !keys.size) return;
+
+  const buckets = new Map(); // key "t|gr" -> arrays
+  const bucket = (t, gr) => {
+    const k = t + '|' + gr;
+    if (!buckets.has(k)) buckets.set(k, { pos: [], nrm: [], col: [], idx: [], n: 0, t, gr });
+    return buckets.get(k);
+  };
+
+  for (const key of keys) {
+    const v = vox.get(key);
+    if (!v) continue;
+    for (const f of FACES) {
+      const nx = v.x + f.dir[0], ny = v.y + f.dir[1], nz = v.z + f.dir[2];
+      const nb = getV(nx, ny, nz);
+      let visible;
+      if (v.t === 1) visible = !nb || (nb.t !== 1 && nb.gr !== v.gr);
+      else visible = !nb || nb.t === 1 || nb.gr !== v.gr;
+      if (!visible) continue;
+
+      const B = bucket(v.t, v.gr);
+      // tangent axes of this face
+      const a = f.dir[0] !== 0 ? 0 : (f.dir[1] !== 0 ? 1 : 2);
+      const u = a === 0 ? 1 : 0, w = a === 2 ? 1 : 2;
+      const base = [nx, ny, nz];
+      const ao = [0, 0, 0, 0];
+      for (let ci = 0; ci < 4; ci++) {
+        const c = f.corners[ci];
+        if (v.t === 0) {
+          const su = c[u] === 1 ? 1 : -1, sw = c[w] === 1 ? 1 : -1;
+          const p1 = base.slice(); p1[u] += su;
+          const p2 = base.slice(); p2[w] += sw;
+          const p3 = base.slice(); p3[u] += su; p3[w] += sw;
+          const s1 = solid(p1[0], p1[1], p1[2]) ? 1 : 0;
+          const s2 = solid(p2[0], p2[1], p2[2]) ? 1 : 0;
+          const s3 = solid(p3[0], p3[1], p3[2]) ? 1 : 0;
+          ao[ci] = (s1 && s2) ? 3 : s1 + s2 + s3;
+        }
+        const light = 1 - ao[ci] * 0.15;
+        B.pos.push(v.x + c[0], v.y + c[1], v.z + c[2]);
+        B.nrm.push(f.dir[0], f.dir[1], f.dir[2]);
+        B.col.push(v.r * light, v.g * light, v.b * light);
+      }
+      const i = B.n;
+      if (ao[0] + ao[3] > ao[1] + ao[2]) B.idx.push(i, i + 1, i + 3, i, i + 3, i + 2); // flipped quad
+      else B.idx.push(i, i + 1, i + 2, i + 2, i + 1, i + 3);
+      B.n += 4;
+    }
+  }
+
+  for (const B of buckets.values()) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(B.nrm, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(B.col, 3));
+    geo.setIndex(B.idx);
+    let mat = matOpaque;
+    if (B.t === 1) mat = matGlass;
+    else if (B.t === 2) mat = matEmissive;
+    else if (B.t === 3) mat = matNight;
+    const mesh = new THREE.Mesh(geo, mat);
+    if (B.t === 0) { mesh.castShadow = true; mesh.receiveShadow = true; }
+    if (B.t === 1) mesh.renderOrder = 2;
+    if (B.gr === 1) { facadeMeshes.add(mesh); mesh.visible = !facadeHidden; }
+    scene.add(mesh);
+    list.push(mesh);
+  }
+}
+for (const ck of chunkIndex.keys()) meshChunk(ck);
+const built = { glassMat: matGlass, nightMats: [matNight] };
+
+document.getElementById('facade').addEventListener('change', e => {
+  facadeHidden = e.target.checked;
+  for (const m of facadeMeshes) m.visible = !facadeHidden;
+});
+
+/* ============================================================
+   17. LIVE PROPS — traffic-light bulbs
+   ============================================================ */
+const bulbGeo = new THREE.BoxGeometry(1, 1, 1);
+function bulb(x, y, z) {
+  const m = new THREE.Mesh(bulbGeo, new THREE.MeshBasicMaterial({ color: 0x201010 }));
+  m.position.set(x + 0.5, y + 0.5, z + 0.5);
+  scene.add(m);
+  return m;
+}
+const tlRed = bulb(51, 15, 31), tlAmber = bulb(51, 14, 31), tlGreen = bulb(51, 13, 31);
+
+/* ============================================================
+   17B. EXPLOSIONS — click any voxel to detonate
+   Blasted voxels become rigid debris cubes (one InstancedMesh)
+   that collide with the live voxel grid, bounce, tumble, and
+   finally freeze back into the world as solid rubble.
+   ============================================================ */
+const BLAST_R = 5.5, GRAV = 38, DEBRIS_MAX = 2200, SPARK_MAX = 500;
+const fl = Math.floor;
+
+const debrisMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.9, 0.9, 0.9), new THREE.MeshLambertMaterial(), DEBRIS_MAX);
+debrisMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+debrisMesh.castShadow = true;
+debrisMesh.frustumCulled = false;
+debrisMesh.count = 0;
+scene.add(debrisMesh);
+const debris = [];
+
+const sparkMesh = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xffc873 }), SPARK_MAX);
+sparkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+sparkMesh.frustumCulled = false;
+sparkMesh.count = 0;
+scene.add(sparkMesh);
+const sparkArr = [];
+
+const flashLight = new THREE.PointLight(0xffa040, 0, 70, 2);
+scene.add(flashLight);
+let flashT = 9;
+
+const _dummy = new THREE.Object3D();
+const _col = new THREE.Color();
+const pendingDirty = new Set();
+let rebuildT = 0;
+
+// collision query: any voxel (glass included) or the untouchable base
+function solidAt(x, y, z) { return y <= -2 || vox.has(x + '|' + y + '|' + z); }
+
+// the 4 corner chunks of a 3x3 neighborhood cover every chunk a removal can dirty
+function markDirty(x, z, set) {
+  set.add(ckOf(x - 1, z - 1)); set.add(ckOf(x - 1, z + 1));
+  set.add(ckOf(x + 1, z - 1)); set.add(ckOf(x + 1, z + 1));
+}
+
+function spawnDebris(v, cx, cy, cz, d) {
+  if (debris.length >= DEBRIS_MAX) return;
+  const px = v.x + 0.5, py = v.y + 0.5, pz = v.z + 0.5;
+  const dx = px - cx - 0.5, dy = py - cy - 0.5, dz = pz - cz - 0.5;
+  const L = Math.hypot(dx, dy, dz) || 1;
+  const pow = (1 - d / (BLAST_R + 1.8)) * 26 + 5;
+  _col.setRGB(v.r, v.g, v.b);
+  debrisMesh.setColorAt(debris.length, _col);
+  debris.push({
+    x: px, y: py, z: pz,
+    vx: dx / L * pow + (Math.random() - 0.5) * 7,
+    vy: dy / L * pow + 6 + Math.random() * 6,
+    vz: dz / L * pow + (Math.random() - 0.5) * 7,
+    rx: Math.random() * 3, ry: Math.random() * 3,
+    rvx: (Math.random() - 0.5) * 9, rvy: (Math.random() - 0.5) * 9,
+    r: v.r, g: v.g, b: v.b, age: 0, rest: 0,
+  });
+  if (debrisMesh.instanceColor) debrisMesh.instanceColor.needsUpdate = true;
+}
+
+function spawnSparks(cx, cy, cz) {
+  for (let i = 0; i < 36 && sparkArr.length < SPARK_MAX; i++) {
+    const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI - Math.PI / 2;
+    const s = 16 + Math.random() * 26;
+    sparkArr.push({
+      x: cx + 0.5, y: cy + 0.5, z: cz + 0.5,
+      vx: Math.cos(a) * Math.cos(e) * s, vy: Math.sin(e) * s + 6, vz: Math.sin(a) * Math.cos(e) * s,
+      age: 0,
+    });
+  }
+}
+
+function explode(cx, cy, cz) {
+  const dirty = new Set();
+  const rI = Math.ceil(BLAST_R + 1.2);
+  let removed = 0;
+  for (let x = cx - rI; x <= cx + rI; x++)
+    for (let y = Math.max(-1, cy - rI); y <= cy + rI; y++)
+      for (let z = cz - rI; z <= cz + rI; z++) {
+        const d = Math.hypot(x - cx, y - cy, z - cz);
+        if (d > BLAST_R + (h3(x, y, z) - 0.5) * 2.4) continue;   // ragged blast edge
+        const v = vox.get(x + '|' + y + '|' + z);
+        if (!v) continue;
+        removeVox(x, y, z);
+        markDirty(x, z, dirty);
+        spawnDebris(v, cx, cy, cz, d);
+        removed++;
+      }
+  if (!removed) return;
+  for (const ck of dirty) meshChunk(ck);
+  flashLight.position.set(cx + 0.5, cy + 1.5, cz + 0.5);
+  flashT = 0;
+  spawnSparks(cx, cy, cz);
+}
+
+// click (not drag) to detonate
+let pDownX = 0, pDownY = 0;
+const _ray = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerdown', e => { pDownX = e.clientX; pDownY = e.clientY; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (e.button !== 0 || Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > 4) return;
+  _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  _ray.setFromCamera(_ndc, camera);
+  const targets = [];
+  for (const ms of chunkMeshes.values()) for (const m of ms) if (m.visible) targets.push(m);
+  const hit = _ray.intersectObjects(targets, false)[0];
+  if (!hit || !hit.face) return;
+  const p = hit.point.clone().addScaledVector(hit.face.normal, -0.5);
+  explode(fl(p.x), fl(p.y), fl(p.z));
+});
+
+function writeDebrisMatrix(i) {
+  const D = debris[i];
+  _dummy.position.set(D.x, D.y, D.z);
+  _dummy.rotation.set(D.rx, D.ry, 0);
+  _dummy.scale.setScalar(1);
+  _dummy.updateMatrix();
+  debrisMesh.setMatrixAt(i, _dummy.matrix);
+}
+
+// freeze a resting cube back into the voxel grid as rubble
+function settleDebris(i) {
+  const D = debris[i];
+  let sx = fl(D.x), sy = fl(D.y), sz = fl(D.z), up = 0;
+  while (vox.has(sx + '|' + sy + '|' + sz) && up < 3) { sy++; up++; }
+  if (!vox.has(sx + '|' + sy + '|' + sz) && sy > -2 && sy < 64 && solidAt(sx, sy - 1, sz)) {
+    const hex = (Math.round(D.r * 255) << 16) | (Math.round(D.g * 255) << 8) | Math.round(D.b * 255);
+    V(sx, sy, sz, hex, { j: 0 });
+    markDirty(sx, sz, pendingDirty);
+  }
+  const last = debris.length - 1;
+  if (i !== last) {
+    debris[i] = debris[last];
+    _col.setRGB(debris[i].r, debris[i].g, debris[i].b);
+    debrisMesh.setColorAt(i, _col);
+    writeDebrisMatrix(i);
+  }
+  debris.pop();
+  if (debrisMesh.instanceColor) debrisMesh.instanceColor.needsUpdate = true;
+}
+
+function stepExplosions(dt) {
+  // --- debris physics (substepped so fast chunks can't tunnel through walls) ---
+  const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.025)));
+  const h = dt / n;
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const D = debris[i];
+    D.age += dt;
+    for (let s = 0; s < n; s++) {
+      D.vy -= GRAV * h;
+      const nx = D.x + D.vx * h;
+      if (solidAt(fl(nx), fl(D.y), fl(D.z))) D.vx *= -0.35; else D.x = nx;
+      const nz = D.z + D.vz * h;
+      if (solidAt(fl(D.x), fl(D.y), fl(nz))) D.vz *= -0.35; else D.z = nz;
+      const ny = D.y + D.vy * h;
+      if (solidAt(fl(D.x), fl(ny), fl(D.z))) {
+        if (D.vy < 0) { D.vx *= 0.55; D.vz *= 0.55; D.vy = D.vy < -7 ? -D.vy * 0.32 : 0; }
+        else D.vy *= -0.25;
+      } else D.y = ny;
+    }
+    const sp = D.vx * D.vx + D.vy * D.vy + D.vz * D.vz;
+    if (sp < 1.5 && solidAt(fl(D.x), fl(D.y - 0.55), fl(D.z))) D.rest += dt; else D.rest = 0;
+    if (D.rest > 0.45 || D.age > 9 || D.y < -4) { settleDebris(i); continue; }
+    D.rx += D.rvx * dt; D.ry += D.rvy * dt;
+    writeDebrisMatrix(i);
+  }
+  debrisMesh.count = debris.length;
+  debrisMesh.instanceMatrix.needsUpdate = true;
+
+  // --- sparks ---
+  for (let i = sparkArr.length - 1; i >= 0; i--) {
+    const S = sparkArr[i];
+    S.age += dt;
+    if (S.age > 0.55) { sparkArr[i] = sparkArr[sparkArr.length - 1]; sparkArr.pop(); continue; }
+    S.vy -= 22 * dt;
+    S.x += S.vx * dt; S.y += S.vy * dt; S.z += S.vz * dt;
+    _dummy.position.set(S.x, S.y, S.z);
+    _dummy.rotation.set(0, 0, 0);
+    _dummy.scale.setScalar(Math.max(0.05, 1 - S.age / 0.55));
+    _dummy.updateMatrix();
+    sparkMesh.setMatrixAt(i, _dummy.matrix);
+  }
+  sparkMesh.count = sparkArr.length;
+  sparkMesh.instanceMatrix.needsUpdate = true;
+
+  // --- blast flash decay ---
+  flashT += dt;
+  flashLight.intensity = Math.max(0, 1 - flashT / 0.4) * 900;
+
+  // --- throttled remeshing as rubble freezes in ---
+  rebuildT += dt;
+  if (pendingDirty.size && rebuildT > 0.3) {
+    for (const ck of pendingDirty) meshChunk(ck);
+    pendingDirty.clear();
+    rebuildT = 0;
+  }
+}
+
+/* ============================================================
+   18. LIGHTS
+   ============================================================ */
+const hemi = new THREE.HemisphereLight(0xbdd8f2, 0x5a4a3a, 0.7);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff2dd, 3);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.camera.left = -95; sun.shadow.camera.right = 95;
+sun.shadow.camera.top = 95; sun.shadow.camera.bottom = -95;
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 420;
+sun.shadow.normalBias = 1.2;
+sun.shadow.bias = -0.0002;
+sun.target.position.set(13, 10, -4);
+scene.add(sun, sun.target);
+
+function roomLight(x, y, z, intensity, color = 0xffd9a0, dist = 24) {
+  const l = new THREE.PointLight(color, intensity, dist, 2);
+  l.position.set(x, y, z);
+  l.userData.base = intensity;
+  scene.add(l);
+  return l;
+}
+const interiorLights = [
+  roomLight(10, 8, -26, 140),   // kitchen
+  roomLight(10, 8, -8, 110),    // family room
+  roomLight(9, 17.5, -8, 150),  // front parlor chandelier
+  roomLight(11, 18.5, -24, 120),// rear parlor
+  roomLight(8, 27.5, -8, 120),  // master bedroom
+  roomLight(18, 27.5, -29, 100),// kid's room
+  roomLight(9, 36.5, -8, 120),  // study
+  roomLight(7, 36.5, -29, 90),  // guest room
+  roomLight(39, 9, 3, 150),     // deli front
+  roomLight(40, 9, -14, 80),    // deli storeroom
+  roomLight(40, 17.5, 1, 110),  // apartment living room
+  roomLight(37, 17.5, -14, 85), // apartment bedroom
+  roomLight(40, 25.5, -3, 120), // artist's loft
+  roomLight(42, 32, -1, 70),    // terrace string lights
+];
+const fireParlor = roomLight(4, 13, -22, 30, 0xff8c2a, 12);
+const fireGarden = roomLight(4, 4, -22, 30, 0xff8c2a, 12);
+const streetLight = roomLight(-15, 12.5, 22.5, 0, 0xffeebb, 30);
+const siteLight = roomLight(-21, 10, -6, 0, 0xeaf2ff, 38);
+
+/* ============================================================
+   19. SKY / SUN / NIGHT
+   ============================================================ */
+const skyStops = [
+  [-1.00, new THREE.Color(0x05070f)],
+  [-0.10, new THREE.Color(0x0b1228)],
+  [ 0.00, new THREE.Color(0x4a3a55)],
+  [ 0.06, new THREE.Color(0xc97a50)],
+  [ 0.18, new THREE.Color(0x88b4e0)],
+  [ 0.55, new THREE.Color(0x9ccaf0)],
+  [ 1.00, new THREE.Color(0xa8d4f4)],
+];
+function rampColor(el, out) {
+  for (let i = 0; i < skyStops.length - 1; i++) {
+    const [a, ca] = skyStops[i], [b, cb] = skyStops[i + 1];
+    if (el <= b) { out.copy(ca).lerp(cb, Math.max(0, (el - a) / (b - a))); return out; }
+  }
+  return out.copy(skyStops[skyStops.length - 1][1]);
+}
+const skyCol = new THREE.Color();
+scene.fog = new THREE.Fog(0x9ccaf0, 110, 340);
+
+// stars
+const starGeo = new THREE.BufferGeometry();
+{
+  const pts = [], rs = mulberry(7);
+  for (let i = 0; i < 420; i++) {
+    const a = rs() * Math.PI * 2, e = Math.acos(rs() * 0.92);
+    pts.push(Math.sin(e) * Math.cos(a) * 380 + 13, Math.cos(e) * 380, Math.sin(e) * Math.sin(a) * 380);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+}
+const starMat = new THREE.PointsMaterial({ color: 0xcdd8e8, size: 1.1, transparent: true, opacity: 0, fog: false });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// moon
+const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 12, 10), new THREE.MeshBasicMaterial({ color: 0xe4e6da, fog: false }));
+scene.add(moon);
+
+const sunHorizon = new THREE.Color(0xff9a4a), sunNoon = new THREE.Color(0xfff2dd);
+const hemiNight = new THREE.Color(0x1c2640), hemiDay = new THREE.Color(0xbdd8f2);
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+let nightF = 0;
+function updateSun(minutes) {
+  const hr = minutes / 60;
+  const a = (hr - 6) / 12 * Math.PI;     // 0 at 6:00, PI at 18:00
+  const el = Math.sin(a);
+  sun.position.set(13 - Math.cos(a) * 150, Math.sin(a) * 125, -4 + 65);
+  const dayI = clamp01(el / 0.16);
+  sun.intensity = dayI * 3.1;
+  sun.visible = el > -0.04;
+  sun.color.copy(sunHorizon).lerp(sunNoon, clamp01(el / 0.45));
+
+  rampColor(el, skyCol);
+  scene.background = skyCol;
+  scene.fog.color.copy(skyCol);
+
+  hemi.color.copy(hemiNight).lerp(hemiDay, clamp01((el + 0.08) / 0.3));
+  hemi.intensity = 0.22 + 0.75 * clamp01(el / 0.25);
+
+  nightF = clamp01((0.10 - el) / 0.20);
+  // interior lamps: dim during the day, warm at night
+  for (const l of interiorLights) l.intensity = l.userData.base * (0.18 + 0.95 * nightF);
+  streetLight.intensity = 90 * nightF;
+  siteLight.intensity = 110 * nightF;
+  // emissive "night" voxels (lamp shades, sconces, string lights)
+  const e = 0.14 + 0.86 * nightF;
+  for (const m of built.nightMats) m.color.setRGB(e, e * 0.96, e * 0.85);
+  // windows pick up a faint warm glow from inside at night
+  built.glassMat.emissive.setRGB(1, 0.72, 0.42).multiplyScalar(0.22 * nightF);
+  built.glassMat.opacity = 0.34 + 0.08 * nightF;
+
+  starMat.opacity = nightF * 0.9;
+  moon.position.set(13 + Math.cos(a) * 320, -Math.sin(a) * 280, -4 - 120);
+  moon.visible = nightF > 0.35 && moon.position.y > 10;
+
+  // clock readout
+  const h24 = Math.floor(hr) % 24, m = Math.floor(minutes % 60);
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = ((h24 + 11) % 12) + 1;
+  document.getElementById('clock').textContent = h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+}
+
+const slider = document.getElementById('time');
+slider.addEventListener('input', () => updateSun(+slider.value));
+
+// optional URL-hash presets, e.g. #t=1290&cam=70,30,60&tgt=40,12,0
+{
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.get('t')) slider.value = +q.get('t');
+  const cam = (q.get('cam') || '').split(',').map(Number);
+  const tgt = (q.get('tgt') || '').split(',').map(Number);
+  if (cam.length === 3 && cam.every(isFinite)) camera.position.set(...cam);
+  if (tgt.length === 3 && tgt.every(isFinite)) controls.target.set(...tgt);
+  const boom = (q.get('boom') || '').split(',').map(Number);
+  if (boom.length === 3 && boom.every(isFinite)) explode(boom[0], boom[1], boom[2]);
+}
+updateSun(+slider.value);
+
+/* ============================================================
+   20. ANIMATION LOOP
+   ============================================================ */
+const playBox = document.getElementById('play');
+const clock = new THREE.Clock();
+const TL_DARK = { r: 0x301010, a: 0x302408, g: 0x0e2410 };
+let tlTime = 0;
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  controls.update();
+  stepExplosions(dt);
+
+  if (playBox.checked) {
+    let t = +slider.value + dt * 90; // ~16 s per full day
+    if (t > 1439) t -= 1440;
+    slider.value = t;
+    updateSun(t);
+  }
+
+  // traffic-light cycle: 7 s green, 2.5 s amber, 6.5 s red
+  tlTime = (tlTime + dt) % 16;
+  tlGreen.material.color.set(tlTime < 7 ? 0x2ee04a : TL_DARK.g);
+  tlAmber.material.color.set(tlTime >= 7 && tlTime < 9.5 ? 0xffb420 : TL_DARK.a);
+  tlRed.material.color.set(tlTime >= 9.5 ? 0xff3424 : TL_DARK.r);
+
+  // fireplace flicker
+  const ft = clock.elapsedTime;
+  const flick = 0.75 + 0.25 * Math.sin(ft * 11) * Math.sin(ft * 5.3 + 1.7);
+  fireParlor.intensity = 26 * flick;
+  fireGarden.intensity = 26 * (1.5 - flick);
+
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

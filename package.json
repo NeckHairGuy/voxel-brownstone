@@ -1,0 +1,13 @@
+{
+  "name": "voxel-brownstone",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive voxel-art Brooklyn block: brownstone, corner deli, construction site — with click-to-explode physics",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
