@@ -22,6 +22,17 @@
   .row label{cursor:pointer;display:flex;align-items:center;gap:6px;}
   #ui .hint{font-size:11px;opacity:.5;margin-top:10px;}
   #ui input[type=checkbox]{accent-color:#e0a85a;}
+  #ui button{
+    width:100%;margin-top:10px;padding:7px 0;border:none;border-radius:8px;
+    background:#e0a85a;color:#221608;font:650 12px/1 -apple-system,Segoe UI,system-ui,sans-serif;
+    cursor:pointer;letter-spacing:.4px;
+  }
+  #ui button:hover{filter:brightness(1.08);}
+  #xhair{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;
+    color:#fff;font:300 22px/1 monospace;text-shadow:0 1px 3px rgba(0,0,0,.8);
+    display:none;pointer-events:none;user-select:none;
+  }
 </style>
 </head>
 <body>
@@ -34,8 +45,10 @@
     <label><input id="play" type="checkbox"> cycle day</label>
     <label><input id="facade" type="checkbox"> hide facades (dollhouse)</label>
   </div>
+  <button id="fpv">&#9654; enter FPV</button>
   <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
 </div>
+<div id="xhair">+</div>
 
 <script type="importmap">
 { "imports": {
@@ -1405,6 +1418,25 @@ V(24, 2, 15, 0x6e7076, { j: 0.06 });                  // one pecking at the side
   // traffic cones out on the sidewalk
   for (const [cx, cz] of [[-15, 14], [-8, 15]]) { V(cx, 2, cz, 0xe06a20, { j: 0 }); V(cx, 3, cz, 0xe06a20, { j: 0 }); }
 }
+
+/* ============================================================
+   15D. DOORS — flagged voxels: the FPV player walks through
+   them, and they turn ghost-transparent while in FPV
+   ============================================================ */
+function markDoor(x0, y0, z0, x1, y1, z1) {
+  for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++)
+    for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
+      for (let z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
+        const v = getV(x, y, z);
+        if (v) v.d = 1;
+      }
+}
+markDoor(19, 11, 0, 23, 19, 1);     // brownstone double doors + transom + knobs
+markDoor(19, 2, -34, 22, 8, -33);   // brownstone garden back door
+markDoor(18, 2, 1, 18, 6, 3);       // under-stoop gate
+markDoor(22, 40, -11, 24, 43, -11); // brownstone roof bulkhead door
+markDoor(46, 2, 12, 47, 8, 13);     // deli entry door + handle
+markDoor(40, 2, -23, 42, 7, -22);   // deli rear service door
 /* ============================================================
    16. MESHER — face culling + baked ambient occlusion
    ============================================================ */
@@ -1424,6 +1456,7 @@ const matGlass = new THREE.MeshPhongMaterial({
 });
 const matEmissive = new THREE.MeshBasicMaterial({ vertexColors: true });
 const matNight = new THREE.MeshBasicMaterial({ vertexColors: true });
+const matDoor = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 1 });
 
 const chunkMeshes = new Map();   // "cx|cz" -> [meshes]
 const facadeMeshes = new Set();
@@ -1437,10 +1470,10 @@ function meshChunk(ck) {
   const keys = chunkIndex.get(ck);
   if (!keys || !keys.size) return;
 
-  const buckets = new Map(); // key "t|gr" -> arrays
-  const bucket = (t, gr) => {
-    const k = t + '|' + gr;
-    if (!buckets.has(k)) buckets.set(k, { pos: [], nrm: [], col: [], idx: [], n: 0, t, gr });
+  const buckets = new Map(); // key "t|gr|d" -> arrays
+  const bucket = (t, gr, d) => {
+    const k = t + '|' + gr + '|' + d;
+    if (!buckets.has(k)) buckets.set(k, { pos: [], nrm: [], col: [], idx: [], n: 0, t, gr, d });
     return buckets.get(k);
   };
 
@@ -1455,7 +1488,7 @@ function meshChunk(ck) {
       else visible = !nb || nb.t === 1 || nb.gr !== v.gr;
       if (!visible) continue;
 
-      const B = bucket(v.t, v.gr);
+      const B = bucket(v.t, v.gr, v.d ? 1 : 0);
       // tangent axes of this face
       const a = f.dir[0] !== 0 ? 0 : (f.dir[1] !== 0 ? 1 : 2);
       const u = a === 0 ? 1 : 0, w = a === 2 ? 1 : 2;
@@ -1495,6 +1528,7 @@ function meshChunk(ck) {
     if (B.t === 1) mat = matGlass;
     else if (B.t === 2) mat = matEmissive;
     else if (B.t === 3) mat = matNight;
+    if (B.d && B.t === 0) mat = matDoor;
     const mesh = new THREE.Mesh(geo, mat);
     if (B.t === 0) { mesh.castShadow = true; mesh.receiveShadow = true; }
     if (B.t === 1) mesh.renderOrder = 2;
@@ -1628,8 +1662,12 @@ const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointerdown', e => { pDownX = e.clientX; pDownY = e.clientY; });
 renderer.domElement.addEventListener('pointerup', e => {
-  if (e.button !== 0 || Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > 4) return;
-  _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  if (e.button !== 0) return;
+  if (player.active) _ndc.set(0, 0);   // FPV: fire from the crosshair
+  else {
+    if (Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > 4) return;
+    _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  }
   _ray.setFromCamera(_ndc, camera);
   const targets = [];
   for (const ms of chunkMeshes.values()) for (const m of ms) if (m.visible) targets.push(m);
@@ -1724,6 +1762,151 @@ function stepExplosions(dt) {
     pendingDirty.clear();
     rebuildT = 0;
   }
+}
+
+/* ============================================================
+   17C. FPV MODE — possess a figure: WASD + mouse look,
+   AABB collision vs the voxel grid, 1-voxel auto-step, jump.
+   Door voxels are walk-through and ghosted while active.
+   ============================================================ */
+const player = {
+  active: false,
+  x: 21.5, y: 2, z: 17.5,      // sidewalk in front of the stoop
+  vx: 0, vy: 0, vz: 0,
+  yaw: 0, pitch: -0.05,
+  grounded: false,
+};
+const P_HALF = 0.38, P_H = 3.9, P_EYE = 3.45;
+const P_SPEED = 9, P_SPRINT = 15, P_JUMP = 13.5;
+
+// the figure: a stack of four bright-red voxels (visible to shadows
+// and when looking down; its own head is backface-culled from inside)
+const playerGroup = new THREE.Group();
+{
+  const mat = new THREE.MeshLambertMaterial({ color: 0xff2424 });
+  const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+  for (let i = 0; i < 4; i++) {
+    const cube = new THREE.Mesh(geo, mat);
+    cube.position.y = i + 0.5;
+    cube.castShadow = true;
+    playerGroup.add(cube);
+  }
+  playerGroup.visible = false;
+  scene.add(playerGroup);
+}
+
+function playerSolid(x, y, z) {
+  if (y <= -2) return true;
+  const v = vox.get(x + '|' + y + '|' + z);
+  return !!v && !v.d;          // door voxels don't block
+}
+function boxFree(x, y, z) {    // player AABB: feet at y, centered on x/z
+  const x0 = fl(x - P_HALF), x1 = fl(x + P_HALF);
+  const z0 = fl(z - P_HALF), z1 = fl(z + P_HALF);
+  const y0 = fl(y + 0.01), y1 = fl(y + P_H);
+  for (let xi = x0; xi <= x1; xi++) for (let yi = y0; yi <= y1; yi++) for (let zi = z0; zi <= z1; zi++)
+    if (playerSolid(xi, yi, zi)) return false;
+  return true;
+}
+
+const keys = new Set();
+addEventListener('keydown', e => {
+  if (!player.active) return;
+  keys.add(e.code);
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('mousemove', e => {
+  if (!player.active) return;
+  player.yaw -= e.movementX * 0.0024;
+  player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - e.movementY * 0.0024));
+});
+
+const fpvBtn = document.getElementById('fpv');
+const xhair = document.getElementById('xhair');
+const hintEl = document.querySelector('#ui .hint');
+const HINT_ORBIT = hintEl.textContent;
+const HINT_FPV = 'WASD — move · shift — run · space — jump · click — explode · esc — exit';
+const savedCam = { pos: new THREE.Vector3(), tgt: new THREE.Vector3() };
+
+fpvBtn.addEventListener('click', () => {
+  if (player.active) document.exitPointerLock();
+  else renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => {
+  const on = document.pointerLockElement === renderer.domElement;
+  if (on && !player.active) enterFPV();
+  else if (!on && player.active) exitFPV();
+});
+
+function enterFPV() {
+  player.active = true;
+  savedCam.pos.copy(camera.position);
+  savedCam.tgt.copy(controls.target);
+  controls.enabled = false;
+  if (!boxFree(player.x, player.y, player.z)) {   // respawn if buried in rubble
+    player.x = 21.5; player.y = 2; player.z = 17.5; player.yaw = 0;
+  }
+  player.vx = player.vy = player.vz = 0;
+  playerGroup.visible = true;
+  camera.rotation.order = 'YXZ';
+  matDoor.opacity = 0.45;
+  matDoor.depthWrite = false;
+  xhair.style.display = 'block';
+  hintEl.textContent = HINT_FPV;
+  fpvBtn.textContent = 'exit FPV (esc)';
+}
+function exitFPV() {
+  player.active = false;
+  playerGroup.visible = false;
+  controls.enabled = true;
+  camera.position.copy(savedCam.pos);
+  controls.target.copy(savedCam.tgt);
+  matDoor.opacity = 1;
+  matDoor.depthWrite = true;
+  keys.clear();
+  xhair.style.display = 'none';
+  hintEl.textContent = HINT_ORBIT;
+  fpvBtn.innerHTML = '&#9654; enter FPV';
+}
+
+function stepPlayer(dt) {
+  if (!player.active) return;
+  const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.033)));
+  const h = dt / n;
+  const sp = (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? P_SPRINT : P_SPEED;
+  let mx = 0, mz = 0;
+  if (keys.has('KeyW')) { mx -= Math.sin(player.yaw); mz -= Math.cos(player.yaw); }
+  if (keys.has('KeyS')) { mx += Math.sin(player.yaw); mz += Math.cos(player.yaw); }
+  if (keys.has('KeyA')) { mx -= Math.cos(player.yaw); mz += Math.sin(player.yaw); }
+  if (keys.has('KeyD')) { mx += Math.cos(player.yaw); mz -= Math.sin(player.yaw); }
+  const L = Math.hypot(mx, mz);
+  if (L > 0) { mx = mx / L * sp; mz = mz / L * sp; }
+
+  for (let s = 0; s < n; s++) {
+    // horizontal, with 1-voxel auto-step (stairs, curbs, stoops) when grounded
+    const nx = player.x + mx * h;
+    if (boxFree(nx, player.y, player.z)) player.x = nx;
+    else if (player.grounded && boxFree(nx, player.y + 1.02, player.z)) { player.x = nx; player.y += 1.02; }
+    const nz = player.z + mz * h;
+    if (boxFree(player.x, player.y, nz)) player.z = nz;
+    else if (player.grounded && boxFree(player.x, player.y + 1.02, nz)) { player.z = nz; player.y += 1.02; }
+    // vertical
+    player.vy -= GRAV * h;
+    const ny = player.y + player.vy * h;
+    if (boxFree(player.x, ny, player.z)) { player.y = ny; player.grounded = false; }
+    else { if (player.vy < 0) player.grounded = true; player.vy = 0; }
+  }
+  if (player.grounded && keys.has('Space')) { player.vy = P_JUMP; player.grounded = false; }
+
+  // stay inside the built world
+  player.x = Math.max(X0 + 0.5, Math.min(X1 + 0.5, player.x));
+  player.z = Math.max(-55.5, Math.min(54.5, player.z));
+
+  playerGroup.position.set(player.x, player.y, player.z);
+  playerGroup.rotation.y = player.yaw;
+  camera.position.set(player.x, player.y + P_EYE, player.z);
+  camera.rotation.set(player.pitch, player.yaw, 0);
 }
 
 /* ============================================================
@@ -1884,6 +2067,7 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.1);
   controls.update();
   stepExplosions(dt);
+  stepPlayer(dt);
 
   if (playBox.checked) {
     let t = +slider.value + dt * 90; // ~16 s per full day
