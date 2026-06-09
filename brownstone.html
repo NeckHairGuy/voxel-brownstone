@@ -1739,13 +1739,23 @@ function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for 
   spawnSparks(cx, cy, cz);
 }
 
-// click (not drag) to detonate
-let pDownX = 0, pDownY = 0;
+// click/tap (not drag, not pinch) to detonate
+let pDownX = 0, pDownY = 0, pDownId = -1, multiTouch = false;
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
-renderer.domElement.addEventListener('pointerdown', e => { pDownX = e.clientX; pDownY = e.clientY; });
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (pDownId !== -1) { multiTouch = true; return; }   // second finger: pinch/orbit, not a tap
+  pDownId = e.pointerId;
+  multiTouch = false;
+  pDownX = e.clientX; pDownY = e.clientY;
+});
+renderer.domElement.addEventListener('pointercancel', e => {
+  if (e.pointerId === pDownId) pDownId = -1;
+});
 renderer.domElement.addEventListener('pointerup', e => {
-  if (e.button !== 0) return;
+  const primary = e.pointerId === pDownId;
+  if (primary) pDownId = -1;
+  if (!primary || multiTouch || e.button !== 0) return;
   // FPV with the mouse released: clicking the scene re-captures it
   if (player.active && document.pointerLockElement !== renderer.domElement) {
     renderer.domElement.requestPointerLock();
@@ -1753,8 +1763,16 @@ renderer.domElement.addEventListener('pointerup', e => {
   }
   if (player.active) _ndc.set(0, 0);   // FPV: fire from the crosshair
   else {
-    if (Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > 4) return;
-    _ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    const slop = e.pointerType === 'mouse' ? 4 : 12;   // fingers wobble more than mice
+    if (Math.hypot(e.clientX - pDownX, e.clientY - pDownY) > slop) return;
+    // Map through the canvas rect, not window.inner*: on mobile the visual
+    // viewport (collapsing address bar, zoom) diverges from the canvas
+    // geometry and window-based NDC lands the ray off-target.
+    const rect = renderer.domElement.getBoundingClientRect();
+    _ndc.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
   }
   // online, only the corpo can act; offline it's a sandbox
   if (net.online && net.role !== 'corpo') return;
