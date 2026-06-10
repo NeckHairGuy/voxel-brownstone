@@ -84,7 +84,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster() });
+  conn.send({ t: 'hello', scene, booms, players: roster(), time: timeState || undefined });
 });
 
 /* ============================================================
@@ -97,7 +97,8 @@ const RESPAWN_MS = +(process.env.RESPAWN_MS || 10000);
 const players = new Map(); // id -> player
 const booms = [];          // [x,y,z] history, replayed to new connections
 let nextId = 1;
-let scene = 'default';     // 'default' | 'tech' — all clients build the same scene
+let scene = 'default';     // 'default' | 'tech' | 'techlong' — all clients build the same scene
+let timeState = null;      // { m, play } — the corpo's time of day, followed by everyone
 
 const roster = () => [...players.values()].map(p => ({
   id: p.id, name: p.name, role: p.role, score: p.score, alive: p.alive,
@@ -155,6 +156,12 @@ function onMessage(conn, m) {
       if (p && p.role === 'human' && p.alive) {
         p.x = +m.x || 0; p.y = +m.y || 0; p.z = +m.z || 0; p.yaw = +m.yaw || 0;
         broadcast({ t: 'pos', id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, conn);
+      }
+      break;
+    case 'time': // the corpo's clock is authoritative for the whole lobby
+      if (p && p.role === 'corpo') {
+        timeState = { m: Math.max(0, Math.min(1439, +m.m || 0)), play: !!m.play };
+        broadcast({ t: 'time', ...timeState }, conn);
       }
       break;
     case 'spot': // corpo's night searchlight aim + beam origin, relayed to everyone else

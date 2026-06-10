@@ -2986,6 +2986,7 @@ function stepPlayer(dt) {
    ============================================================ */
 const net = { ws: null, online: false, id: 0, role: null, alive: false };
 const remotes = new Map();   // id -> {group, alive, x,y,z,yaw, tx,ty,tz,tyaw}
+let lastRoster = [];
 const mpStatus = document.getElementById('mp-status');
 const mpJoinEl = document.getElementById('mp-join');
 const mpListEl = document.getElementById('mp-list');
@@ -3030,6 +3031,8 @@ function wsConnect() {
     fpvBtn.style.display = '';
     bearingBox.disabled = false;
     if (player.active) { document.exitPointerLock(); exitFPV(); }
+    lastRoster = [];
+    applyTimeLock();
     mpStatus.textContent = 'disconnected — retrying…';
     if (retry) setTimeout(wsConnect, 3000);
   };
@@ -3045,6 +3048,14 @@ function handleNet(m) {
       if (m.scene) setSceneLocal(m.scene);
       for (const b of m.booms || []) explode(b[0], b[1], b[2], true);
       updateRoster(m.players || []);
+      if (m.time) handleNet({ t: 'time', ...m.time });
+      break;
+    case 'time':
+      if (net.role !== 'corpo') {
+        timeSlider.value = m.m;
+        playChk.checked = !!m.play;
+        updateSun(+m.m);
+      }
       break;
     case 'scene':
       setSceneLocal(m.scene);
@@ -3052,8 +3063,10 @@ function handleNet(m) {
     case 'welcome':
       net.id = m.id; net.role = m.role; net.alive = m.role === 'human';
       mpJoinEl.style.display = 'none';
+      applyTimeLock();
       if (m.role === 'corpo') {
         mpStatus.textContent = 'you are the CORPO — click a human to lay them off';
+        sendTime();   // the corpo's clock becomes everyone's clock
       } else {
         mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
@@ -3138,6 +3151,8 @@ function makeRemote(p) {
 }
 
 function updateRoster(list) {
+  lastRoster = list;
+  applyTimeLock();
   // sync remote figures (every human that isn't us)
   const seen = new Set();
   for (const p of list) {
@@ -3204,6 +3219,21 @@ setInterval(() => {   // respawn cooldown countdown
   }
 }, 300);
 setInterval(() => nsend({ t: 'ping' }), 25000);
+
+/* ---- time of day follows the corpo ---- */
+const timeSlider = document.getElementById('time');
+const playChk = document.getElementById('play');
+function sendTime() {
+  if (net.online && net.role === 'corpo') nsend({ t: 'time', m: +timeSlider.value, play: playChk.checked });
+}
+timeSlider.addEventListener('input', sendTime);
+playChk.addEventListener('change', sendTime);
+setInterval(() => { if (playChk.checked) sendTime(); }, 2000);   // re-sync drift while cycling
+function applyTimeLock() {
+  const follower = net.online && net.role !== 'corpo' && lastRoster.some(p => p.role === 'corpo');
+  timeSlider.disabled = follower;
+  playChk.disabled = follower;
+}
 
 let posTimer = 0;
 function stepNet(dt) {
