@@ -28,6 +28,7 @@
     cursor:pointer;letter-spacing:.4px;
   }
   #ui button:hover{filter:brightness(1.08);}
+  #ui #reset{background:#46506a;color:#dfe3ea;margin-top:6px;}
   #xhair{
     position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;
     color:#fff;font:300 22px/1 monospace;text-shadow:0 1px 3px rgba(0,0,0,.8);
@@ -94,6 +95,7 @@
     <label><input id="facade" type="checkbox"> hide facades (dollhouse)</label>
   </div>
   <button id="fpv">&#9654; enter FPV</button>
+  <button id="reset">reset scene</button>
   <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
 </div>
 <div id="xhair">+</div>
@@ -258,6 +260,9 @@ const P = {
    ============================================================ */
 const X0 = -34, X1 = 60;
 
+// Everything physical is built by this one function so the scene
+// can be rebuilt in place by the reset button.
+function buildWorld() {
 // earth base
 fillB(X0, -2, -56, X1, -1, 54, 0x4a3a2a, { j: 0.05 });
 // default grass everywhere on top
@@ -1502,6 +1507,8 @@ markDoor(18, 2, 1, 18, 6, 3);       // under-stoop gate
 markDoor(22, 40, -11, 24, 43, -11); // brownstone roof bulkhead door
 markDoor(46, 2, 12, 47, 8, 13);     // deli entry door + handle
 markDoor(40, 2, -23, 42, 7, -22);   // deli rear service door
+}
+buildWorld();
 /* ============================================================
    16. MESHER — face culling + baked ambient occlusion
    ============================================================ */
@@ -2120,6 +2127,9 @@ function handleNet(m) {
     case 'boom':
       explode(m.x, m.y, m.z);
       break;
+    case 'reset':
+      resetWorld();
+      break;
     case 'layoff': {
       flamesAt(m.x, m.y, m.z);
       const r = remotes.get(m.id);
@@ -2262,6 +2272,29 @@ function stepNet(dt) {
   }
 }
 wsConnect();
+
+/* ---- reset scene: rebuild every voxel in place (synced when online) ---- */
+function resetWorld() {
+  vox.clear();
+  chunkIndex.clear();
+  debris.length = 0;
+  sparkArr.length = 0;
+  pendingDirty.clear();
+  buildWorld();
+  const all = new Set([...chunkMeshes.keys(), ...chunkIndex.keys()]);
+  for (const ck of all) meshChunk(ck);
+  // if a restored wall now overlaps the player, send them back to the sidewalk
+  if (player.active && !boxFree(player.x, player.y, player.z)) {
+    player.x = 21.5; player.y = 2; player.z = 17.5; player.vy = 0;
+  }
+}
+document.getElementById('reset').addEventListener('click', () => {
+  if (net.online && !net.role) { mpStatus.textContent = 'join a seat first to reset the scene'; return; }
+  const scope = net.online ? ' for every connected player' : '';
+  if (!confirm('Reset the scene? All destruction and rubble will be rebuilt' + scope + '.')) return;
+  if (net.online) nsend({ t: 'reset' });
+  else resetWorld();
+});
 
 /* ============================================================
    18. LIGHTS

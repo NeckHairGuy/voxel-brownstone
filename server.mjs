@@ -61,12 +61,14 @@ server.on('upgrade', (req, socket) => {
   let buf = Buffer.alloc(0);
   socket.on('data', d => {
     buf = Buffer.concat([buf, d]);
+    if (buf.length > 65536) { dropConn(conn); socket.destroy(); return; }   // flood guard
     while (true) {
       if (buf.length < 2) break;
       const op = buf[0] & 0x0f, masked = buf[1] & 0x80;
       let len = buf[1] & 0x7f, off = 2;
       if (len === 126) { if (buf.length < 4) break; len = buf.readUInt16BE(2); off = 4; }
       else if (len === 127) { if (buf.length < 10) break; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+      if (len > 16384) { dropConn(conn); socket.destroy(); return; }        // oversized frame
       const maskStart = off;
       if (masked) off += 4;
       if (buf.length < off + len) break;
@@ -181,6 +183,13 @@ function onMessage(conn, m) {
         p.x = s[0]; p.y = s[1]; p.z = s[2];
         broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z });
         broadcast({ t: 'players', list: roster() });
+      }
+      break;
+    case 'reset': // any seated player may rebuild the block (client confirms first)
+      if (p) {
+        booms.length = 0;
+        console.log(`scene reset by ${p.name}`);
+        broadcast({ t: 'reset' });
       }
       break;
     case 'ping':
