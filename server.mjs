@@ -84,7 +84,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', booms, players: roster() });
+  conn.send({ t: 'hello', scene, booms, players: roster() });
 });
 
 /* ============================================================
@@ -97,6 +97,7 @@ const RESPAWN_MS = +(process.env.RESPAWN_MS || 10000);
 const players = new Map(); // id -> player
 const booms = [];          // [x,y,z] history, replayed to new connections
 let nextId = 1;
+let scene = 'default';     // 'default' | 'tech' — all clients build the same scene
 
 const roster = () => [...players.values()].map(p => ({
   id: p.id, name: p.name, role: p.role, score: p.score, alive: p.alive,
@@ -190,6 +191,14 @@ function onMessage(conn, m) {
         booms.length = 0;
         console.log(`scene reset by ${p.name}`);
         broadcast({ t: 'reset' });
+      }
+      break;
+    case 'scene': // any seated player may switch scenes for everyone
+      if (p && (m.scene === 'default' || m.scene === 'tech') && m.scene !== scene) {
+        scene = m.scene;
+        booms.length = 0;
+        console.log(`scene -> ${scene} by ${p.name}`);
+        broadcast({ t: 'scene', scene });
       }
       break;
     case 'ping':
