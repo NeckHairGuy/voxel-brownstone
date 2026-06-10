@@ -110,7 +110,11 @@
     <select id="scene">
       <option value="default">scene: default Brooklyn</option>
       <option value="tech">scene: Tech Brooklyn</option>
+      <option value="techlong">scene: Tech Brooklyn Long</option>
     </select>
+    <div class="row">
+      <label><input id="iso" type="checkbox"> isometric camera</label>
+    </div>
     <button id="fpv">&#9654; enter FPV</button>
     <button id="reset">reset scene</button>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
@@ -176,6 +180,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  orthoResize();   // keep the isometric frustum in step (hoisted; defined in 17C)
 });
 
 /* ============================================================
@@ -1544,7 +1549,9 @@ markDoor(18, 2, 1, 18, 6, 3);       // under-stoop gate
 markDoor(46, 2, 12, 47, 8, 13);     // deli entry door + handle
 markDoor(40, 2, -23, 42, 7, -22);   // deli rear service door
 
+const Vb = V, fillBb = fillB, clearBb = clearB, markDoorb = markDoor;
 if (sceneId === 'tech') buildTech();
+if (sceneId === 'techlong') buildTechLong();
 
 /* ============================================================
    15E. TECH BROOKLYN — the VOXL tower (7 walkable floors +
@@ -1596,16 +1603,87 @@ function buildTech() {
   person(-18, 49, 0x30608a, 0x2a2018);
   person(34, 51, 0xd0d0d4, 0x3a3a3e);
 
-  // The district below was authored for a lot at z -96..-138; the local
-  // wrappers mirror it to z 55..97 so the facades face the existing road.
-  const V_ = V, fillB_ = fillB, clearB_ = clearB, markDoor_ = markDoor;
-  const MZ = z => -41 - z;
-  techBody();
-  function techBody() {
-  function V(x, y, z, hex, o = {}) { V_(x, y, MZ(z), hex, o); }
-  function fillB(x0, y0, z0, x1, y1, z1, hex, o = {}) { fillB_(x0, y0, MZ(z0), x1, y1, MZ(z1), hex, o); }
-  function clearB(x0, y0, z0, x1, y1, z1) { clearB_(x0, y0, MZ(z0), x1, y1, MZ(z1)); }
-  function markDoor(x0, y0, z0, x1, y1, z1) { markDoor_(x0, y0, MZ(z0), x1, y1, MZ(z1)); }
+  // mirrored across the street; flipText restores readable signage
+  techDistrict(x => x, z => -41 - z, true);
+}
+
+/* ============================================================
+   15F. TECH BROOKLYN LONG — all five buildings on one side:
+   the street continues east past the deli to the VOXL tower
+   (x 64..110) and the FLEX gym (x 116..148), unmirrored
+   ============================================================ */
+function buildTechLong() {
+  const XE = 152;
+  // ground + street continuation east of the deli
+  fillB(61, -2, -56, XE, -1, 54, 0x4a3a2a, { j: 0.05 });
+  fillB(61, 0, -56, XE, 0, 54, P.grass, { j: 0.12 });
+  fillB(61, 0, 22, XE, 0, 46, P.asphalt, { j: 0.05 });
+  for (let x = 61; x <= XE; x++) { V(x, 0, 33, P.lineY, { j: 0.04 }); V(x, 0, 35, P.lineY, { j: 0.04 }); }
+  for (let x = 66; x <= XE; x += 6)
+    for (let d = 0; d < 3 && x + d <= XE; d++) { V(x + d, 0, 29, P.lineW, { j: 0.08 }); V(x + d, 0, 41, P.lineW, { j: 0.08 }); }
+  fillB(61, 0, 13, XE, 0, 21, 0x7a7a76, { j: 0.04 });
+  fillB(61, 1, 13, XE, 1, 20, P.bluestone, { j: 0.07 });
+  fillB(61, 1, 21, XE, 1, 21, P.curb, { j: 0.05 });
+  for (let x = 66; x <= XE; x += 6) fillB(x, 1, 13, x, 1, 20, P.bluestoneDk, { j: 0.04 });
+  fillB(61, 0, 47, XE, 0, 54, 0x7a7a76, { j: 0.04 });
+  fillB(61, 1, 47, XE, 1, 54, P.bluestone, { j: 0.07 });
+  fillB(61, 1, 47, XE, 1, 47, P.curb, { j: 0.05 });
+  for (let x = 63; x <= XE; x += 6) fillB(x, 1, 48, x, 1, 54, P.bluestoneDk, { j: 0.04 });
+  // crosswalk at the tower entrance
+  for (const sx of [82, 85, 88, 91]) fillB(sx, 0, 23, sx + 1, 0, 45, 0xc4c4c0, { j: 0.1 });
+  // street trees, lamp, furniture, people
+  treePit(70, 16); treeAt(72, 18, 909, 14);
+  treePit(124, 16); treeAt(126, 18, 919, 13);
+  fillB(112, 2, 19, 112, 15, 19, 0x2a3a2e, { j: 0.03 });
+  fillB(112, 15, 20, 112, 15, 22, 0x2a3a2e, { j: 0.03 });
+  V(112, 14, 23, 0x2a3a2e, { j: 0.03 });
+  V(112, 13, 23, P.lampWhite, { t: 3, j: 0 });
+  for (let bx = 74; bx <= 80; bx += 3) { fillB(bx, 2, 16, bx, 3, 16, 0x565c66, { j: 0.03 }); V(bx + 1, 3, 16, 0x565c66, { j: 0.03 }); }
+  fillB(98, 2, 16, 98, 2, 17, 0x23262a); V(98, 3, 16, 0xe05050); V(98, 4, 16, 0x23262a);
+  fillB(100, 2, 16, 100, 2, 17, 0x23262a); V(100, 3, 16, 0x30c8a0); V(100, 4, 16, 0x23262a);
+  fillB(104, 2, 17, 104, 4, 17, P.hydrant, { j: 0.05 }); V(104, 5, 17, P.hydrantCap, { j: 0.04 });
+  // bus shelter on the far sidewalk
+  fillB(122, 2, 49, 122, 5, 49, 0x565c66, { j: 0.03 }); fillB(130, 2, 49, 130, 5, 49, 0x565c66, { j: 0.03 });
+  fillB(122, 6, 48, 130, 6, 50, P.glass, { t: 1, j: 0.02 });
+  fillB(123, 2, 50, 129, 4, 50, P.glass, { t: 1, j: 0.02 });
+  fillB(123, 3, 49, 129, 3, 49, 0x8a6a3a, { j: 0.05 });
+  person(84, 16, 0x30608a, 0x2a2018);
+  person(118, 15, 0xe07020, 0x3a3a3e);
+  person(102, 50, 0xd0d0d4, 0x23262a);
+  // cybertruck + robotaxi at the new curb
+  {
+    const cx = 94, cz = 23;
+    for (const wx of [cx + 2, cx + 10]) for (const wz of [cz, cz + 5]) {
+      fillB(wx, 1, wz, wx + 1, 2, wz, 0x141416, { j: 0.03 });
+      V(wx, 2, wz, 0x3a3a3e, { j: 0.03 });
+    }
+    fillB(cx, 2, cz, cx + 13, 2, cz + 5, 0x1c1c1e, { j: 0.03 });
+    fillB(cx, 3, cz, cx + 13, 4, cz + 5, 0xb8bdc2, { j: 0.02 });
+    fillB(cx, 5, cz, cx + 11, 5, cz + 5, 0xb8bdc2, { j: 0.02 });
+    fillB(cx + 2, 6, cz, cx + 9, 6, cz + 5, 0xb8bdc2, { j: 0.02 });
+    fillB(cx + 4, 7, cz + 1, cx + 6, 7, cz + 4, 0xb8bdc2, { j: 0.02 });
+    fillB(cx + 10, 5, cz + 1, cx + 11, 5, cz + 4, P.glass, { t: 1, j: 0.02 });
+    fillB(cx + 8, 6, cz + 1, cx + 9, 6, cz + 4, P.glass, { t: 1, j: 0.02 });
+    fillB(cx + 3, 6, cz, cx + 7, 6, cz, P.glass, { t: 1, j: 0.02 });
+    fillB(cx + 3, 6, cz + 5, cx + 7, 6, cz + 5, P.glass, { t: 1, j: 0.02 });
+    fillB(cx + 13, 4, cz, cx + 13, 4, cz + 5, 0xfff6e0, { t: 2, j: 0 });
+    fillB(cx, 4, cz, cx, 4, cz + 5, 0xff2424, { t: 2, j: 0 });
+    V(cx + 6, 3, cz, 0x16181c); V(cx + 6, 3, cz + 5, 0x16181c);
+  }
+  car(64, 23, 0x6e4a26);
+  car(116, 23, 0xf0f0ee);                                       // robotaxi
+  fillB(121, 8, 25, 122, 8, 26, 0x202830, { j: 0.03 });
+  V(121, 8, 27, 0x30c8ff, { t: 2, j: 0 });
+  techDistrict(x => x + 90, z => z + 108, false);               // translated, unmirrored
+}
+
+// The district body below was authored for a lot at x -26..58, z -96..-138;
+// each scene maps it into place through these local coordinate wrappers.
+function techDistrict(mapX, mapZ, flipText) {
+  function V(x, y, z, hex, o = {}) { Vb(mapX(x), y, mapZ(z), hex, o); }
+  function fillB(x0, y0, z0, x1, y1, z1, hex, o = {}) { fillBb(mapX(x0), y0, mapZ(z0), mapX(x1), y1, mapZ(z1), hex, o); }
+  function clearB(x0, y0, z0, x1, y1, z1) { clearBb(mapX(x0), y0, mapZ(z0), mapX(x1), y1, mapZ(z1)); }
+  function markDoor(x0, y0, z0, x1, y1, z1) { markDoorb(mapX(x0), y0, mapZ(z0), mapX(x1), y1, mapZ(z1)); }
   const T = {
     panel: 0x1d3038, mull: 0x20242a, steel: 0x565c66,
     tileA: 0xc9c9c5, tileB: 0x9ea4a8, desk: 0xdcdcd6, screen: 0x10141c,
@@ -1618,13 +1696,17 @@ function buildTech() {
     A: ['.#.', '###', '#.#'], T: ['###', '.#.', '.#.'],
   };
   function sign(word, x0, y0, z, scale, color, t = 3) {
+    const W = [...word].reduce((a, ch) => a + (FONT2[ch][0].length + 1) * scale, 0) - scale;
     let lx = x0;
     for (const ch of word) {
       const rows = FONT2[ch];
       for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
-        if (rows[ry][cx] === '#')
-          fillB(lx + cx * scale, y0 + (2 - ry) * scale, z,
-                lx + cx * scale + scale - 1, y0 + (2 - ry) * scale + scale - 1, z, color, { t, j: 0 });
+        if (rows[ry][cx] === '#') {
+          let px = lx + cx * scale;
+          if (flipText) px = x0 + W - scale - (px - x0);   // mirror the word so it reads
+          fillB(px, y0 + (2 - ry) * scale, z,              // correctly on the mirrored face
+                px + scale - 1, y0 + (2 - ry) * scale + scale - 1, z, color, { t, j: 0 });
+        }
       lx += (rows[0].length + 1) * scale;
     }
   }
@@ -2078,8 +2160,7 @@ function buildTech() {
   for (let i = 1; i <= 9; i++) fillB(53, 2, -112 - i, 56, 1 + i, -112 - i, 0x8a8e94, { j: 0.04 });
   clearB(48, 19, -121, 51, 19, -117);
   for (let i = 1; i <= 9; i++) fillB(48, 11, -112 - i, 51, 10 + i, -112 - i, 0x8a8e94, { j: 0.04 });
-  }   // end techBody (mirrored coordinates)
-}
+}   // end techDistrict
 }
 buildWorld();
 /* ============================================================
@@ -2483,7 +2564,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   }
   // online, only the corpo can act; offline it's a sandbox
   if (net.online && net.role !== 'corpo') return;
-  _ray.setFromCamera(_ndc, camera);
+  _ray.setFromCamera(_ndc, activeCam);
   const targets = [];
   if (net.online) for (const r of remotes.values())
     if (r.alive) for (const c of r.group.children) if (c.isMesh) targets.push(c);
@@ -2615,11 +2696,13 @@ const player = {
   x: 21.5, y: 2, z: 17.5,      // sidewalk in front of the stoop
   vx: 0, vy: 0, vz: 0,
   yaw: 0, pitch: -0.05,
-  grounded: false,
+  grounded: false, crouch: false,
 };
-const P_HALF = 0.38, P_H = 3.9, P_EYE = 3.45;
+const P_HALF = 0.38, P_H = 3.9, P_H_CROUCH = 2.9, P_EYE = 3.45;
 const P_SPEED = 9, P_SPRINT = 15, P_JUMP = 13.5;
+let P_Hcur = P_H;       // current collision height (crouching shrinks it)
 let playZMax = 54.5;    // northern world edge (extended by Tech Brooklyn)
+let playXMax = 60.5;    // eastern world edge (extended by Tech Brooklyn Long)
 
 // the figure: a stack of four bright-red voxels (visible to shadows
 // and when looking down; its own head is backface-culled from inside)
@@ -2645,7 +2728,7 @@ function playerSolid(x, y, z) {
 function boxFree(x, y, z) {    // player AABB: feet at y, centered on x/z
   const x0 = fl(x - P_HALF), x1 = fl(x + P_HALF);
   const z0 = fl(z - P_HALF), z1 = fl(z + P_HALF);
-  const y0 = fl(y + 0.01), y1 = fl(y + P_H);
+  const y0 = fl(y + 0.01), y1 = fl(y + P_Hcur);
   for (let xi = x0; xi <= x1; xi++) for (let yi = y0; yi <= y1; yi++) for (let zi = z0; zi <= z1; zi++)
     if (playerSolid(xi, yi, zi)) return false;
   return true;
@@ -2655,7 +2738,7 @@ const keys = new Set();
 addEventListener('keydown', e => {
   if (!player.active) return;
   keys.add(e.code);
-  if (e.code === 'Space') e.preventDefault();
+  if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'ControlRight') e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('mousemove', e => {
@@ -2668,7 +2751,7 @@ const fpvBtn = document.getElementById('fpv');
 const xhair = document.getElementById('xhair');
 const hintEl = document.querySelector('#ui .hint');
 const HINT_ORBIT = hintEl.textContent;
-const HINT_FPV = 'WASD — move · shift — run · space — jump · click — explode · esc — exit';
+const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space — jump · click — explode · esc — exit';
 const savedCam = { pos: new THREE.Vector3(), tgt: new THREE.Vector3() };
 
 fpvBtn.addEventListener('click', () => {
@@ -2691,6 +2774,8 @@ document.addEventListener('pointerlockchange', () => {
 
 function enterFPV() {
   player.active = true;
+  if (isoBox.checked) { isoBox.checked = false; setIso(false); }   // FPV is perspective-only
+  isoBox.disabled = true;
   savedCam.pos.copy(camera.position);
   savedCam.tgt.copy(controls.target);
   controls.enabled = false;
@@ -2718,13 +2803,58 @@ function exitFPV() {
   xhair.style.display = 'none';
   hintEl.textContent = HINT_ORBIT;
   fpvBtn.innerHTML = '&#9654; enter FPV';
+  isoBox.disabled = false;
 }
+
+/* ---- isometric camera (corpo & spectator modes only) ---- */
+const isoBox = document.getElementById('iso');
+const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 900);
+let activeCam = camera;
+let orthoHalfH = 40;
+function orthoResize() {
+  const a = innerWidth / innerHeight;
+  orthoCam.left = -orthoHalfH * a; orthoCam.right = orthoHalfH * a;
+  orthoCam.top = orthoHalfH; orthoCam.bottom = -orthoHalfH;
+  orthoCam.updateProjectionMatrix();
+}
+function setIso(on) {
+  if (on && player.active) { isoBox.checked = false; return; }
+  if (on) {
+    // classic isometric vantage from the current orbit distance
+    const d = Math.max(40, camera.position.distanceTo(controls.target));
+    const el = Math.atan(1 / Math.sqrt(2)), az = Math.PI / 4;
+    orthoCam.position.set(
+      controls.target.x + Math.cos(el) * Math.sin(az) * d,
+      controls.target.y + Math.sin(el) * d,
+      controls.target.z + Math.cos(el) * Math.cos(az) * d);
+    orthoCam.lookAt(controls.target);
+    orthoHalfH = Math.tan(camera.fov * Math.PI / 360) * d;
+    orthoCam.zoom = 1;
+    orthoResize();
+    controls.object = orthoCam;
+    activeCam = orthoCam;
+  } else {
+    if (activeCam === orthoCam) camera.position.copy(orthoCam.position);
+    controls.object = camera;
+    activeCam = camera;
+  }
+  controls.update();
+}
+isoBox.addEventListener('change', () => setIso(isoBox.checked));
 
 function stepPlayer(dt) {
   if (!player.active) return;
   const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.033)));
   const h = dt / n;
-  const sp = (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? P_SPRINT : P_SPEED;
+  // crouch (ctrl or C): one voxel shorter and slower — squeezes up tight stairs
+  const wantCrouch = keys.has('ControlLeft') || keys.has('ControlRight') || keys.has('KeyC');
+  if (wantCrouch) player.crouch = true;
+  else if (player.crouch) {
+    P_Hcur = P_H;
+    player.crouch = !boxFree(player.x, player.y, player.z);   // stand only with headroom
+  }
+  P_Hcur = player.crouch ? P_H_CROUCH : P_H;
+  const sp = ((keys.has('ShiftLeft') || keys.has('ShiftRight')) ? P_SPRINT : P_SPEED) * (player.crouch ? 0.45 : 1);
   let mx = 0, mz = 0;
   if (keys.has('KeyW')) { mx -= Math.sin(player.yaw); mz -= Math.cos(player.yaw); }
   if (keys.has('KeyS')) { mx += Math.sin(player.yaw); mz += Math.cos(player.yaw); }
@@ -2750,12 +2880,13 @@ function stepPlayer(dt) {
   if (player.grounded && keys.has('Space')) { player.vy = P_JUMP; player.grounded = false; }
 
   // stay inside the built world
-  player.x = Math.max(X0 + 0.5, Math.min(X1 + 0.5, player.x));
+  player.x = Math.max(X0 + 0.5, Math.min(playXMax, player.x));
   player.z = Math.max(-55.5, Math.min(playZMax, player.z));
 
   playerGroup.position.set(player.x, player.y, player.z);
   playerGroup.rotation.y = player.yaw;
-  camera.position.set(player.x, player.y + P_EYE, player.z);
+  playerGroup.children[3].visible = !player.crouch;   // tuck the head voxel
+  camera.position.set(player.x, player.y + (player.crouch ? P_EYE - 1 : P_EYE), player.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
 }
 
@@ -3031,7 +3162,7 @@ document.getElementById('reset').addEventListener('click', () => {
 /* ---- scene selection (synced when online) ---- */
 const sceneSel = document.getElementById('scene');
 function setSceneLocal(id) {
-  if (id !== 'default' && id !== 'tech') return;
+  if (id !== 'default' && id !== 'tech' && id !== 'techlong') return;
   sceneSel.value = id;
   if (id === sceneId) return;
   sceneId = id;
@@ -3124,18 +3255,33 @@ const techLights = [
   roomLight(40, 16.5, 71, 100),   // gym studio
   roomLight(40, 24, 70, 90, 0x66d8f0, 28),   // pool glow
 ];
-interiorLights.push(...techLights);
+const longLights = [
+  roomLight(86, 7.5, 0, 150),     // tower lobby
+  roomLight(80, 15.5, -2, 110),   // engineering
+  roomLight(85, 23.5, -4, 110),   // meetings
+  roomLight(82, 31.5, 0, 100),    // lab
+  roomLight(82, 39.5, -4, 120),   // cafeteria
+  roomLight(82, 47.5, -2, 100),   // exec
+  roomLight(82, 55.5, -2, 130),   // sky lounge
+  roomLight(132, 8, -2, 130),     // gym floor
+  roomLight(130, 16.5, -4, 100),  // gym studio
+  roomLight(130, 24, -3, 90, 0x66d8f0, 28),    // pool glow
+];
+interiorLights.push(...techLights, ...longLights);
 for (const l of techLights) l.visible = false;
+for (const l of longLights) l.visible = false;
 
 function applySceneEnv() {
-  const tech = sceneId === 'tech';
-  const ext = tech ? 125 : 95;
+  const tech = sceneId === 'tech', long = sceneId === 'techlong';
+  const ext = long ? 150 : tech ? 125 : 95;
   sun.shadow.camera.left = -ext; sun.shadow.camera.right = ext;
   sun.shadow.camera.top = ext; sun.shadow.camera.bottom = -ext;
   sun.shadow.camera.updateProjectionMatrix();
   for (const l of techLights) l.visible = tech;
-  controls.maxDistance = tech ? 320 : 260;
+  for (const l of longLights) l.visible = long;
+  controls.maxDistance = (tech || long) ? 340 : 260;
   playZMax = tech ? 101.5 : 54.5;
+  playXMax = long ? 152.5 : 60.5;
 }
 applySceneEnv();
 
@@ -3275,7 +3421,7 @@ renderer.setAnimationLoop(() => {
   fireParlor.intensity = 26 * flick;
   fireGarden.intensity = 26 * (1.5 - flick);
 
-  renderer.render(scene, camera);
+  renderer.render(scene, activeCam);
 });
 </script>
 </body>

@@ -11,10 +11,13 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
 - **Load-bearing collapse** — structures cut off from the ground break loose and
   fall as rigid pieces, landing intact or shattering into debris (blow out the
   crane mast or the water-tower legs)
-- **Two scenes** (synced in multiplayer): *default Brooklyn*, and *Tech Brooklyn*,
+- **Three scenes** (synced in multiplayer): *default Brooklyn*; *Tech Brooklyn*,
   which fills the far side of the street with the 7-story VOXL tower (every
   floor furnished and walkable, stairs to the helipad roof) and the FLEX luxury
-  gym with a rooftop pool, plus a cybertruck and robotaxi at the curb
+  gym with a rooftop pool, plus a cybertruck and robotaxi at the curb; and
+  *Tech Brooklyn Long*, which instead extends the street east so all five
+  buildings line the same side
+- **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 
 ## Multiplayer — humans vs the corpo
@@ -46,7 +49,8 @@ Or open `brownstone.html` directly in a browser for the offline sandbox.
 
 - drag — orbit · scroll — zoom · right-drag — pan · **click — explode**
 - **FPV mode** (button in the panel): possess a red voxel figure — WASD to move,
-  shift to run, space to jump, mouse to look, click to explode at the crosshair,
+  shift to run, ctrl/C to crouch (one voxel shorter, slower — squeeze up tight
+  stairwells), space to jump, mouse to look, click to explode at the crosshair,
   esc to exit. Doors ghost transparent and can be walked through.
 - Time-of-day slider and `cycle day` checkbox in the panel
 - URL hash presets: `#t=1290&cam=x,y,z&tgt=x,y,z&boom=x,y,z&scene=tech`

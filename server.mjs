@@ -194,7 +194,7 @@ function onMessage(conn, m) {
       }
       break;
     case 'scene': // any seated player may switch scenes for everyone
-      if (p && (m.scene === 'default' || m.scene === 'tech') && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
         console.log(`scene -> ${scene} by ${p.name}`);
