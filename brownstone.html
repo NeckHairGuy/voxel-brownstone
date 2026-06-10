@@ -2992,7 +2992,7 @@ function handleNet(m) {
       explode(m.x, m.y, m.z);
       break;
     case 'spot':
-      spotWant.set(m.x, 2, m.z);
+      spotWant.set(m.x, m.y !== undefined ? m.y : 2, m.z);
       if (m.oy !== undefined) spotOrigWant.set(m.ox, m.oy, m.oz);
       spotRemoteAt = performance.now();
       break;
@@ -3301,10 +3301,34 @@ const _spotV = new THREE.Vector3();
 let spotRemoteAt = -1e9;
 let spotSendAt = 0;
 const _spotRay = new THREE.Raycaster();
+const _spotHit = new THREE.Vector3();
 const _mouseNDC = new THREE.Vector2(0, 0);
 addEventListener('pointermove', e => {
   _mouseNDC.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
 });
+// march the cursor ray through the voxel grid (DDA) so the beam lands on
+// whatever is actually under the cursor — facades and rooftops included
+function spotRayHit(o, d, out) {
+  let x = fl(o.x), y = fl(o.y), z = fl(o.z);
+  const sx = d.x > 0 ? 1 : -1, sy = d.y > 0 ? 1 : -1, sz = d.z > 0 ? 1 : -1;
+  const ix = Math.abs(d.x) > 1e-9 ? Math.abs(1 / d.x) : 1e9;
+  const iy = Math.abs(d.y) > 1e-9 ? Math.abs(1 / d.y) : 1e9;
+  const iz = Math.abs(d.z) > 1e-9 ? Math.abs(1 / d.z) : 1e9;
+  let tx = (sx > 0 ? x + 1 - o.x : o.x - x) * ix;
+  let ty = (sy > 0 ? y + 1 - o.y : o.y - y) * iy;
+  let tz = (sz > 0 ? z + 1 - o.z : o.z - z) * iz;
+  let t = 0;
+  for (let i = 0; i < 600 && t < 450; i++) {
+    if (y <= -2 || vox.has(x + '|' + y + '|' + z)) {
+      out.copy(d).multiplyScalar(Math.max(0, t - 0.05)).add(o);
+      return true;
+    }
+    if (tx <= ty && tx <= tz) { t = tx; tx += ix; x += sx; }
+    else if (ty <= tz) { t = ty; ty += iy; y += sy; }
+    else { t = tz; tz += iz; z += sz; }
+  }
+  return false;
+}
 function stepSpot(dt) {
   const iAmCorpo = !player.active && (!net.online || net.role === 'corpo');
   const remoteFresh = performance.now() - spotRemoteAt < 1500;
@@ -3312,10 +3336,15 @@ function stepSpot(dt) {
   corpoSpot.visible = on;
   if (!on) return;
   if (iAmCorpo) {
-    // aim at the ground point under the cursor — plane intersection, no mesh raycast
+    // aim at the surface under the cursor (voxel DDA, ground-plane fallback)
     _spotRay.setFromCamera(_mouseNDC, activeCam);
     const o = _spotRay.ray.origin, d = _spotRay.ray.direction;
-    if (d.y < -0.05) {
+    if (spotRayHit(o, d, _spotHit)) {
+      spotWant.set(
+        Math.max(X0, Math.min(playXMax, _spotHit.x)),
+        Math.max(0, Math.min(75, _spotHit.y)),
+        Math.max(-56, Math.min(playZMax, _spotHit.z)));
+    } else if (d.y < -0.05) {
       const t = (2 - o.y) / d.y;
       spotWant.set(
         Math.max(X0, Math.min(playXMax, o.x + d.x * t)), 2,
@@ -3326,11 +3355,11 @@ function stepSpot(dt) {
     _spotV.copy(spotWant).sub(activeCam.position);
     _spotV.multiplyScalar(-70 / (_spotV.length() || 1));
     spotOrigWant.copy(spotWant).add(_spotV);
-    spotOrigWant.y = Math.max(spotOrigWant.y, spotWant.y + 24);
+    spotOrigWant.y = Math.max(spotOrigWant.y, spotWant.y + 14);
     if (net.online && performance.now() - spotSendAt > 150) {
       spotSendAt = performance.now();
       nsend({
-        t: 'spot', x: +spotWant.x.toFixed(1), z: +spotWant.z.toFixed(1),
+        t: 'spot', x: +spotWant.x.toFixed(1), y: +spotWant.y.toFixed(1), z: +spotWant.z.toFixed(1),
         ox: +spotOrigWant.x.toFixed(1), oy: +spotOrigWant.y.toFixed(1), oz: +spotOrigWant.z.toFixed(1),
       });
     }

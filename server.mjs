@@ -159,7 +159,7 @@ function onMessage(conn, m) {
       break;
     case 'spot': // corpo's night searchlight aim + beam origin, relayed to everyone else
       if (p && p.role === 'corpo') broadcast({
-        t: 'spot', x: +m.x || 0, z: +m.z || 0,
+        t: 'spot', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0,
         ox: +m.ox || 0, oy: +m.oy || 0, oz: +m.oz || 0,
       }, conn);
       break;
