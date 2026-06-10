@@ -51,7 +51,9 @@ Or open `brownstone.html` directly in a browser for the offline sandbox.
 - **FPV mode** (button in the panel): possess a red voxel figure — WASD to move,
   shift to run, ctrl/C to crouch (one voxel shorter, slower — squeeze up tight
   stairwells), space to jump, mouse to look, click to explode at the crosshair,
-  esc to exit. Doors ghost transparent and can be walked through.
+  esc to exit. Doors ghost transparent and can be walked through. On mobile,
+  joining as human brings up touch controls: a virtual joystick (full tilt
+  sprints), drag to look, and jump/crouch buttons.
 - Time-of-day slider and `cycle day` checkbox in the panel
 - URL hash presets: `#t=1290&cam=x,y,z&tgt=x,y,z&boom=x,y,z&scene=tech`
 

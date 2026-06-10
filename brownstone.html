@@ -91,6 +91,25 @@
     font:700 14px -apple-system,Segoe UI,system-ui,sans-serif;
   }
   #laidoff button:disabled{opacity:.4;cursor:default;}
+  #stick{
+    position:fixed;left:22px;bottom:26px;width:110px;height:110px;border-radius:50%;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
+    z-index:9;display:none;touch-action:none;
+  }
+  #knob{
+    position:absolute;left:31px;top:31px;width:48px;height:48px;border-radius:50%;
+    background:rgba(255,255,255,.25);pointer-events:none;
+  }
+  .tbtn{
+    position:fixed;right:24px;width:58px;height:58px;border-radius:50%;z-index:9;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);
+    color:#fff;font:26px/58px -apple-system,sans-serif;text-align:center;display:none;
+    touch-action:none;user-select:none;-webkit-user-select:none;
+  }
+  #tjump{bottom:26px;}
+  #tcrouch{bottom:96px;}
+  #tcrouch.on{background:rgba(224,168,90,.45);border-color:#e0a85a;}
+  body.touchfpv #stick,body.touchfpv .tbtn{display:block;}
 </style>
 </head>
 <body>
@@ -143,6 +162,9 @@
   <div class="lo-sub">the corpo restructured you out of the org chart</div>
   <button id="respawn">respawn</button>
 </div>
+<div id="stick"><div id="knob"></div></div>
+<div id="tjump" class="tbtn">&#8673;</div>
+<div id="tcrouch" class="tbtn">&#8675;</div>
 
 <script type="importmap">
 { "imports": {
@@ -2547,8 +2569,8 @@ renderer.domElement.addEventListener('pointerup', e => {
   const primary = e.pointerId === pDownId;
   if (primary) pDownId = -1;
   if (!primary || multiTouch || e.button !== 0) return;
-  // FPV with the mouse released: clicking the scene re-captures it
-  if (player.active && document.pointerLockElement !== renderer.domElement) {
+  // FPV with the mouse released: clicking the scene re-captures it (desktop only)
+  if (player.active && !isTouch && document.pointerLockElement !== renderer.domElement) {
     renderer.domElement.requestPointerLock();
     return;
   }
@@ -2758,6 +2780,7 @@ const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space —
 const savedCam = { pos: new THREE.Vector3(), tgt: new THREE.Vector3() };
 
 fpvBtn.addEventListener('click', () => {
+  if (isTouch) { player.active ? exitFPV() : enterFPV(); return; }   // no pointer lock on touch
   if (player.active) document.exitPointerLock();
   else renderer.domElement.requestPointerLock();
 });
@@ -2791,8 +2814,9 @@ function enterFPV() {
   matDoor.opacity = 0.45;
   matDoor.depthWrite = false;
   xhair.style.display = 'block';
-  hintEl.textContent = HINT_FPV;
-  fpvBtn.textContent = 'exit FPV (esc)';
+  if (isTouch) document.body.classList.add('touchfpv');
+  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — jump / crouch' : HINT_FPV;
+  fpvBtn.textContent = isTouch ? 'exit FPV' : 'exit FPV (esc)';
 }
 function exitFPV() {
   player.active = false;
@@ -2804,6 +2828,8 @@ function exitFPV() {
   matDoor.depthWrite = true;
   keys.clear();
   xhair.style.display = 'none';
+  document.body.classList.remove('touchfpv');
+  document.getElementById('tcrouch').classList.remove('on');
   hintEl.textContent = HINT_ORBIT;
   fpvBtn.innerHTML = '&#9654; enter FPV';
   isoBox.disabled = false;
@@ -2845,6 +2871,58 @@ function setIso(on) {
 }
 isoBox.addEventListener('change', () => setIso(isoBox.checked));
 
+/* ---- mobile touch controls: joystick, look-drag, jump + crouch ---- */
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const touchStick = { x: 0, y: 0, len: 0 };
+{
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('knob');
+  const jumpBtn = document.getElementById('tjump');
+  const crouchBtn = document.getElementById('tcrouch');
+  let sid = -1;
+  const setStick = e => {
+    const r = stick.getBoundingClientRect();
+    let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    const L = Math.hypot(dx, dy);
+    if (L > 1) { dx /= L; dy /= L; }
+    touchStick.x = dx; touchStick.y = dy; touchStick.len = Math.min(1, L);
+    knob.style.transform = `translate(${dx * 30}px, ${dy * 30}px)`;
+  };
+  const resetStick = () => {
+    sid = -1;
+    touchStick.x = touchStick.y = touchStick.len = 0;
+    knob.style.transform = 'translate(0,0)';
+  };
+  stick.addEventListener('pointerdown', e => { sid = e.pointerId; stick.setPointerCapture(sid); setStick(e); e.preventDefault(); });
+  stick.addEventListener('pointermove', e => { if (e.pointerId === sid) setStick(e); });
+  stick.addEventListener('pointerup', e => { if (e.pointerId === sid) resetStick(); });
+  stick.addEventListener('pointercancel', e => { if (e.pointerId === sid) resetStick(); });
+  jumpBtn.addEventListener('pointerdown', e => { keys.add('Space'); e.preventDefault(); });
+  jumpBtn.addEventListener('pointerup', () => keys.delete('Space'));
+  jumpBtn.addEventListener('pointercancel', () => keys.delete('Space'));
+  crouchBtn.addEventListener('pointerdown', e => {   // toggle: holding is awkward on glass
+    e.preventDefault();
+    if (keys.has('KeyC')) { keys.delete('KeyC'); crouchBtn.classList.remove('on'); }
+    else { keys.add('KeyC'); crouchBtn.classList.add('on'); }
+  });
+  // look: drag a finger anywhere on the scene
+  let lid = -1, lx = 0, ly = 0;
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (isTouch && player.active && e.pointerType === 'touch' && lid === -1) {
+      lid = e.pointerId; lx = e.clientX; ly = e.clientY;
+    }
+  });
+  addEventListener('pointermove', e => {
+    if (e.pointerId !== lid || !player.active) return;
+    player.yaw -= (e.clientX - lx) * 0.005;
+    player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch - (e.clientY - ly) * 0.005));
+    lx = e.clientX; ly = e.clientY;
+  });
+  addEventListener('pointerup', e => { if (e.pointerId === lid) lid = -1; });
+  addEventListener('pointercancel', e => { if (e.pointerId === lid) lid = -1; });
+}
+
 function stepPlayer(dt) {
   if (!player.active) return;
   const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.033)));
@@ -2863,8 +2941,15 @@ function stepPlayer(dt) {
   if (keys.has('KeyS')) { mx += Math.sin(player.yaw); mz += Math.cos(player.yaw); }
   if (keys.has('KeyA')) { mx -= Math.cos(player.yaw); mz += Math.sin(player.yaw); }
   if (keys.has('KeyD')) { mx += Math.cos(player.yaw); mz -= Math.sin(player.yaw); }
+  let analog = 1;
+  if (touchStick.len > 0.08) {        // virtual joystick (full tilt sprints)
+    const f = -touchStick.y, s = touchStick.x;
+    mx += -Math.sin(player.yaw) * f + Math.cos(player.yaw) * s;
+    mz += -Math.cos(player.yaw) * f - Math.sin(player.yaw) * s;
+    analog = Math.min(1, touchStick.len * (touchStick.len > 0.95 ? P_SPRINT / P_SPEED : 1.1));
+  }
   const L = Math.hypot(mx, mz);
-  if (L > 0) { mx = mx / L * sp; mz = mz / L * sp; }
+  if (L > 0) { mx = mx / L * sp * analog; mz = mz / L * sp * analog; }
 
   for (let s = 0; s < n; s++) {
     // horizontal, with 1-voxel auto-step (stairs, curbs, stoops) when grounded
@@ -3102,13 +3187,13 @@ function localLayoff() {
 function doJoin(want) {
   const name = (mpNameEl.value || '').trim() || 'player';
   localStorage.setItem('vb-name', name);
-  if (want === 'human') renderer.domElement.requestPointerLock();   // must happen in the click gesture
+  if (want === 'human' && !isTouch) renderer.domElement.requestPointerLock();   // in the click gesture
   nsend({ t: 'join', name, want });
 }
 joinHumanBtn.addEventListener('click', () => doJoin('human'));
 joinCorpoBtn.addEventListener('click', () => doJoin('corpo'));
 respawnBtn.addEventListener('click', () => {
-  renderer.domElement.requestPointerLock();   // gesture-bound; FPV resumes on the server's ack
+  if (!isTouch) renderer.domElement.requestPointerLock();   // gesture-bound; FPV resumes on ack
   nsend({ t: 'respawn' });
 });
 setInterval(() => {   // respawn cooldown countdown
