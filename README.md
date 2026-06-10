@@ -12,9 +12,9 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   fall as rigid pieces, landing intact or shattering into debris (blow out the
   crane mast or the water-tower legs)
 - **Two scenes** (synced in multiplayer): *default Brooklyn*, and *Tech Brooklyn*,
-  which adds a second street with a cybertruck and robotaxi, the 7-story VOXL
-  tower (every floor furnished and walkable, stairs to the helipad roof), and
-  the FLEX luxury gym with a rooftop pool
+  which fills the far side of the street with the 7-story VOXL tower (every
+  floor furnished and walkable, stairs to the helipad roof) and the FLEX luxury
+  gym with a rooftop pool, plus a cybertruck and robotaxi at the curb
 - Collapsible control panels (handy on mobile)
 
 ## Multiplayer — humans vs the corpo
