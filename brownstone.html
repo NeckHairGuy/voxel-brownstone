@@ -94,6 +94,9 @@
     <label><input id="play" type="checkbox"> cycle day</label>
     <label><input id="facade" type="checkbox"> hide facades (dollhouse)</label>
   </div>
+  <div class="row">
+    <label><input id="bearing" type="checkbox" checked> load-bearing collapse</label>
+  </div>
   <button id="fpv">&#9654; enter FPV</button>
   <button id="reset">reset scene</button>
   <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
@@ -213,6 +216,16 @@ function removeVox(x, y, z) {
   const cs = chunkIndex.get(ckOf(x, z));
   if (cs) cs.delete(k);
   return true;
+}
+// re-place a voxel with already-linear rgb, bypassing V()'s hex path
+// (which would re-apply the sRGB->linear conversion and shift the color)
+function setVoxRaw(x, y, z, c) {
+  const k = x + '|' + y + '|' + z;
+  vox.set(k, { x, y, z, r: c.r, g: c.g, b: c.b, t: c.t || 0, gr: 0, d: c.d });
+  const ck = ckOf(x, z);
+  let cs = chunkIndex.get(ck);
+  if (!cs) { cs = new Set(); chunkIndex.set(ck, cs); }
+  cs.add(k);
 }
 function getV(x, y, z) { return vox.get(x + '|' + y + '|' + z); }
 function solid(x, y, z) { const v = getV(x, y, z); return !!v && v.t !== 1; }
@@ -1722,10 +1735,136 @@ function flamesAt(x, y, z) {
   flashT = 0;
 }
 
+/* ---- load-bearing collapse: support check ---- */
+let loadBearing = true;
+const DIRS6 = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]];
+const SUPPORT_CAP = 12000;   // beyond this, assume the structure is anchored
+
+// After voxels vanish, anything no longer connected to the bedrock through
+// solid voxels breaks loose: it drops as a rigid piece, landing intact for
+// short falls or shattering into debris for long ones / small fragments.
+function collapseCheck(removed, dirty, quiet) {
+  const seeds = [];
+  const seedSeen = new Set();
+  for (const [x, y, z] of removed)
+    for (const d of DIRS6) {
+      const k = (x + d[0]) + '|' + (y + d[1]) + '|' + (z + d[2]);
+      if (!seedSeen.has(k) && vox.has(k)) { seedSeen.add(k); seeds.push(k); }
+    }
+  const status = new Map();   // key -> 1 grounded | 2 detached | 0 in progress
+  for (const sk of seeds) {
+    if (status.has(sk)) continue;
+    const stack = [sk];
+    const visited = [];
+    status.set(sk, 0);
+    let grounded = false;
+    while (stack.length) {
+      const k = stack.pop();
+      visited.push(k);
+      const v = vox.get(k);
+      if (!v) continue;
+      // down is pushed last so it pops first — grounded structures resolve fast
+      for (let i = DIRS6.length - 1; i >= 0; i--) {
+        const d = DIRS6[i];
+        const ny = v.y + d[1];
+        const nk = (v.x + d[0]) + '|' + ny + '|' + (v.z + d[2]);
+        const st = status.get(nk);
+        if (st === 1) { grounded = true; break; }
+        if (st !== undefined) continue;
+        if (!vox.has(nk)) continue;
+        if (ny <= -2) { grounded = true; break; }   // bedrock is indestructible
+        status.set(nk, 0);
+        stack.push(nk);
+      }
+      if (grounded || visited.length + stack.length > SUPPORT_CAP) { grounded = true; break; }
+    }
+    if (grounded) {
+      for (const k of visited) status.set(k, 1);
+      for (const k of stack) status.set(k, 1);
+    } else {
+      for (const k of visited) status.set(k, 2);
+      detachComponent(visited, dirty, quiet);
+    }
+  }
+}
+
+function detachComponent(keys, dirty, quiet) {
+  const cells = [];
+  for (const k of keys) {
+    const v = vox.get(k);
+    if (v) cells.push({ x: v.x, y: v.y, z: v.z, r: v.r, g: v.g, b: v.b, t: v.t, d: v.d });
+  }
+  if (!cells.length) return;
+  for (const c of cells) { removeVox(c.x, c.y, c.z); markDirty(c.x, c.z, dirty); }
+  // rigid straight-down drop: shortest free fall among all columns
+  let drop = Infinity;
+  for (const c of cells) {
+    let free = 0, yy = c.y - 1;
+    while (yy > -2 && free < drop && !vox.has(c.x + '|' + yy + '|' + c.z)) { free++; yy--; }
+    if (free < drop) drop = free;
+    if (drop === 0) break;
+  }
+  const shatter = cells.length < 8 || drop >= 7;
+  if (quiet) {   // history replay for late joiners: settle instantly, no theatrics
+    if (!shatter) for (const c of cells) integrateCell(c, drop, dirty);
+    return;
+  }
+  if (shatter && drop < 2) { for (const c of cells) crumbleCell(c, 0); return; }
+  spawnFallingGroup(cells, drop, shatter);
+}
+/* ---- falling pieces ---- */
+const fallGeo = new THREE.BoxGeometry(1, 1, 1);
+const fallMat = new THREE.MeshLambertMaterial();
+const fallingGroups = [];
+
+function spawnFallingGroup(cells, drop, shatter) {
+  const mesh = new THREE.InstancedMesh(fallGeo, fallMat, cells.length);
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    _dummy.position.set(c.x + 0.5, c.y + 0.5, c.z + 0.5);
+    _dummy.rotation.set(0, 0, 0);
+    _dummy.scale.setScalar(1);
+    _dummy.updateMatrix();
+    mesh.setMatrixAt(i, _dummy.matrix);
+    _col.setRGB(c.r, c.g, c.b);
+    mesh.setColorAt(i, _col);
+  }
+  mesh.castShadow = true;
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  fallingGroups.push({ mesh, cells, drop, off: 0, vy: 0, shatter });
+}
+
+function integrateCell(c, drop, dirty) {
+  const y = c.y - drop;
+  if (vox.has(c.x + '|' + y + '|' + c.z)) { crumbleCell(c, drop); return; }
+  setVoxRaw(c.x, y, c.z, c);
+  markDirty(c.x, c.z, dirty);
+}
+
+function crumbleCell(c, dropped) {
+  if (debris.length >= DEBRIS_MAX) return;
+  _col.setRGB(c.r, c.g, c.b);
+  debrisMesh.setColorAt(debris.length, _col);
+  debris.push({
+    x: c.x + 0.5, y: c.y - dropped + 0.5, z: c.z + 0.5,
+    vx: (Math.random() - 0.5) * 6,
+    vy: -2 - Math.random() * 3,
+    vz: (Math.random() - 0.5) * 6,
+    rx: Math.random() * 3, ry: Math.random() * 3,
+    rvx: (Math.random() - 0.5) * 8, rvy: (Math.random() - 0.5) * 8,
+    r: c.r, g: c.g, b: c.b, age: 0, rest: 0,
+  });
+  if (debrisMesh.instanceColor) debrisMesh.instanceColor.needsUpdate = true;
+}
+
+const bearingBox = document.getElementById('bearing');
+bearingBox.addEventListener('change', () => { loadBearing = bearingBox.checked; });
+
 function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for late joiners
   const dirty = new Set();
   const rI = Math.ceil(BLAST_R + 1.2);
-  let removed = 0;
+  const removedPts = [];
   for (let x = cx - rI; x <= cx + rI; x++)
     for (let y = Math.max(-1, cy - rI); y <= cy + rI; y++)
       for (let z = cz - rI; z <= cz + rI; z++) {
@@ -1736,9 +1875,10 @@ function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for 
         removeVox(x, y, z);
         markDirty(x, z, dirty);
         if (!quiet) spawnDebris(v, cx, cy, cz, d);
-        removed++;
+        removedPts.push([x, y, z]);
       }
-  if (!removed) return;
+  if (!removedPts.length) return;
+  if (loadBearing) collapseCheck(removedPts, dirty, quiet);
   for (const ck of dirty) meshChunk(ck);
   if (quiet) return;
   flashLight.position.set(cx + 0.5, cy + 1.5, cz + 0.5);
@@ -1813,8 +1953,7 @@ function settleDebris(i) {
   let sx = fl(D.x), sy = fl(D.y), sz = fl(D.z), up = 0;
   while (vox.has(sx + '|' + sy + '|' + sz) && up < 3) { sy++; up++; }
   if (!vox.has(sx + '|' + sy + '|' + sz) && sy > -2 && sy < 64 && solidAt(sx, sy - 1, sz)) {
-    const hex = (Math.round(D.r * 255) << 16) | (Math.round(D.g * 255) << 8) | Math.round(D.b * 255);
-    V(sx, sy, sz, hex, { j: 0 });
+    setVoxRaw(sx, sy, sz, { r: D.r, g: D.g, b: D.b });   // exact original color
     markDirty(sx, sz, pendingDirty);
   }
   const last = debris.length - 1;
@@ -1829,6 +1968,27 @@ function settleDebris(i) {
 }
 
 function stepExplosions(dt) {
+  // --- falling rigid pieces ---
+  for (let gi = fallingGroups.length - 1; gi >= 0; gi--) {
+    const g = fallingGroups[gi];
+    g.vy += GRAV * dt;
+    g.off = Math.min(g.drop, g.off + g.vy * dt);
+    if (g.off >= g.drop) {
+      scene.remove(g.mesh);
+      g.mesh.dispose();
+      fallingGroups.splice(gi, 1);
+      if (g.shatter) {
+        for (const c of g.cells) crumbleCell(c, g.drop);
+      } else {
+        const dd = new Set();
+        for (const c of g.cells) integrateCell(c, g.drop, dd);
+        for (const ck of dd) meshChunk(ck);
+      }
+    } else {
+      g.mesh.position.y = -g.off;
+    }
+  }
+
   // --- debris physics (substepped so fast chunks can't tunnel through walls) ---
   const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.025)));
   const h = dt / n;
@@ -2074,6 +2234,10 @@ function wsConnect() {
     mpStatus.textContent = 'pick a side';
     mpJoinEl.style.display = 'block';
     fpvBtn.style.display = 'none';
+    // physics must match across clients, so online it's always on
+    loadBearing = true;
+    bearingBox.checked = true;
+    bearingBox.disabled = true;
   };
   ws.onclose = () => {
     const retry = net.online || net.ws === ws;
@@ -2084,6 +2248,7 @@ function wsConnect() {
     mpListEl.innerHTML = '';
     laidoffEl.style.display = 'none';
     fpvBtn.style.display = '';
+    bearingBox.disabled = false;
     if (player.active) { document.exitPointerLock(); exitFPV(); }
     mpStatus.textContent = 'disconnected — retrying…';
     if (retry) setTimeout(wsConnect, 3000);
@@ -2280,6 +2445,8 @@ function resetWorld() {
   debris.length = 0;
   sparkArr.length = 0;
   pendingDirty.clear();
+  for (const g of fallingGroups) { scene.remove(g.mesh); g.mesh.dispose(); }
+  fallingGroups.length = 0;
   buildWorld();
   const all = new Set([...chunkMeshes.keys(), ...chunkIndex.keys()]);
   for (const ck of all) meshChunk(ck);

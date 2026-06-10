@@ -8,6 +8,9 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
 - Day/night cycle, dollhouse facade toggle, animated traffic lights
 - **Click any voxel to explode it** — debris cubes tumble with real collision against
   the voxel grid and settle back into the world as permanent rubble
+- **Load-bearing collapse** — structures cut off from the ground break loose and
+  fall as rigid pieces, landing intact or shattering into debris (blow out the
+  crane mast or the water-tower legs)
 
 ## Multiplayer — humans vs the corpo
 
