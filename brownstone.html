@@ -2993,6 +2993,7 @@ function handleNet(m) {
       break;
     case 'spot':
       spotWant.set(m.x, 2, m.z);
+      if (m.oy !== undefined) spotOrigWant.set(m.ox, m.oy, m.oz);
       spotRemoteAt = performance.now();
       break;
     case 'reset':
@@ -3281,11 +3282,22 @@ for (const l of longLights) l.visible = false;
 /* ---- corpo night searchlight: follows the corpo's cursor after dark.
        The aim is broadcast, so humans see where the corpo is hunting. ---- */
 const spotBox = document.getElementById('spot');
-const corpoSpot = new THREE.SpotLight(0xfff2d0, 0, 130, Math.PI / 10, 0.35, 1.3);
+const corpoSpot = new THREE.SpotLight(0xfff2d0, 0, 150, Math.PI / 10, 0.35, 1.3);
 corpoSpot.visible = false;
+// shadows from a small dedicated map: one extra 1024px pass, only while
+// the beam is on (invisible lights skip their shadow pass entirely)
+corpoSpot.castShadow = true;
+corpoSpot.shadow.mapSize.set(1024, 1024);
+corpoSpot.shadow.camera.near = 8;
+corpoSpot.shadow.camera.far = 150;
+corpoSpot.shadow.bias = -0.0005;
+corpoSpot.shadow.normalBias = 1.2;
 scene.add(corpoSpot, corpoSpot.target);
 const spotAim = new THREE.Vector3(13, 2, 17);
 const spotWant = spotAim.clone();
+const spotOrig = new THREE.Vector3(27, 64, 27);
+const spotOrigWant = spotOrig.clone();
+const _spotV = new THREE.Vector3();
 let spotRemoteAt = -1e9;
 let spotSendAt = 0;
 const _spotRay = new THREE.Raycaster();
@@ -3309,14 +3321,25 @@ function stepSpot(dt) {
         Math.max(X0, Math.min(playXMax, o.x + d.x * t)), 2,
         Math.max(-56, Math.min(playZMax, o.z + d.z * t)));
     }
+    // the beam leans with the corpo's view: its source sits back up the
+    // view ray toward the camera (with a floor on its elevation)
+    _spotV.copy(spotWant).sub(activeCam.position);
+    _spotV.multiplyScalar(-70 / (_spotV.length() || 1));
+    spotOrigWant.copy(spotWant).add(_spotV);
+    spotOrigWant.y = Math.max(spotOrigWant.y, spotWant.y + 24);
     if (net.online && performance.now() - spotSendAt > 150) {
       spotSendAt = performance.now();
-      nsend({ t: 'spot', x: +spotWant.x.toFixed(1), z: +spotWant.z.toFixed(1) });
+      nsend({
+        t: 'spot', x: +spotWant.x.toFixed(1), z: +spotWant.z.toFixed(1),
+        ox: +spotOrigWant.x.toFixed(1), oy: +spotOrigWant.y.toFixed(1), oz: +spotOrigWant.z.toFixed(1),
+      });
     }
   }
-  spotAim.lerp(spotWant, Math.min(1, dt * 6));
+  const k = Math.min(1, dt * 6);
+  spotAim.lerp(spotWant, k);
+  spotOrig.lerp(spotOrigWant, k);
   corpoSpot.target.position.copy(spotAim);
-  corpoSpot.position.set(spotAim.x + 14, 62, spotAim.z + 10);
+  corpoSpot.position.copy(spotOrig);
   corpoSpot.intensity = 1100 * nightF;
 }
 
