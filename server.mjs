@@ -157,6 +157,9 @@ function onMessage(conn, m) {
         broadcast({ t: 'pos', id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, conn);
       }
       break;
+    case 'spot': // corpo's night searchlight aim, relayed to everyone else
+      if (p && p.role === 'corpo') broadcast({ t: 'spot', x: +m.x || 0, z: +m.z || 0 }, conn);
+      break;
     case 'boom': // corpo-only ability
       if (p && p.role === 'corpo') {
         const b = [Math.round(+m.x || 0), Math.round(+m.y || 0), Math.round(+m.z || 0)];

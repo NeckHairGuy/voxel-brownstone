@@ -115,6 +115,9 @@
     <div class="row">
       <label><input id="iso" type="checkbox"> isometric camera</label>
     </div>
+    <div class="row">
+      <label><input id="spot" type="checkbox" checked> corpo night spotlight</label>
+    </div>
     <button id="fpv">&#9654; enter FPV</button>
     <button id="reset">reset scene</button>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
@@ -2988,6 +2991,10 @@ function handleNet(m) {
     case 'boom':
       explode(m.x, m.y, m.z);
       break;
+    case 'spot':
+      spotWant.set(m.x, 2, m.z);
+      spotRemoteAt = performance.now();
+      break;
     case 'reset':
       resetWorld();
       break;
@@ -3271,6 +3278,48 @@ interiorLights.push(...techLights, ...longLights);
 for (const l of techLights) l.visible = false;
 for (const l of longLights) l.visible = false;
 
+/* ---- corpo night searchlight: follows the corpo's cursor after dark.
+       The aim is broadcast, so humans see where the corpo is hunting. ---- */
+const spotBox = document.getElementById('spot');
+const corpoSpot = new THREE.SpotLight(0xfff2d0, 0, 130, Math.PI / 10, 0.35, 1.3);
+corpoSpot.visible = false;
+scene.add(corpoSpot, corpoSpot.target);
+const spotAim = new THREE.Vector3(13, 2, 17);
+const spotWant = spotAim.clone();
+let spotRemoteAt = -1e9;
+let spotSendAt = 0;
+const _spotRay = new THREE.Raycaster();
+const _mouseNDC = new THREE.Vector2(0, 0);
+addEventListener('pointermove', e => {
+  _mouseNDC.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+});
+function stepSpot(dt) {
+  const iAmCorpo = !player.active && (!net.online || net.role === 'corpo');
+  const remoteFresh = performance.now() - spotRemoteAt < 1500;
+  const on = spotBox.checked && nightF > 0.05 && (iAmCorpo || remoteFresh);
+  corpoSpot.visible = on;
+  if (!on) return;
+  if (iAmCorpo) {
+    // aim at the ground point under the cursor — plane intersection, no mesh raycast
+    _spotRay.setFromCamera(_mouseNDC, activeCam);
+    const o = _spotRay.ray.origin, d = _spotRay.ray.direction;
+    if (d.y < -0.05) {
+      const t = (2 - o.y) / d.y;
+      spotWant.set(
+        Math.max(X0, Math.min(playXMax, o.x + d.x * t)), 2,
+        Math.max(-56, Math.min(playZMax, o.z + d.z * t)));
+    }
+    if (net.online && performance.now() - spotSendAt > 150) {
+      spotSendAt = performance.now();
+      nsend({ t: 'spot', x: +spotWant.x.toFixed(1), z: +spotWant.z.toFixed(1) });
+    }
+  }
+  spotAim.lerp(spotWant, Math.min(1, dt * 6));
+  corpoSpot.target.position.copy(spotAim);
+  corpoSpot.position.set(spotAim.x + 14, 62, spotAim.z + 10);
+  corpoSpot.intensity = 1100 * nightF;
+}
+
 function applySceneEnv() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong';
   const ext = long ? 150 : tech ? 125 : 95;
@@ -3401,6 +3450,7 @@ renderer.setAnimationLoop(() => {
   stepExplosions(dt);
   stepPlayer(dt);
   stepNet(dt);
+  stepSpot(dt);
 
   if (playBox.checked) {
     let t = +slider.value + dt * 90; // ~16 s per full day
