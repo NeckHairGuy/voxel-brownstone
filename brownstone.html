@@ -206,6 +206,7 @@
       <option value="tech">scene: Tech Brooklyn</option>
       <option value="techlong">scene: Tech Brooklyn Long</option>
       <option value="boston">scene: Boston</option>
+      <option value="bostonlong">scene: Boston Long</option>
     </select>
     <div class="help">scene — swap the map (switches it for everyone online)</div>
     <div class="row">
@@ -519,6 +520,361 @@ function markDoor(x0, y0, z0, x1, y1, z1) {
         const v = getV(x, y, z);
         if (v) v.d = 1;
       }
+}
+
+/* ---- Boston kit: palette, letter font, shared builders ---- */
+  const BB = {
+    brick: 0x94422e, brickDk: 0x7e3826, mortar: 0x84402c,
+    granite: 0x8f9296, graniteDk: 0x74777b,
+    trimWhite: 0xeae4d8, shutter: 0x22262a,
+    doorRed: 0x7e2222, doorGreen: 0x2e4a34, doorBlack: 0x24262b, purple: 0xb49cc8,
+    cobble: 0x6e6a64, cobbleDk: 0x605c56,
+    brickWalk: 0x96543c, brickWalkDk: 0x7e4230, trail: 0xb03024,
+    slate: 0x4a4e56, steepleWhite: 0xece8dc, gold: 0xd8ac38, bell: 0xc89b30,
+    pink: 0xf05898, dorange: 0xf07820, cream: 0xf2e6d4, dbrown: 0x5a3a26,
+    tGreen: 0x2f7a3c, tGreenDk: 0x276231, tWhite: 0xe8eae6,
+    sidingA: 0x9aa88a, sidingB: 0x8a9878, sidingC: 0x94a2ae, sidingD: 0x8492a0,
+    coral: 0xf0685a, hubbBrick: 0x8a4432, hubbMortar: 0x7a3c2c,
+    mull: 0x2a3238, teal: 0x18a08c, copper: 0xb87333, turf: 0x4a8a3a,
+    stair: 0x8a5e33, stairDk: 0x6e4a28, wood: 0xb08a58, tan: 0xc8a058,
+    steel: 0x565c66, screen: 0x10141c, white: 0xeaeae6, desk: 0xdcdcd6,
+  };
+  const FONT = {
+    A: ['.#.', '###', '#.#'], B: ['##.', '###', '##.'], C: ['###', '#..', '###'],
+    D: ['##.', '#.#', '##.'], E: ['###', '##.', '###'], G: ['####', '#...', '#.##'],
+    H: ['#.#', '###', '#.#'], I: ['#', '#', '#'], J: ['..#', '..#', '##.'],
+    K: ['#.#', '##.', '#.#'], L: ['#..', '#..', '###'], M: ['##.##', '#.#.#', '#...#'],
+    N: ['#..#', '##.#', '#.##'], O: ['###', '#.#', '###'], P: ['##.', '##.', '#..'],
+    S: ['.##', '.#.', '##.'], T: ['###', '.#.', '.#.'], U: ['#.#', '#.#', '###'],
+    V: ['#.#', '#.#', '.#.'], X: ['#.#', '.#.', '#.#'], Y: ['#.#', '.#.', '.#.'],
+  };
+  function sign(word, x0, y0, z, scale, color, t = 3, sp = 1) {
+    let lx = x0;
+    for (const ch of word) {
+      if (ch === ' ') { lx += 2 * scale; continue; }
+      const rows = FONT[ch];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
+        if (rows[ry][cx] === '#')
+          fillB(lx + cx * scale, y0 + (2 - ry) * scale, z,
+                lx + cx * scale + scale - 1, y0 + (2 - ry) * scale + scale - 1, z, color, { t, j: 0 });
+      lx += (rows[0].length + sp) * scale;
+    }
+  }
+  // switchback stair sized for the player: flight A (xa..xa+1) climbs in the
+  // s direction, half landing, flight B (xa+2..xa+3) floats back. The hollow
+  // under the landing is sealed at build time — the deli-well lesson.
+  function bstair(yF, yT, xa, zb, s) {
+    const H = yT - yF, hA = Math.ceil(H / 2), hB = H - hA;
+    const zi = i => zb + s * i;
+    for (let i = 1; i <= hA; i++)
+      fillB(xa, yF + 1, zi(i), xa + 1, yF + i, zi(i), BB.stair, { j: 0.05 });
+    fillB(xa, yF + hA, zi(hA + 1), xa + 3, yF + hA, zi(hA + 2), BB.stair, { j: 0.05 });
+    for (let i = 1; i <= hB; i++)
+      fillB(xa + 2, yF + i + 1, zi(hA + 2 - i), xa + 3, yF + hA + i, zi(hA + 2 - i), BB.stair, { j: 0.05 });
+    clearB(xa, yT, zi(hA - 1), xa + 1, yT, zi(hA + 2));
+    clearB(xa + 2, yT, zi(hA + 3 - hB), xa + 3, yT, zi(hA + 2));
+    // ground flights only: seal the reachable hollow under the landing (the
+    // deli-well lesson). Upper hollows are boxed in by slab + columns already,
+    // and a seal there would hang a low ceiling over the landing below it.
+    if (yF <= 1) fillB(xa, yF + 1, zi(hA + 1), xa + 3, yF + hA - 1, zi(hA + 2), BB.stairDk, { j: 0.04 });
+  }
+  function bperson(x, y, z, shirt, pants) {   // person() for upper floors
+    fillB(x, y, z, x, y + 1, z, pants, { j: 0.05 });
+    fillB(x, y + 2, z, x, y + 3, z, shirt, { j: 0.05 });
+    V(x, y + 4, z, P.skin, { j: 0.04 });
+    V(x, y + 5, z, [0x2a2018, 0x6e4a26, 0x111114][Math.floor(h3(x, y + 5, z) * 3)], { j: 0.05 });
+  }
+  function gasLamp(x, z) {   // beacon hill gas lamp: short iron post, warm flame
+    fillB(x, 1, z, x, 5, z, P.iron, { j: 0.03 });
+    V(x, 6, z, P.lampWarm, { t: 3, j: 0 });
+    V(x, 7, z, P.iron, { j: 0.03 });
+  }
+  function acornLamp(x, z) { // taller street lamp with a round acorn globe
+    fillB(x, 2, z, x, 9, z, 0x24262a, { j: 0.03 });
+    V(x, 10, z, P.lampWarm, { t: 3, j: 0 });
+    V(x, 11, z, 0x24262a, { j: 0.03 });
+  }
+  function bench(x, z, alongX) { // park bench: iron ends, wood slats
+    if (alongX) {
+      fillB(x, 2, z, x + 3, 2, z, BB.wood, { j: 0.07 });
+      fillB(x, 3, z - 1, x + 3, 3, z - 1, BB.wood, { j: 0.07 });
+      V(x, 1, z, P.iron); V(x + 3, 1, z, P.iron);
+    } else {
+      fillB(x, 2, z, x, 2, z + 3, BB.wood, { j: 0.07 });
+      fillB(x + 1, 3, z, x + 1, 3, z + 3, BB.wood, { j: 0.07 });
+      V(x, 1, z, P.iron); V(x, 1, z + 3, P.iron);
+    }
+  }
+
+
+// the church / burying-ground / DUNKS row, placeable at an x offset so
+// Boston and Boston Long can share it (the techDistrict trick)
+function bostonSouthRow(dx) {
+  const V = (x, y, z, hex, o = {}) => Vb(x + dx, y, z, hex, o);
+  const fillB = (x0, y0, z0, x1, y1, z1, hex, o = {}) => fillBb(x0 + dx, y0, z0, x1 + dx, y1, z1, hex, o);
+  const clearB = (x0, y0, z0, x1, y1, z1) => clearBb(x0 + dx, y0, z0, x1 + dx, y1, z1);
+  const markDoor = (x0, y0, z0, x1, y1, z1) => markDoorb(x0 + dx, y0, z0, x1 + dx, y1, z1);
+  const person = (x, z, shirt, pants) => {
+    fillB(x, 2, z, x, 3, z, pants, { j: 0.05 });
+    fillB(x, 4, z, x, 5, z, shirt, { j: 0.05 });
+    V(x, 6, z, P.skin, { j: 0.04 });
+    V(x, 7, z, [0x2a2018, 0x6e4a26, 0x111114][Math.floor(h3(x + dx, 7, z) * 3)], { j: 0.05 });
+  };
+  const sign = (word, x0, y0, z, scale, color, t = 3, sp = 1) => {
+    let lx = x0;
+    for (const ch of word) {
+      if (ch === ' ') { lx += 2 * scale; continue; }
+      const rows = FONT[ch];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
+        if (rows[ry][cx] === '#')
+          fillB(lx + cx * scale, y0 + (2 - ry) * scale, z,
+                lx + cx * scale + scale - 1, y0 + (2 - ry) * scale + scale - 1, z, color, { t, j: 0 });
+      lx += (rows[0].length + sp) * scale;
+    }
+  };
+  const bstair = (yF, yT, xa, zb, s) => {
+    const H = yT - yF, hA = Math.ceil(H / 2), hB = H - hA;
+    const zi = i => zb + s * i;
+    for (let i = 1; i <= hA; i++)
+      fillB(xa, yF + 1, zi(i), xa + 1, yF + i, zi(i), BB.stair, { j: 0.05 });
+    fillB(xa, yF + hA, zi(hA + 1), xa + 3, yF + hA, zi(hA + 2), BB.stair, { j: 0.05 });
+    for (let i = 1; i <= hB; i++)
+      fillB(xa + 2, yF + i + 1, zi(hA + 2 - i), xa + 3, yF + hA + i, zi(hA + 2 - i), BB.stair, { j: 0.05 });
+    clearB(xa, yT, zi(hA - 1), xa + 1, yT, zi(hA + 2));
+    clearB(xa + 2, yT, zi(hA + 3 - hB), xa + 3, yT, zi(hA + 2));
+    if (yF <= 1) fillB(xa, yF + 1, zi(hA + 1), xa + 3, yF + hA - 1, zi(hA + 2), BB.stairDk, { j: 0.04 });
+  };
+
+  /* ============================================================
+     OLD NORTH-ish CHURCH — nave x 46..68 z -28..-4, brick tower
+     x 50..58 z -4..8 with bell-ringer rooms, belfry (two
+     lanterns), spire, and a gilded cod up top
+     ============================================================ */
+  {
+    // tower shell
+    for (let y = 2; y <= 29; y++) {
+      const c = (y % 3 === 0) ? BB.mortar : BB.brick;
+      fillB(50, y, -4, 50, y, 8, c, { j: 0.07 });
+      fillB(58, y, -4, 58, y, 8, c, { j: 0.07 });
+      fillB(51, y, 8, 57, y, 8, c, { j: 0.07 });
+      fillB(51, y, -4, 57, y, -4, c, { j: 0.07 });
+    }
+    fillB(51, 1, -3, 57, 1, 7, 0x8a8478, { j: 0.05 });           // stone floor
+    // bell-ringer + clock rooms, then the belfry deck
+    for (const sy of [10, 19, 30])
+      fillB(51, sy, -3, 57, sy, 7, ((sy === 30)) ? 0xb8b2a4 : P.floorA, { j: 0.05 });
+    bstair(1, 10, 51, -2, 1);
+    bstair(10, 19, 51, -2, 1);
+    bstair(19, 30, 51, -2, 1);
+    // the bell rope drops the full height of the tower
+    for (const hy of [30, 19, 10]) clearB(56, hy, 5, 56, hy, 5);
+    for (let y = 2; y <= 33; y++) V(56, y, 5, 0x8a6a3a, { j: 0.04 });
+    // slit windows for the rooms, a workbench, the clock works
+    for (const wy of [5, 14]) { clearB(50, wy, 2, 50, wy + 2, 2); fillB(50, wy, 2, 50, wy + 2, 2, P.glass, { t: 1, j: 0.02 }); }
+    fillB(55, 11, -2, 57, 12, -1, BB.wood, { j: 0.05 });          // ringer's bench
+    fillB(55, 20, -2, 57, 22, 0, P.brass, { j: 0.05 });           // gear cabinet
+    V(56, 21, 1, P.iron); V(55, 23, -1, P.brass, { t: 2, j: 0 });
+    // front doors + fanlight + surround
+    clearB(52, 2, 8, 56, 9, 8);
+    fillB(52, 2, 8, 56, 7, 8, BB.doorRed, { j: 0.04 });
+    fillB(54, 2, 8, 54, 7, 8, 0x5e1a1a, { j: 0.04 });
+    fillB(52, 8, 8, 56, 9, 8, 0xd6e4ea, { t: 1, j: 0.02 });
+    fillB(51, 2, 9, 51, 9, 9, BB.trimWhite, { j: 0.04 });
+    fillB(57, 2, 9, 57, 9, 9, BB.trimWhite, { j: 0.04 });
+    fillB(51, 10, 9, 57, 10, 9, BB.trimWhite, { j: 0.04 });
+    V(53, 4, 9, P.brass, { t: 2, j: 0 }); V(55, 4, 9, P.brass, { t: 2, j: 0 });
+    markDoor(52, 2, 8, 56, 7, 9);
+    // clock face on the street front
+    fillB(52, 22, 9, 56, 26, 9, BB.trimWhite, { j: 0.03 });
+    V(54, 24, 9, 0x16181c); fillB(54, 25, 9, 54, 25, 9, 0x16181c); V(55, 24, 9, 0x16181c);
+    V(52, 22, 9, BB.gold, { t: 2, j: 0 }); V(56, 26, 9, BB.gold, { t: 2, j: 0 });
+    V(52, 26, 9, BB.gold, { t: 2, j: 0 }); V(56, 22, 9, BB.gold, { t: 2, j: 0 });
+    // belfry: white deck with open arches, rails, the bell, two lanterns
+    for (let y = 31; y <= 39; y++) {
+      fillB(50, y, -4, 50, y, 8, BB.steepleWhite, { j: 0.04 });
+      fillB(58, y, -4, 58, y, 8, BB.steepleWhite, { j: 0.04 });
+      fillB(51, y, 8, 57, y, 8, BB.steepleWhite, { j: 0.04 });
+      fillB(51, y, -4, 57, y, -4, BB.steepleWhite, { j: 0.04 });
+    }
+    clearB(52, 31, 8, 56, 36, 8); clearB(52, 31, -4, 56, 36, -4);
+    clearB(50, 31, 0, 50, 36, 4);  clearB(58, 31, 0, 58, 36, 4);
+    for (const [rx, rz0, rx1, rz1] of [[52, 8, 56, 8], [52, -4, 56, -4]]) fillB(rx, 31, rz0, rx1, 31, rz1, P.iron, { j: 0.03 });
+    fillB(50, 31, 0, 50, 31, 4, P.iron, { j: 0.03 }); fillB(58, 31, 0, 58, 31, 4, P.iron, { j: 0.03 });
+    fillB(54, 37, -1, 54, 40, 0, P.iron, { j: 0.03 });            // bell yoke
+    fillB(53, 34, -1, 54, 35, 0, BB.bell, { j: 0.04 });           // the bell, clear of the stair
+    V(53, 33, -1, P.iron);
+    V(53, 36, -3, 0xffb45a, { t: 3, j: 0 }); V(55, 36, -3, 0xffb45a, { t: 3, j: 0 });  // two if by sea
+    // spire in shrinking white tiers, then the golden cod vane
+    fillB(50, 40, -4, 58, 40, 8, BB.steepleWhite, { j: 0.04 });
+    fillB(51, 41, -3, 57, 42, 7, BB.steepleWhite, { j: 0.04 });
+    fillB(52, 43, -2, 56, 44, 6, 0xd8d4c8, { j: 0.04 });
+    fillB(53, 45, -1, 55, 46, 5, BB.slate, { j: 0.04 });
+    fillB(54, 47, 1, 54, 52, 3, 0xc8c4b8, { j: 0.04 });
+    fillB(54, 53, 2, 54, 54, 2, P.iron, { j: 0 });
+    fillB(53, 55, 2, 55, 55, 2, BB.gold, { t: 2, j: 0 });         // the cod swims east
+    V(52, 56, 2, BB.gold, { t: 2, j: 0 });
+    // nave shell + gables + arched windows
+    for (let y = 2; y <= 15; y++) {
+      const c = (y % 3 === 0) ? BB.mortar : BB.brick;
+      fillB(46, y, -28, 46, y, -5, c, { j: 0.07 });
+      fillB(68, y, -28, 68, y, -5, c, { j: 0.07 });
+      fillB(46, y, -28, 68, y, -28, c, { j: 0.07 });
+      fillB(46, y, -4, 68, y, -4, c, { j: 0.07 });
+    }
+    for (let i = 0; i <= 5; i++) {
+      fillB(48 + 2 * i, 15 + i, -28, 66 - 2 * i, 15 + i, -28, BB.brick, { j: 0.07 });
+      fillB(48 + 2 * i, 15 + i, -4, 66 - 2 * i, 15 + i, -4, BB.brick, { j: 0.07 });
+    }
+    for (let i = 0; i <= 5; i++) {                                 // slate roof planes
+      fillB(46 + 2 * i, 16 + i, -27, 47 + 2 * i, 16 + i, -5, BB.slate, { j: 0.05 });
+      fillB(67 - 2 * i, 16 + i, -27, 68 - 2 * i, 16 + i, -5, BB.slate, { j: 0.05 });
+    }
+    fillB(56, 21, -27, 58, 21, -5, 0x3e4249, { j: 0.04 });         // ridge cap
+    for (const wz2 of [-26, -20, -14, -8]) for (const wx2 of [46, 68]) {
+      clearB(wx2, 4, wz2, wx2, 11, wz2 + 2);
+      fillB(wx2, 4, wz2, wx2, 11, wz2 + 2, P.glass, { t: 1, j: 0.02 });
+      clearB(wx2, 12, wz2 + 1, wx2, 12, wz2 + 1);
+      fillB(wx2, 12, wz2 + 1, wx2, 12, wz2 + 1, P.glass, { t: 1, j: 0.02 });
+    }
+    // stained glass over the altar
+    {
+      const r = mulberry(1723);
+      clearB(53, 5, -28, 61, 13, -28);
+      for (let x = 53; x <= 61; x++) for (let y = 5; y <= 13; y++)
+        V(x, y, -28, [0x8a3030, 0x30608a, 0xc9a227, 0x3a7a4a, 0x7a4a8a][Math.floor(r() * 5)], { t: 1, j: 0.04 });
+      fillB(52, 4, -28, 62, 4, -28, BB.trimWhite, { j: 0.04 });
+      fillB(52, 14, -28, 62, 14, -28, BB.trimWhite, { j: 0.04 });
+    }
+    // interior: floor, red aisle, pews, altar, pulpit, organ, chandeliers
+    fillB(47, 1, -27, 67, 1, -5, P.floorA, { j: 0.05 });
+    fillB(56, 1, -26, 58, 1, -5, 0x7a2020, { j: 0.05 });
+    clearB(53, 2, -4, 55, 7, -4);                                  // tower -> nave passage
+    for (const pz6 of [-8, -11, -14, -17, -20, -23]) {
+      fillB(48, 2, pz6, 54, 2, pz6, BB.wood, { j: 0.06 });
+      fillB(48, 3, pz6 - 1, 54, 3, pz6 - 1, BB.stairDk, { j: 0.06 });
+      fillB(60, 2, pz6, 66, 2, pz6, BB.wood, { j: 0.06 });
+      fillB(60, 3, pz6 - 1, 66, 3, pz6 - 1, BB.stairDk, { j: 0.06 });
+    }
+    fillB(52, 2, -27, 62, 2, -25, 0x8a8478, { j: 0.04 });          // chancel step
+    fillB(55, 3, -26, 59, 4, -26, BB.trimWhite, { j: 0.03 });      // altar
+    V(55, 5, -26, P.brass, { j: 0.03 }); V(59, 5, -26, P.brass, { j: 0.03 });
+    V(55, 6, -26, P.fireAmber, { t: 2, j: 0 }); V(59, 6, -26, P.fireAmber, { t: 2, j: 0 });
+    fillB(48, 2, -24, 49, 5, -23, BB.wood, { j: 0.05 });           // pulpit
+    V(48, 6, -23, 0x8a3030);
+    for (const ox of [47, 63]) {                                   // organ pipes
+      for (let x = ox; x <= ox + 4; x++) {
+        const hpipe = 6 + ((x * 7) % 5);
+        fillB(x, 3, -27, x, 3 + hpipe, -27, (x % 2 === 0) ? 0x9aa0a6 : BB.gold, { j: 0.03 });
+      }
+    }
+    for (const cz2 of [-10, -20]) {
+      fillB(57, 14, cz2, 57, 15, cz2, P.iron, { j: 0 });
+      fillB(56, 13, cz2, 58, 13, cz2, P.lampWarm, { t: 3, j: 0 });
+    }
+    // side door to the burying ground
+    clearB(68, 2, -12, 68, 6, -11);
+    fillB(68, 2, -12, 68, 6, -11, P.doorWood, { j: 0.05 });
+    markDoor(68, 2, -12, 69, 6, -11);
+    // brick forecourt + a tourist squinting up
+    fillB(44, 1, 9, 70, 1, 12, BB.brickWalk, { j: 0.09 });
+    person(60, 10, 0x30608a, 0x2a2018);
+  }
+
+  /* ============================================================
+     THE BURYING GROUND — x 72..88, z -24..-2: crooked slate,
+     chest tombs, a dead elm, one freshly dug opening
+     ============================================================ */
+  {
+    for (let x = 72; x <= 88; x++) {
+      if (x >= 79 && x <= 81) continue;
+      V(x, 3, -2, P.iron, { j: 0.03 });
+      if (x % 2 === 0) fillB(x, 1, -2, x, 2, -2, P.iron, { j: 0.03 });
+    }
+    for (let z = -24; z <= -2; z++) for (const fx of [72, 88]) {
+      V(fx, 3, z, P.iron, { j: 0.03 });
+      if (z % 2 === 0) fillB(fx, 1, z, fx, 2, z, P.iron, { j: 0.03 });
+    }
+    for (let x = 72; x <= 88; x++) V(x, 3, -24, P.iron, { j: 0.03 });
+    fillB(79, 1, -20, 81, 1, -2, 0xb8a888, { j: 0.08 });
+    {
+      const r = mulberry(1630);
+      for (const [gx3, gz3] of [[74, -6], [77, -7], [83, -6], [86, -7], [74, -12], [77, -13], [84, -12], [87, -13], [75, -18], [86, -19]]) {
+        const hh = 2 + Math.floor(r() * 2);
+        fillB(gx3, 1, gz3, gx3, hh, gz3, (r() < 0.5) ? 0x4a4e52 : 0x565a5e, { j: 0.06 });
+        V(gx3 + (r() < 0.3 ? 1 : 0), hh + 1, gz3, 0x565a5e, { j: 0.06 });   // tilted cap
+      }
+    }
+    fillB(74, 1, -22, 76, 2, -21, 0x565a5e, { j: 0.05 });          // chest tombs
+    fillB(84, 1, -23, 86, 2, -22, 0x4a4e52, { j: 0.05 });
+    // dead elm + the raven
+    for (let y = 1; y <= 8; y++) V(85, y, -16, P.bark, { j: 0.12 });
+    V(84, 7, -16, P.bark); V(86, 6, -16, P.bark); V(85, 9, -15, P.bark); V(83, 8, -16, P.bark);
+    V(72, 4, -12, 0x1a1c20, { j: 0 }); V(72, 5, -12, 0x111114, { j: 0 });
+    // an open grave, mound and shovel beside it
+    clearB(76, 0, -19, 77, 0, -17);
+    fillB(78, 1, -19, 79, 1, -17, P.soil, { j: 0.1 }); V(78, 2, -18, P.soil, { j: 0.1 });
+    fillB(80, 1, -17, 80, 2, -17, 0x8a6a3a, { j: 0.05 }); V(80, 1, -16, 0x9aa0a6);
+  }
+
+  /* ============================================================
+     DUNKS — x 74..90, z 2..12: pink and orange, giant sprinkle
+     donut on the roof, a cop on his break
+     ============================================================ */
+  {
+    for (let y = 2; y <= 8; y++) {
+      fillB(74, y, 2, 74, y, 12, BB.cream, { j: 0.05 });
+      fillB(90, y, 2, 90, y, 12, BB.cream, { j: 0.05 });
+      fillB(75, y, 2, 89, y, 2, BB.cream, { j: 0.05 });
+    }
+    for (let x = 75; x <= 89; x++) for (let z = 3; z <= 11; z++)
+      V(x, 1, z, ((x + z) % 2 === 0) ? P.tileA : 0xf0b8cc, { j: 0.03 });
+    fillB(74, 9, 2, 90, 9, 12, P.roof, { j: 0.04 });
+    fillB(74, 10, 2, 90, 10, 12, BB.cream, { j: 0.05 });
+    clearB(75, 10, 3, 89, 10, 11);
+    // storefront: pink kick, glass, glazed door
+    fillB(75, 2, 12, 89, 2, 12, BB.pink, { j: 0.04 });
+    fillB(75, 3, 12, 89, 7, 12, P.glass, { t: 1, j: 0.02 });
+    fillB(80, 3, 12, 80, 7, 12, BB.trimWhite, { j: 0.03 });
+    fillB(83, 3, 12, 83, 7, 12, BB.trimWhite, { j: 0.03 });
+    clearB(81, 2, 12, 82, 7, 12);
+    fillB(81, 2, 12, 82, 6, 12, P.glass, { t: 1, j: 0.02 });
+    V(81, 4, 13, P.brass, { t: 2, j: 0 });
+    markDoor(81, 2, 12, 82, 6, 13);
+    // sign band, tight-set pink letters
+    fillB(74, 8, 13, 90, 10, 13, BB.dbrown, { j: 0.03 });
+    sign('DUNKS', 75, 8, 14, 1, BB.pink, 3, 0);
+    // the rooftop donut
+    fillB(80, 10, 6, 81, 13, 7, BB.steel, { j: 0.03 });
+    for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) {
+      const d = Math.hypot(dx, dy);
+      if (d >= 2.3 && d <= 3.4) {
+        const c = dy >= 0 ? BB.pink : 0xd8a868;
+        fillB(81 + dx, 16 + dy, 6, 81 + dx, 16 + dy, 7, c, { j: 0.04 });
+        if (dy >= 1 && (dx * 3 + dy) % 3 === 0)
+          V(81 + dx, 16 + dy, 5, [0x48c8e8, 0xe8e24a, 0x8adf6a, 0xffffff][(dx + dy + 6) % 4], { t: 3, j: 0 });
+      }
+    }
+    // counter, donut case, coffee rigs, menu, tables, the cop
+    fillB(76, 2, 6, 86, 3, 7, BB.pink, { j: 0.04 });
+    fillB(76, 4, 6, 86, 4, 7, BB.cream, { j: 0.03 });
+    fillB(76, 3, 8, 79, 5, 8, P.glass, { t: 1, j: 0.02 });        // display case front
+    for (let x = 76; x <= 79; x++) {
+      V(x, 5, 6, [BB.pink, 0x8a5a2e, 0xd8a868, 0xf0e0c0][(x - 76) % 4], { j: 0.05 });
+      V(x, 5, 7, [0x8a5a2e, BB.pink, 0xf0e0c0, 0xd8a868][(x - 76) % 4], { j: 0.05 });
+    }
+    for (const mx2 of [76, 83]) {
+      fillB(mx2, 3, 3, mx2 + 2, 5, 3, BB.steel, { j: 0.03 });
+      V(mx2 + 1, 4, 4, 0xff3020, { t: 2, j: 0 });
+    }
+    fillB(76, 6, 3, 87, 7, 3, BB.screen, { j: 0.02 });
+    { const r = mulberry(1950); for (let x = 77; x <= 86; x++) if (r() < 0.6) V(x, 6 + Math.floor(r() * 2), 3, 0xffb84a, { t: 2, j: 0 }); }
+    for (const [tx3, tz3] of [[87, 9], [76, 10]]) {
+      fillB(tx3, 4, tz3, tx3 + 1, 4, tz3, BB.trimWhite, { j: 0.03 });
+      V(tx3, 2, tz3, BB.steel); V(tx3 + 1, 2, tz3 + 1, 0x23262a);
+    }
+    person(85, 9, 0x2a3a55, 0x23262a);                             // the cop
+    V(84, 4, 9, BB.pink, { j: 0 });                                // his donut
+  }
 }
 
 if (sceneId !== 'boston') {   // ---- the Brooklyn base underlies every scene but Boston ----
@@ -1707,6 +2063,204 @@ const Vb = V, fillBb = fillB, clearBb = clearB, markDoorb = markDoor;
 if (sceneId === 'tech') buildTech();
 if (sceneId === 'techlong') buildTechLong();
 if (sceneId === 'boston') buildBoston();
+if (sceneId === 'bostonlong') buildBostonLong();
+
+/* ============================================================
+   15H. BOSTON LONG — the Brooklyn block plus the Boston landmarks
+   on one continuous side of a WIDENED street: church row east of
+   the deli, a south-facing T station and triple-decker (VOXGO on
+   its roof), and a Green Line trolley on fresh rails
+   ============================================================ */
+function buildBostonLong() {
+  const XE = 142;
+  /* ---- clear the old far side, then widen the roadway to z 54 ---- */
+  clearB(X0, 1, 47, 60, 26, 62);            // old far sidewalk, tree, passers-by
+  clearB(0, 8, 44, 20, 26, 46);             // canopy overhang of the removed tree
+  clearB(-2, 1, 41, 9, 8, 46);              // far-lane cars would sit mid-street now
+  clearB(18, 1, 41, 31, 8, 46);
+  // ground: east extension + a lawn behind the new far sidewalk
+  fillB(61, -2, -56, XE, -1, 74, 0x4a3a2a, { j: 0.05 });
+  fillB(61, 0, -56, XE, 0, 74, P.grass, { j: 0.12 });
+  fillB(X0, -2, 55, 60, -1, 74, 0x4a3a2a, { j: 0.05 });
+  fillB(X0, 0, 55, 60, 0, 74, P.grass, { j: 0.12 });
+  fillB(X0, 0, 22, XE, 0, 54, P.asphalt, { j: 0.05 });
+  {
+    const r = mulberry(2200);
+    for (let i = 0; i < 40; i++) {
+      const px = X0 + 4 + Math.floor(r() * 170), pz = 23 + Math.floor(r() * 29);
+      fillB(px, 0, pz, px + 2 + Math.floor(r() * 4), 0, pz + 1 + Math.floor(r() * 2), P.asphaltPatch, { j: 0.06 });
+    }
+  }
+  // stripes east + trolley rails across the full width
+  for (let x = 61; x <= XE; x++) {
+    if (x >= 116 && x <= 129) continue;
+    V(x, 0, 33, P.lineY, { j: 0.04 }); V(x, 0, 35, P.lineY, { j: 0.04 });
+  }
+  for (let x = 64; x <= XE; x += 6) {
+    if (x >= 116 && x <= 129) continue;
+    for (let d = 0; d < 3 && x + d <= XE; d++) { V(x + d, 0, 29, P.lineW, { j: 0.08 }); V(x + d, 0, 41, P.lineW, { j: 0.08 }); }
+  }
+  for (let x = X0; x <= XE; x++) { V(x, 0, 49, 0x8a8e94, { j: 0.03 }); V(x, 0, 52, 0x8a8e94, { j: 0.03 }); }
+  for (const sx of [46, 49, 52, 55]) fillB(sx, 0, 46, sx + 1, 0, 53, 0xc4c4c0, { j: 0.1 });
+  for (const sx of [117, 120, 123, 126]) fillB(sx, 0, 23, sx + 1, 0, 53, 0xc4c4c0, { j: 0.1 });
+  fillB(100, 0, 36, 102, 0, 38, 0x2a2a2c, { j: 0.04 }); V(101, 0, 37, 0x222224);
+  // near sidewalk east of the deli: boston brick, granite curb, the trail
+  fillB(61, 0, 13, XE, 0, 21, 0x7a7a76, { j: 0.04 });
+  fillB(61, 1, 13, XE, 1, 20, BB.brickWalk, { j: 0.09 });
+  fillB(61, 1, 21, XE, 1, 21, BB.granite, { j: 0.05 });
+  for (let x = 62; x <= XE; x += 5) fillB(x, 1, 13, x, 1, 20, BB.brickWalkDk, { j: 0.05 });
+  for (let x = 30; x <= 110; x++) V(x, 1, 16, BB.trail, { j: 0.05 });   // trail runs to DUNKS
+  fillB(57, 1, 9, 63, 1, 12, BB.cobble, { j: 0.1 });                    // cobble link to the church
+  for (let x = 57; x <= 63; x++) for (let z = 9; z <= 12; z++) if ((x + z) % 2 === 0) V(x, 1, z, BB.cobbleDk, { j: 0.08 });
+  gasLamp(58, 10);
+  // the new far sidewalk, z 55..62
+  fillB(X0, 0, 55, XE, 0, 62, 0x7a7a76, { j: 0.04 });
+  fillB(X0, 1, 55, XE, 1, 55, P.curb, { j: 0.05 });
+  fillB(X0, 1, 56, XE, 1, 62, P.bluestone, { j: 0.07 });
+  for (let x = X0 + 3; x <= XE; x += 6) fillB(x, 1, 56, x, 1, 62, P.bluestoneDk, { j: 0.04 });
+  for (const lx of [-20, 12, 44, 76, 108, 136]) acornLamp(lx, 58);
+  for (const [tx2, tz2] of [[-8, 57], [28, 57], [92, 57], [130, 57]]) { treePit(tx2, tz2); treeAt(tx2 + 2, tz2 + 2, 7100 + tx2, 12 + ((tx2 + 200) % 3)); }
+  bench(0, 61, true); bench(64, 61, true); bench(100, 61, true);
+  fillB(52, 2, 57, 52, 4, 57, 0xd8b020, { j: 0.05 }); V(52, 5, 57, 0x2e7a3c);   // hydrant
+  treeAt(-24, 68, 7201, 15); treeAt(20, 70, 7202, 16); treeAt(70, 68, 7203, 14); treeAt(118, 70, 7204, 15);
+  // east curbside: cars, people, pigeons
+  car(64, 23, 0xe8e4da, { taxi: true });
+  car(96, 23, 0x2a4a7a);
+  person(70, 17, 0x8a3030, 0x2a3038);
+  person(99, 18, 0x3a7a4a, 0x3a3a3e);
+  person(30, 58, 0x30608a, 0x2a2018);
+  pigeon(95, 2, 14); pigeon(97, 2, 15); V(96, 2, 17, 0x6e7076, { j: 0.06 });
+
+  /* ---- the landmark row, twenty east of its Boston berth ---- */
+  bostonSouthRow(20);
+
+  /* ---- green line trolley on the rails, doors to the curb side ---- */
+  {
+    const tx0 = 66, tx1 = 89;
+    fillB(tx0 + 1, 1, 49, tx1 - 1, 1, 52, 0x23262a, { j: 0.04 });
+    for (let y = 2; y <= 7; y++) {
+      for (let x = tx0; x <= tx1; x++) {
+        const post = (x - tx0) % 4 === 0;
+        V(x, y, 53, (y >= 4 && y <= 6 && !post) ? P.glass : BB.tGreen, (y >= 4 && y <= 6 && !post) ? { t: 1, j: 0.02 } : { j: 0.05 });
+      }
+      for (let x = tx0; x <= tx1; x++) {
+        if ((x >= tx0 + 10 && x <= tx0 + 11 || x >= tx0 + 21 && x <= tx0 + 22) && y <= 6) continue;
+        const post = (x - tx0) % 4 === 0;
+        V(x, y, 48, (y >= 4 && y <= 6 && !post) ? P.glass : BB.tGreen, (y >= 4 && y <= 6 && !post) ? { t: 1, j: 0.02 } : { j: 0.05 });
+      }
+      fillB(tx0, y, 49, tx0, y, 52, (y >= 4 && y <= 6) ? P.glass : BB.tGreen, (y >= 4 && y <= 6) ? { t: 1, j: 0.02 } : { j: 0.05 });
+      fillB(tx1, y, 49, tx1, y, 52, (y >= 4 && y <= 6) ? P.glass : BB.tGreen, (y >= 4 && y <= 6) ? { t: 1, j: 0.02 } : { j: 0.05 });
+    }
+    fillB(tx0, 8, 48, tx1, 8, 53, 0xd8dcd8, { j: 0.04 });
+    V(tx0 + 11, 9, 50, BB.steel); V(tx0 + 12, 10, 50, BB.steel); V(tx0 + 13, 9, 50, BB.steel);
+    fillB(tx1, 7, 49, tx1, 7, 52, 0xf2f2ee, { j: 0 });
+    V(tx1, 7, 50, BB.tGreen, { t: 2, j: 0 });
+    V(tx1, 3, 49, 0xfff2c8, { t: 2, j: 0 }); V(tx1, 3, 52, 0xfff2c8, { t: 2, j: 0 });
+    V(tx0, 3, 49, 0xff3020, { t: 2, j: 0 }); V(tx0, 3, 52, 0xff3020, { t: 2, j: 0 });
+    for (const cx3 of [tx0 + 5, tx0 + 16]) {
+      fillB(cx3 - 1, 4, 47, cx3 + 1, 6, 47, 0xf2f2ee, { j: 0 });
+      V(cx3, 5, 47, BB.tGreen, { j: 0 });
+    }
+    for (let x = tx0 + 2; x <= tx1 - 4; x += 3) fillB(x, 2, 52, x + 1, 2, 52, BB.tan, { j: 0.06 });
+    for (let x = tx0 + 3; x <= tx1 - 5; x += 6) V(x, 3, 52, BB.tan, { j: 0.06 });
+    for (const px6 of [tx0 + 7, tx0 + 17]) fillB(px6, 2, 50, px6, 7, 50, BB.steel, { j: 0.02 });
+    V(tx1 - 2, 2, 50, BB.steel); V(tx1 - 2, 3, 50, 0x23262a);
+    person(tx1 - 3, 51, 0x2a4a34, 0x23262a);
+  }
+
+  /* ---- T station sunk into the near sidewalk, x 112..126 ---- */
+  {
+    clearB(116, 0, 15, 121, 1, 18);
+    for (let x = 116; x <= 121; x++) for (let z = 15; z <= 18; z++)
+      V(x, -1, z, ((x + z) % 2 === 0) ? 0xd8dcd4 : 0x2e6b46, { j: 0.04 });
+    fillB(116, 0, 15, 121, 0, 15, BB.granite, { j: 0.05 });
+    fillB(115, 0, 14, 115, 1, 19, 0xd8dcd4, { j: 0.04 });
+    fillB(122, 0, 14, 122, 1, 19, 0xd8dcd4, { j: 0.04 });
+    fillB(116, 0, 19, 121, 1, 19, 0xd8dcd4, { j: 0.04 });
+    fillB(117, 1, 19, 120, 1, 19, BB.tGreen, { j: 0.04 });
+    fillB(115, 2, 14, 115, 2, 19, P.iron, { j: 0.03 });
+    fillB(122, 2, 14, 122, 2, 19, P.iron, { j: 0.03 });
+    fillB(116, 2, 19, 121, 2, 19, P.iron, { j: 0.03 });
+    for (const gx4 of [116, 118, 120]) fillB(gx4, 0, 17, gx4, 1, 17, BB.steel, { j: 0.03 });
+    V(117, 1, 17, 0xe06a20, { j: 0.04 }); V(119, 1, 17, 0xe06a20, { j: 0.04 });
+    markDoor(117, 1, 17, 117, 1, 17); markDoor(119, 1, 17, 119, 1, 17);
+    for (const [px5, pz7] of [[114, 13], [123, 13], [114, 20], [123, 20]])
+      fillB(px5, 2, pz7, px5, 6, pz7, 0x2a4a34, { j: 0.04 });
+    fillB(113, 7, 12, 124, 7, 21, P.glass, { t: 1, j: 0.02 });
+    fillB(113, 7, 12, 124, 7, 12, 0x2a4a34, { j: 0.04 });
+    fillB(116, 8, 15, 121, 8, 18, 0x2a4a34, { j: 0.04 });
+    fillB(113, 5, 21, 125, 8, 21, BB.tGreenDk, { j: 0.04 });     // board faces the street
+    sign('LATE', 115, 5, 22, 1, 0xffb84a, 2);
+    fillB(112, 2, 17, 112, 8, 17, 0x2a4a34, { j: 0.04 });        // the roundel totem
+    for (let dx2 = -2; dx2 <= 2; dx2++) for (let dy = -2; dy <= 2; dy++)
+      if (Math.abs(dx2) + Math.abs(dy) <= 3) V(112 + dx2, 11 + dy, 17, 0xf2f2ee, { t: 3, j: 0 });
+    fillB(112, 9, 17, 112, 12, 17, 0x16181c, { t: 0, j: 0 });
+    fillB(111, 12, 17, 113, 12, 17, 0x16181c, { t: 0, j: 0 });
+    V(120, 0, 18, 0x53555c, { j: 0.05 }); V(119, 0, 18, 0x6e7076, { j: 0.05 });
+    person(126, 15, 0x8a8e94, 0x2a3038); V(127, 3, 15, 0x5a3a26);
+  }
+
+  /* ---- triple-decker, porches to the street, VOXGO riding the roof ---- */
+  {
+    const hx0 = 128, hx1 = 140;
+    for (let y = 2; y <= 21; y++) {
+      const c = (y % 4 < 2) ? BB.sidingA : BB.sidingB;
+      fillB(hx0, y, 8, hx1, y, 8, c, { j: 0.05 });
+      fillB(hx0, y, -6, hx1, y, -6, c, { j: 0.05 });
+      fillB(hx0, y, -5, hx0, y, 7, c, { j: 0.05 });
+      fillB(hx1, y, -5, hx1, y, 7, c, { j: 0.05 });
+    }
+    for (const cx4 of [hx0, hx1]) for (const cz3 of [8, -6])
+      fillB(cx4, 2, cz3, cx4, 21, cz3, BB.trimWhite, { j: 0.04 });
+    for (const sy of [1, 8, 15]) for (let x = hx0 + 1; x <= hx1 - 1; x++) for (let z = -5; z <= 7; z++)
+      V(x, sy, z, ((x + (z >> 2)) % 2 === 0) ? P.floorA : P.floorB, { j: 0.05 });
+    fillB(hx0, 22, -6, hx1, 22, 8, P.roof, { j: 0.04 });
+    fillB(hx0, 22, 9, hx1, 22, 12, P.roof, { j: 0.04 });
+    for (const wy of [3, 10, 17]) for (const wx3 of [hx0 + 2, hx1 - 4]) for (const wz3 of [8, -6]) {
+      clearB(wx3, wy, wz3, wx3 + 2, wy + 3, wz3);
+      fillB(wx3, wy, wz3, wx3 + 2, wy + 3, wz3, P.glass, { t: 1, j: 0.02 });
+      fillB(wx3 + 1, wy + 1, wz3, wx3 + 1, wy + 1, wz3, P.sash, { j: 0.03 });
+    }
+    for (const dy of [1, 8, 15]) fillB(hx0 + 1, dy, 9, hx1 - 1, dy, 12, BB.fence, { j: 0.07 });
+    for (const py of [2, 9, 16]) for (const px7 of [hx0 + 1, hx0 + 6, hx1 - 1]) fillB(px7, py, 12, px7, py + 5, 12, BB.trimWhite, { j: 0.04 });
+    for (const ry of [2, 9, 16]) for (let x = hx0 + 1; x <= hx1 - 1; x++)
+      if ((x - hx0) % 2 === 0) V(x, ry, 12, BB.trimWhite, { j: 0.04 });
+    for (const ry2 of [3, 10, 17]) fillB(hx0 + 1, ry2, 12, hx1 - 1, ry2, 12, BB.trimWhite, { j: 0.04 });
+    for (let i = 0; i <= 5; i++) fillB(hx0 + 1 + i, 2 + i, 10, hx0 + 1 + i, 2 + i, 11, BB.stair, { j: 0.05 });
+    clearB(hx0 + 2, 2, 12, hx0 + 9, 8, 12);                        // open rail over the run + the walk-up
+    clearB(hx0 + 3, 8, 10, hx0 + 6, 8, 11);                        // stairwell opening in the 2nd deck
+    for (let i = 0; i <= 5; i++) fillB(hx1 - 1 - i, 9 + i, 10, hx1 - 1 - i, 9 + i, 11, BB.stair, { j: 0.05 });
+    clearB(hx1 - 6, 10, 12, hx1 - 2, 15, 12);
+    clearB(hx1 - 6, 15, 10, hx1 - 3, 15, 11);                      // and in the 3rd
+    const dxd = hx0 + 5;
+    for (const dy2 of [2, 9, 16]) {
+      clearB(dxd, dy2, 8, dxd + 1, dy2 + 4, 8);
+      fillB(dxd, dy2, 8, dxd + 1, dy2 + 4, 8, BB.doorBlack, { j: 0.04 });
+      V(dxd, dy2 + 2, 9, P.brass, { t: 2, j: 0 });
+      markDoor(dxd, dy2, 8, dxd + 1, dy2 + 4, 9);
+    }
+    fillB(hx0 + 2, 2, -4, hx0 + 5, 2, -2, 0x2f5f5a, { j: 0.06 });   // living room
+    fillB(hx0 + 2, 3, -5, hx0 + 5, 3, -5, 0x2f5f5a, { j: 0.06 });
+    fillB(hx0 + 8, 3, -4, hx0 + 9, 4, -4, BB.screen, { j: 0.02 });
+    fillB(hx0 + 8, 2, -4, hx0 + 9, 2, -4, BB.wood, { j: 0.05 });
+    fillB(hx0 + 3, 9, -4, hx0 + 7, 9, -1, 0x3a2516, { j: 0.04 });   // bedroom
+    fillB(hx0 + 3, 10, -4, hx0 + 7, 10, -1, 0xe8e4da, { j: 0.03 });
+    fillB(hx0 + 4, 10, -4, hx0 + 7, 10, -1, 0x8a6a4a, { j: 0.05 });
+    V(hx0 + 3, 11, -2, 0xf2eee4);
+    fillB(hx0 + 2, 16, -5, hx0 + 7, 18, -4, 0x4a5e6a, { j: 0.04 }); // kitchenette
+    fillB(hx0 + 2, 19, -5, hx0 + 7, 19, -4, 0xd9d4c8, { j: 0.03 });
+    fillB(hx0 + 9, 16, -5, hx0 + 10, 20, -4, 0xb8bcc2, { j: 0.04 });
+    fillB(hx0 - 3, 1, 10, hx0 - 2, 3, 11, 0x6a6e72, { j: 0.06 });   // barrels
+    V(hx0 - 3, 4, 10, 0x53555c);
+    fillB(hx0 + 2, 10, 10, hx0 + 2, 11, 10, 0x30608a, { j: 0.05 }); // porch sitter, clear of the stairs
+    V(hx0 + 2, 12, 10, P.skin); V(hx0 + 2, 13, 10, 0x6e4a26);
+    for (const px8 of [hx0 + 1, hx0 + 6, hx1 - 1]) fillB(px8, 23, -4, px8, 29, -3, BB.steel, { j: 0.04 });
+    fillB(hx0 - 3, 30, -4, hx1 + 2, 43, -3, 0xf2f0ea, { j: 0.03 });
+    for (let i = 0; i <= 5; i++)
+      fillB(hx0 + 1 + i, 33 + i, -2, hx1 - 1 - i, 33 + i, -2, 0xd03028, { t: 3, j: 0 });
+    sign('VOXGO', hx0 - 2, 30, -2, 1, 0x2858c8, 3, 0);
+  }
+}
 
 /* ============================================================
    15E. TECH BROOKLYN — the VOXL tower (7 walkable floors +
@@ -2326,89 +2880,6 @@ function techDistrict(mapX, mapZ, flipText) {
    HUBB campus (cheerfully dystopian). World x -34..90, z -56..74.
    ============================================================ */
 function buildBoston() {
-  const BB = {
-    brick: 0x94422e, brickDk: 0x7e3826, mortar: 0x84402c,
-    granite: 0x8f9296, graniteDk: 0x74777b,
-    trimWhite: 0xeae4d8, shutter: 0x22262a,
-    doorRed: 0x7e2222, doorGreen: 0x2e4a34, doorBlack: 0x24262b, purple: 0xb49cc8,
-    cobble: 0x6e6a64, cobbleDk: 0x605c56,
-    brickWalk: 0x96543c, brickWalkDk: 0x7e4230, trail: 0xb03024,
-    slate: 0x4a4e56, steepleWhite: 0xece8dc, gold: 0xd8ac38, bell: 0xc89b30,
-    pink: 0xf05898, dorange: 0xf07820, cream: 0xf2e6d4, dbrown: 0x5a3a26,
-    tGreen: 0x2f7a3c, tGreenDk: 0x276231, tWhite: 0xe8eae6,
-    sidingA: 0x9aa88a, sidingB: 0x8a9878, sidingC: 0x94a2ae, sidingD: 0x8492a0,
-    coral: 0xf0685a, hubbBrick: 0x8a4432, hubbMortar: 0x7a3c2c,
-    mull: 0x2a3238, teal: 0x18a08c, copper: 0xb87333, turf: 0x4a8a3a,
-    stair: 0x8a5e33, stairDk: 0x6e4a28, wood: 0xb08a58, tan: 0xc8a058,
-    steel: 0x565c66, screen: 0x10141c, white: 0xeaeae6, desk: 0xdcdcd6,
-  };
-  const FONT = {
-    A: ['.#.', '###', '#.#'], B: ['##.', '###', '##.'], C: ['###', '#..', '###'],
-    D: ['##.', '#.#', '##.'], E: ['###', '##.', '###'], G: ['####', '#...', '#.##'],
-    H: ['#.#', '###', '#.#'], I: ['#', '#', '#'], J: ['..#', '..#', '##.'],
-    K: ['#.#', '##.', '#.#'], L: ['#..', '#..', '###'], M: ['##.##', '#.#.#', '#...#'],
-    N: ['#..#', '##.#', '#.##'], O: ['###', '#.#', '###'], P: ['##.', '##.', '#..'],
-    S: ['.##', '.#.', '##.'], T: ['###', '.#.', '.#.'], U: ['#.#', '#.#', '###'],
-    V: ['#.#', '#.#', '.#.'], X: ['#.#', '.#.', '#.#'], Y: ['#.#', '.#.', '.#.'],
-  };
-  function sign(word, x0, y0, z, scale, color, t = 3, sp = 1) {
-    let lx = x0;
-    for (const ch of word) {
-      if (ch === ' ') { lx += 2 * scale; continue; }
-      const rows = FONT[ch];
-      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
-        if (rows[ry][cx] === '#')
-          fillB(lx + cx * scale, y0 + (2 - ry) * scale, z,
-                lx + cx * scale + scale - 1, y0 + (2 - ry) * scale + scale - 1, z, color, { t, j: 0 });
-      lx += (rows[0].length + sp) * scale;
-    }
-  }
-  // switchback stair sized for the player: flight A (xa..xa+1) climbs in the
-  // s direction, half landing, flight B (xa+2..xa+3) floats back. The hollow
-  // under the landing is sealed at build time — the deli-well lesson.
-  function bstair(yF, yT, xa, zb, s) {
-    const H = yT - yF, hA = Math.ceil(H / 2), hB = H - hA;
-    const zi = i => zb + s * i;
-    for (let i = 1; i <= hA; i++)
-      fillB(xa, yF + 1, zi(i), xa + 1, yF + i, zi(i), BB.stair, { j: 0.05 });
-    fillB(xa, yF + hA, zi(hA + 1), xa + 3, yF + hA, zi(hA + 2), BB.stair, { j: 0.05 });
-    for (let i = 1; i <= hB; i++)
-      fillB(xa + 2, yF + i + 1, zi(hA + 2 - i), xa + 3, yF + hA + i, zi(hA + 2 - i), BB.stair, { j: 0.05 });
-    clearB(xa, yT, zi(hA - 1), xa + 1, yT, zi(hA + 2));
-    clearB(xa + 2, yT, zi(hA + 3 - hB), xa + 3, yT, zi(hA + 2));
-    // ground flights only: seal the reachable hollow under the landing (the
-    // deli-well lesson). Upper hollows are boxed in by slab + columns already,
-    // and a seal there would hang a low ceiling over the landing below it.
-    if (yF <= 1) fillB(xa, yF + 1, zi(hA + 1), xa + 3, yF + hA - 1, zi(hA + 2), BB.stairDk, { j: 0.04 });
-  }
-  function bperson(x, y, z, shirt, pants) {   // person() for upper floors
-    fillB(x, y, z, x, y + 1, z, pants, { j: 0.05 });
-    fillB(x, y + 2, z, x, y + 3, z, shirt, { j: 0.05 });
-    V(x, y + 4, z, P.skin, { j: 0.04 });
-    V(x, y + 5, z, [0x2a2018, 0x6e4a26, 0x111114][Math.floor(h3(x, y + 5, z) * 3)], { j: 0.05 });
-  }
-  function gasLamp(x, z) {   // beacon hill gas lamp: short iron post, warm flame
-    fillB(x, 1, z, x, 5, z, P.iron, { j: 0.03 });
-    V(x, 6, z, P.lampWarm, { t: 3, j: 0 });
-    V(x, 7, z, P.iron, { j: 0.03 });
-  }
-  function acornLamp(x, z) { // taller street lamp with a round acorn globe
-    fillB(x, 2, z, x, 9, z, 0x24262a, { j: 0.03 });
-    V(x, 10, z, P.lampWarm, { t: 3, j: 0 });
-    V(x, 11, z, 0x24262a, { j: 0.03 });
-  }
-  function bench(x, z, alongX) { // park bench: iron ends, wood slats
-    if (alongX) {
-      fillB(x, 2, z, x + 3, 2, z, BB.wood, { j: 0.07 });
-      fillB(x, 3, z - 1, x + 3, 3, z - 1, BB.wood, { j: 0.07 });
-      V(x, 1, z, P.iron); V(x + 3, 1, z, P.iron);
-    } else {
-      fillB(x, 2, z, x, 2, z + 3, BB.wood, { j: 0.07 });
-      fillB(x + 1, 3, z, x + 1, 3, z + 3, BB.wood, { j: 0.07 });
-      V(x, 1, z, P.iron); V(x, 1, z + 3, P.iron);
-    }
-  }
-
   /* ---- ground plan: earth, grass, main street z 22..46, brick
      sidewalks z 13..20 / 47..54, cross alley + campus plaza ---- */
   fillB(-34, -2, -56, 90, -1, 74, 0x4a3a2a, { j: 0.05 });
@@ -2852,236 +3323,8 @@ function buildBoston() {
     V(21, 1, -30, BB.fence); V(21, 2, -30, BB.fence); V(21, 3, -30, BB.fence);
     for (let x = 17; x <= 20; x++) V(x, 5 - (x === 18 || x === 19 ? 1 : 0), -31 + (x > 18 ? 1 : 0), 0xe8e2d2, { j: 0.05 });
   }
-  /* ============================================================
-     OLD NORTH-ish CHURCH — nave x 46..68 z -28..-4, brick tower
-     x 50..58 z -4..8 with bell-ringer rooms, belfry (two
-     lanterns), spire, and a gilded cod up top
-     ============================================================ */
-  {
-    // tower shell
-    for (let y = 2; y <= 29; y++) {
-      const c = (y % 3 === 0) ? BB.mortar : BB.brick;
-      fillB(50, y, -4, 50, y, 8, c, { j: 0.07 });
-      fillB(58, y, -4, 58, y, 8, c, { j: 0.07 });
-      fillB(51, y, 8, 57, y, 8, c, { j: 0.07 });
-      fillB(51, y, -4, 57, y, -4, c, { j: 0.07 });
-    }
-    fillB(51, 1, -3, 57, 1, 7, 0x8a8478, { j: 0.05 });           // stone floor
-    // bell-ringer + clock rooms, then the belfry deck
-    for (const sy of [10, 19, 30])
-      fillB(51, sy, -3, 57, sy, 7, ((sy === 30)) ? 0xb8b2a4 : P.floorA, { j: 0.05 });
-    bstair(1, 10, 51, -2, 1);
-    bstair(10, 19, 51, -2, 1);
-    bstair(19, 30, 51, -2, 1);
-    // the bell rope drops the full height of the tower
-    for (const hy of [30, 19, 10]) clearB(56, hy, 5, 56, hy, 5);
-    for (let y = 2; y <= 33; y++) V(56, y, 5, 0x8a6a3a, { j: 0.04 });
-    // slit windows for the rooms, a workbench, the clock works
-    for (const wy of [5, 14]) { clearB(50, wy, 2, 50, wy + 2, 2); fillB(50, wy, 2, 50, wy + 2, 2, P.glass, { t: 1, j: 0.02 }); }
-    fillB(55, 11, -2, 57, 12, -1, BB.wood, { j: 0.05 });          // ringer's bench
-    fillB(55, 20, -2, 57, 22, 0, P.brass, { j: 0.05 });           // gear cabinet
-    V(56, 21, 1, P.iron); V(55, 23, -1, P.brass, { t: 2, j: 0 });
-    // front doors + fanlight + surround
-    clearB(52, 2, 8, 56, 9, 8);
-    fillB(52, 2, 8, 56, 7, 8, BB.doorRed, { j: 0.04 });
-    fillB(54, 2, 8, 54, 7, 8, 0x5e1a1a, { j: 0.04 });
-    fillB(52, 8, 8, 56, 9, 8, 0xd6e4ea, { t: 1, j: 0.02 });
-    fillB(51, 2, 9, 51, 9, 9, BB.trimWhite, { j: 0.04 });
-    fillB(57, 2, 9, 57, 9, 9, BB.trimWhite, { j: 0.04 });
-    fillB(51, 10, 9, 57, 10, 9, BB.trimWhite, { j: 0.04 });
-    V(53, 4, 9, P.brass, { t: 2, j: 0 }); V(55, 4, 9, P.brass, { t: 2, j: 0 });
-    markDoor(52, 2, 8, 56, 7, 9);
-    // clock face on the street front
-    fillB(52, 22, 9, 56, 26, 9, BB.trimWhite, { j: 0.03 });
-    V(54, 24, 9, 0x16181c); fillB(54, 25, 9, 54, 25, 9, 0x16181c); V(55, 24, 9, 0x16181c);
-    V(52, 22, 9, BB.gold, { t: 2, j: 0 }); V(56, 26, 9, BB.gold, { t: 2, j: 0 });
-    V(52, 26, 9, BB.gold, { t: 2, j: 0 }); V(56, 22, 9, BB.gold, { t: 2, j: 0 });
-    // belfry: white deck with open arches, rails, the bell, two lanterns
-    for (let y = 31; y <= 39; y++) {
-      fillB(50, y, -4, 50, y, 8, BB.steepleWhite, { j: 0.04 });
-      fillB(58, y, -4, 58, y, 8, BB.steepleWhite, { j: 0.04 });
-      fillB(51, y, 8, 57, y, 8, BB.steepleWhite, { j: 0.04 });
-      fillB(51, y, -4, 57, y, -4, BB.steepleWhite, { j: 0.04 });
-    }
-    clearB(52, 31, 8, 56, 36, 8); clearB(52, 31, -4, 56, 36, -4);
-    clearB(50, 31, 0, 50, 36, 4);  clearB(58, 31, 0, 58, 36, 4);
-    for (const [rx, rz0, rx1, rz1] of [[52, 8, 56, 8], [52, -4, 56, -4]]) fillB(rx, 31, rz0, rx1, 31, rz1, P.iron, { j: 0.03 });
-    fillB(50, 31, 0, 50, 31, 4, P.iron, { j: 0.03 }); fillB(58, 31, 0, 58, 31, 4, P.iron, { j: 0.03 });
-    fillB(54, 37, -1, 54, 40, 0, P.iron, { j: 0.03 });            // bell yoke
-    fillB(53, 34, -1, 54, 35, 0, BB.bell, { j: 0.04 });           // the bell, clear of the stair
-    V(53, 33, -1, P.iron);
-    V(53, 36, -3, 0xffb45a, { t: 3, j: 0 }); V(55, 36, -3, 0xffb45a, { t: 3, j: 0 });  // two if by sea
-    // spire in shrinking white tiers, then the golden cod vane
-    fillB(50, 40, -4, 58, 40, 8, BB.steepleWhite, { j: 0.04 });
-    fillB(51, 41, -3, 57, 42, 7, BB.steepleWhite, { j: 0.04 });
-    fillB(52, 43, -2, 56, 44, 6, 0xd8d4c8, { j: 0.04 });
-    fillB(53, 45, -1, 55, 46, 5, BB.slate, { j: 0.04 });
-    fillB(54, 47, 1, 54, 52, 3, 0xc8c4b8, { j: 0.04 });
-    fillB(54, 53, 2, 54, 54, 2, P.iron, { j: 0 });
-    fillB(53, 55, 2, 55, 55, 2, BB.gold, { t: 2, j: 0 });         // the cod swims east
-    V(52, 56, 2, BB.gold, { t: 2, j: 0 });
-    // nave shell + gables + arched windows
-    for (let y = 2; y <= 15; y++) {
-      const c = (y % 3 === 0) ? BB.mortar : BB.brick;
-      fillB(46, y, -28, 46, y, -5, c, { j: 0.07 });
-      fillB(68, y, -28, 68, y, -5, c, { j: 0.07 });
-      fillB(46, y, -28, 68, y, -28, c, { j: 0.07 });
-      fillB(46, y, -4, 68, y, -4, c, { j: 0.07 });
-    }
-    for (let i = 0; i <= 5; i++) {
-      fillB(48 + 2 * i, 15 + i, -28, 66 - 2 * i, 15 + i, -28, BB.brick, { j: 0.07 });
-      fillB(48 + 2 * i, 15 + i, -4, 66 - 2 * i, 15 + i, -4, BB.brick, { j: 0.07 });
-    }
-    for (let i = 0; i <= 5; i++) {                                 // slate roof planes
-      fillB(46 + 2 * i, 16 + i, -27, 47 + 2 * i, 16 + i, -5, BB.slate, { j: 0.05 });
-      fillB(67 - 2 * i, 16 + i, -27, 68 - 2 * i, 16 + i, -5, BB.slate, { j: 0.05 });
-    }
-    fillB(56, 21, -27, 58, 21, -5, 0x3e4249, { j: 0.04 });         // ridge cap
-    for (const wz2 of [-26, -20, -14, -8]) for (const wx2 of [46, 68]) {
-      clearB(wx2, 4, wz2, wx2, 11, wz2 + 2);
-      fillB(wx2, 4, wz2, wx2, 11, wz2 + 2, P.glass, { t: 1, j: 0.02 });
-      clearB(wx2, 12, wz2 + 1, wx2, 12, wz2 + 1);
-      fillB(wx2, 12, wz2 + 1, wx2, 12, wz2 + 1, P.glass, { t: 1, j: 0.02 });
-    }
-    // stained glass over the altar
-    {
-      const r = mulberry(1723);
-      clearB(53, 5, -28, 61, 13, -28);
-      for (let x = 53; x <= 61; x++) for (let y = 5; y <= 13; y++)
-        V(x, y, -28, [0x8a3030, 0x30608a, 0xc9a227, 0x3a7a4a, 0x7a4a8a][Math.floor(r() * 5)], { t: 1, j: 0.04 });
-      fillB(52, 4, -28, 62, 4, -28, BB.trimWhite, { j: 0.04 });
-      fillB(52, 14, -28, 62, 14, -28, BB.trimWhite, { j: 0.04 });
-    }
-    // interior: floor, red aisle, pews, altar, pulpit, organ, chandeliers
-    fillB(47, 1, -27, 67, 1, -5, P.floorA, { j: 0.05 });
-    fillB(56, 1, -26, 58, 1, -5, 0x7a2020, { j: 0.05 });
-    clearB(53, 2, -4, 55, 7, -4);                                  // tower -> nave passage
-    for (const pz6 of [-8, -11, -14, -17, -20, -23]) {
-      fillB(48, 2, pz6, 54, 2, pz6, BB.wood, { j: 0.06 });
-      fillB(48, 3, pz6 - 1, 54, 3, pz6 - 1, BB.stairDk, { j: 0.06 });
-      fillB(60, 2, pz6, 66, 2, pz6, BB.wood, { j: 0.06 });
-      fillB(60, 3, pz6 - 1, 66, 3, pz6 - 1, BB.stairDk, { j: 0.06 });
-    }
-    fillB(52, 2, -27, 62, 2, -25, 0x8a8478, { j: 0.04 });          // chancel step
-    fillB(55, 3, -26, 59, 4, -26, BB.trimWhite, { j: 0.03 });      // altar
-    V(55, 5, -26, P.brass, { j: 0.03 }); V(59, 5, -26, P.brass, { j: 0.03 });
-    V(55, 6, -26, P.fireAmber, { t: 2, j: 0 }); V(59, 6, -26, P.fireAmber, { t: 2, j: 0 });
-    fillB(48, 2, -24, 49, 5, -23, BB.wood, { j: 0.05 });           // pulpit
-    V(48, 6, -23, 0x8a3030);
-    for (const ox of [47, 63]) {                                   // organ pipes
-      for (let x = ox; x <= ox + 4; x++) {
-        const hpipe = 6 + ((x * 7) % 5);
-        fillB(x, 3, -27, x, 3 + hpipe, -27, (x % 2 === 0) ? 0x9aa0a6 : BB.gold, { j: 0.03 });
-      }
-    }
-    for (const cz2 of [-10, -20]) {
-      fillB(57, 14, cz2, 57, 15, cz2, P.iron, { j: 0 });
-      fillB(56, 13, cz2, 58, 13, cz2, P.lampWarm, { t: 3, j: 0 });
-    }
-    // side door to the burying ground
-    clearB(68, 2, -12, 68, 6, -11);
-    fillB(68, 2, -12, 68, 6, -11, P.doorWood, { j: 0.05 });
-    markDoor(68, 2, -12, 69, 6, -11);
-    // brick forecourt + a tourist squinting up
-    fillB(44, 1, 9, 70, 1, 12, BB.brickWalk, { j: 0.09 });
-    person(60, 10, 0x30608a, 0x2a2018);
-  }
+  bostonSouthRow(0);
 
-  /* ============================================================
-     THE BURYING GROUND — x 72..88, z -24..-2: crooked slate,
-     chest tombs, a dead elm, one freshly dug opening
-     ============================================================ */
-  {
-    for (let x = 72; x <= 88; x++) {
-      if (x >= 79 && x <= 81) continue;
-      V(x, 3, -2, P.iron, { j: 0.03 });
-      if (x % 2 === 0) fillB(x, 1, -2, x, 2, -2, P.iron, { j: 0.03 });
-    }
-    for (let z = -24; z <= -2; z++) for (const fx of [72, 88]) {
-      V(fx, 3, z, P.iron, { j: 0.03 });
-      if (z % 2 === 0) fillB(fx, 1, z, fx, 2, z, P.iron, { j: 0.03 });
-    }
-    for (let x = 72; x <= 88; x++) V(x, 3, -24, P.iron, { j: 0.03 });
-    fillB(79, 1, -20, 81, 1, -2, 0xb8a888, { j: 0.08 });
-    {
-      const r = mulberry(1630);
-      for (const [gx3, gz3] of [[74, -6], [77, -7], [83, -6], [86, -7], [74, -12], [77, -13], [84, -12], [87, -13], [75, -18], [86, -19]]) {
-        const hh = 2 + Math.floor(r() * 2);
-        fillB(gx3, 1, gz3, gx3, hh, gz3, (r() < 0.5) ? 0x4a4e52 : 0x565a5e, { j: 0.06 });
-        V(gx3 + (r() < 0.3 ? 1 : 0), hh + 1, gz3, 0x565a5e, { j: 0.06 });   // tilted cap
-      }
-    }
-    fillB(74, 1, -22, 76, 2, -21, 0x565a5e, { j: 0.05 });          // chest tombs
-    fillB(84, 1, -23, 86, 2, -22, 0x4a4e52, { j: 0.05 });
-    // dead elm + the raven
-    for (let y = 1; y <= 8; y++) V(85, y, -16, P.bark, { j: 0.12 });
-    V(84, 7, -16, P.bark); V(86, 6, -16, P.bark); V(85, 9, -15, P.bark); V(83, 8, -16, P.bark);
-    V(72, 4, -12, 0x1a1c20, { j: 0 }); V(72, 5, -12, 0x111114, { j: 0 });
-    // an open grave, mound and shovel beside it
-    clearB(76, 0, -19, 77, 0, -17);
-    fillB(78, 1, -19, 79, 1, -17, P.soil, { j: 0.1 }); V(78, 2, -18, P.soil, { j: 0.1 });
-    fillB(80, 1, -17, 80, 2, -17, 0x8a6a3a, { j: 0.05 }); V(80, 1, -16, 0x9aa0a6);
-  }
-
-  /* ============================================================
-     DUNKS — x 74..90, z 2..12: pink and orange, giant sprinkle
-     donut on the roof, a cop on his break
-     ============================================================ */
-  {
-    for (let y = 2; y <= 8; y++) {
-      fillB(74, y, 2, 74, y, 12, BB.cream, { j: 0.05 });
-      fillB(90, y, 2, 90, y, 12, BB.cream, { j: 0.05 });
-      fillB(75, y, 2, 89, y, 2, BB.cream, { j: 0.05 });
-    }
-    for (let x = 75; x <= 89; x++) for (let z = 3; z <= 11; z++)
-      V(x, 1, z, ((x + z) % 2 === 0) ? P.tileA : 0xf0b8cc, { j: 0.03 });
-    fillB(74, 9, 2, 90, 9, 12, P.roof, { j: 0.04 });
-    fillB(74, 10, 2, 90, 10, 12, BB.cream, { j: 0.05 });
-    clearB(75, 10, 3, 89, 10, 11);
-    // storefront: pink kick, glass, glazed door
-    fillB(75, 2, 12, 89, 2, 12, BB.pink, { j: 0.04 });
-    fillB(75, 3, 12, 89, 7, 12, P.glass, { t: 1, j: 0.02 });
-    fillB(80, 3, 12, 80, 7, 12, BB.trimWhite, { j: 0.03 });
-    fillB(83, 3, 12, 83, 7, 12, BB.trimWhite, { j: 0.03 });
-    clearB(81, 2, 12, 82, 7, 12);
-    fillB(81, 2, 12, 82, 6, 12, P.glass, { t: 1, j: 0.02 });
-    V(81, 4, 13, P.brass, { t: 2, j: 0 });
-    markDoor(81, 2, 12, 82, 6, 13);
-    // sign band, tight-set pink letters
-    fillB(74, 8, 13, 90, 10, 13, BB.dbrown, { j: 0.03 });
-    sign('DUNKS', 75, 8, 14, 1, BB.pink, 3, 0);
-    // the rooftop donut
-    fillB(80, 10, 6, 81, 13, 7, BB.steel, { j: 0.03 });
-    for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) {
-      const d = Math.hypot(dx, dy);
-      if (d >= 2.3 && d <= 3.4) {
-        const c = dy >= 0 ? BB.pink : 0xd8a868;
-        fillB(81 + dx, 16 + dy, 6, 81 + dx, 16 + dy, 7, c, { j: 0.04 });
-        if (dy >= 1 && (dx * 3 + dy) % 3 === 0)
-          V(81 + dx, 16 + dy, 5, [0x48c8e8, 0xe8e24a, 0x8adf6a, 0xffffff][(dx + dy + 6) % 4], { t: 3, j: 0 });
-      }
-    }
-    // counter, donut case, coffee rigs, menu, tables, the cop
-    fillB(76, 2, 6, 86, 3, 7, BB.pink, { j: 0.04 });
-    fillB(76, 4, 6, 86, 4, 7, BB.cream, { j: 0.03 });
-    fillB(76, 3, 8, 79, 5, 8, P.glass, { t: 1, j: 0.02 });        // display case front
-    for (let x = 76; x <= 79; x++) {
-      V(x, 5, 6, [BB.pink, 0x8a5a2e, 0xd8a868, 0xf0e0c0][(x - 76) % 4], { j: 0.05 });
-      V(x, 5, 7, [0x8a5a2e, BB.pink, 0xf0e0c0, 0xd8a868][(x - 76) % 4], { j: 0.05 });
-    }
-    for (const mx2 of [76, 83]) {
-      fillB(mx2, 3, 3, mx2 + 2, 5, 3, BB.steel, { j: 0.03 });
-      V(mx2 + 1, 4, 4, 0xff3020, { t: 2, j: 0 });
-    }
-    fillB(76, 6, 3, 87, 7, 3, BB.screen, { j: 0.02 });
-    { const r = mulberry(1950); for (let x = 77; x <= 86; x++) if (r() < 0.6) V(x, 6 + Math.floor(r() * 2), 3, 0xffb84a, { t: 2, j: 0 }); }
-    for (const [tx3, tz3] of [[87, 9], [76, 10]]) {
-      fillB(tx3, 4, tz3, tx3 + 1, 4, tz3, BB.trimWhite, { j: 0.03 });
-      V(tx3, 2, tz3, BB.steel); V(tx3 + 1, 2, tz3 + 1, 0x23262a);
-    }
-    person(85, 9, 0x2a3a55, 0x23262a);                             // the cop
-    V(84, 4, 9, BB.pink, { j: 0 });                                // his donut
-  }
   /* ============================================================
      T STATION — sunken mezzanine under a green glass headhouse,
      fare gates, the LATE board, and the resident rat
@@ -3200,10 +3443,12 @@ function buildBoston() {
     for (const ry2 of [3, 10, 17]) fillB(hx0 + 1, ry2, 56, hx1 - 1, ry2, 56, BB.trimWhite, { j: 0.04 });
     // front stair flights: up to the 2nd porch, and 3rd when full
     for (let i = 0; i <= 5; i++) fillB(hx0 + 1 + i, 2 + i, 57, hx0 + 1 + i, 2 + i, 58, BB.stair, { j: 0.05 });
-    clearB(hx0 + 2, 3, 56, hx0 + 6, 8, 56);                        // open rail over the run
+    clearB(hx0 + 2, 2, 56, hx0 + 9, 8, 56);                        // open rail over the run + the walk-up
+    clearB(hx0 + 3, 8, 56, hx0 + 6, 8, 57);                        // stairwell opening in the 2nd deck
     if (full) {
       for (let i = 0; i <= 5; i++) fillB(hx1 - 1 - i, 9 + i, 57, hx1 - 1 - i, 9 + i, 58, BB.stair, { j: 0.05 });
       clearB(hx1 - 6, 10, 56, hx1 - 2, 15, 56);
+      clearB(hx1 - 6, 15, 56, hx1 - 3, 15, 57);                    // and in the 3rd
     }
     // porch doors into each flat
     const dxd = hx0 + 5;
@@ -4423,10 +4668,18 @@ function stepPlayer(dt) {
     const fx = -Math.sin(player.yaw) * cp, fy = Math.sin(player.pitch), fz = -Math.cos(player.yaw) * cp;
     const d = camClearance(player.x, eyeY, player.z, -fx, -fy, -fz, CAM3_DIST);
     playerGroup.visible = d > 1.8;   // pulled in tight, own figure would fill the lens
+    playerGroup.scale.set(1, 1, 1);
+    playerGroup.children[2].visible = true;
     camera.position.set(player.x - fx * d, eyeY - fy * d, player.z - fz * d);
     camera.lookAt(player.x + fx * 2, eyeY + fy * 2, player.z + fz * 2);
   } else {
     playerGroup.visible = true;
+    // first person: hide the head + chest (the camera lives inside them and
+    // looking down they wall off the view) and slim the legs — you still see
+    // your own feet, and everyone else still sees the full figure
+    playerGroup.scale.set(0.5, 1, 0.5);
+    playerGroup.children[2].visible = false;
+    playerGroup.children[3].visible = false;
     camera.position.set(player.x, eyeY, player.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
   }
@@ -4829,7 +5082,7 @@ document.getElementById('reset').addEventListener('click', () => {
 /* ---- scene selection (synced when online) ---- */
 const sceneSel = document.getElementById('scene');
 function setSceneLocal(id) {
-  if (id !== 'default' && id !== 'tech' && id !== 'techlong' && id !== 'boston') return;
+  if (!['default', 'tech', 'techlong', 'boston', 'bostonlong'].includes(id)) return;
   sceneSel.value = id;
   if (id === sceneId) return;
   sceneId = id;
@@ -4945,6 +5198,16 @@ const longLights = [
   roomLight(130, 16.5, -4, 100),  // gym studio
   roomLight(130, 24, -3, 90, 0x66d8f0, 28),    // pool glow
 ];
+// Boston Long lights: the shifted church row, T, trolley, triple-decker
+const bostonLongLights = [
+  roomLight(74, 11, -10, 150),                 // church nave front (+20)
+  roomLight(78, 11, -22, 130),                 // church nave rear
+  roomLight(74, 34.5, 2, 45, 0xffb45a, 16),    // belfry lanterns
+  roomLight(101, 6, 7, 130, 0xffd0dc, 22),     // DUNKS pink glow
+  roomLight(118, 1.5, 17, 80, 0xd8e8ff, 14),   // T stair pit
+  roomLight(77, 5.5, 50, 60, 0xfff4e0, 14),    // trolley interior
+  roomLight(134, 5, 1, 80),                    // triple-decker parlor
+];
 // Boston lights: rowhouses, church, DUNKS, T mezzanine, trolley, HUBB floors
 const bostonLights = [
   roomLight(8, 6.5, -20, 110),                 // rowhouse #2 kitchen
@@ -4963,10 +5226,11 @@ const bostonLights = [
   roomLight(58, 30, 64, 60, 0xc8c0ff, 22),     // HUBB nap floor (dim violet)
   roomLight(64, 38, 62, 120),                  // HUBB exec
 ];
-interiorLights.push(...techLights, ...longLights, ...bostonLights);
+interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights);
 for (const l of techLights) l.visible = false;
 for (const l of longLights) l.visible = false;
 for (const l of bostonLights) l.visible = false;
+for (const l of bostonLongLights) l.visible = false;
 
 /* ---- corpo night searchlight: follows the corpo's cursor after dark.
        The aim is broadcast, so humans see where the corpo is hunting. ---- */
@@ -5063,7 +5327,8 @@ function stepSpot(dt) {
 
 function applySceneEnv() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong', bos = sceneId === 'boston';
-  const ext = long ? 150 : (tech || bos) ? 135 : 95;
+  const blong = sceneId === 'bostonlong';
+  const ext = (long || blong) ? 165 : (tech || bos) ? 135 : 95;
   sun.shadow.camera.left = -ext; sun.shadow.camera.right = ext;
   sun.shadow.camera.top = ext; sun.shadow.camera.bottom = -ext;
   sun.shadow.camera.updateProjectionMatrix();
@@ -5071,9 +5336,10 @@ function applySceneEnv() {
   for (const l of longLights) l.visible = long;
   for (const l of brookLights) l.visible = !bos;
   for (const l of bostonLights) l.visible = bos;
-  controls.maxDistance = (tech || long || bos) ? 340 : 260;
-  playZMax = tech ? 101.5 : bos ? 74.5 : 54.5;
-  playXMax = long ? 152.5 : bos ? 89.5 : 60.5;
+  for (const l of bostonLongLights) l.visible = blong;
+  controls.maxDistance = (tech || long || bos || blong) ? 360 : 260;
+  playZMax = tech ? 101.5 : (bos || blong) ? 74.5 : 54.5;
+  playXMax = long ? 152.5 : blong ? 141.5 : bos ? 89.5 : 60.5;
   playXMin = X0 + 0.5;
   playZMin = -55.5;
   // the live traffic-light bulbs follow each scene's signal head

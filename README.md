@@ -11,7 +11,7 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
 - **Load-bearing collapse** — structures cut off from the ground break loose and
   fall as rigid pieces, landing intact or shattering into debris (blow out the
   crane mast or the water-tower legs)
-- **Four scenes** (synced in multiplayer): *default Brooklyn*; *Tech Brooklyn*,
+- **Five scenes** (synced in multiplayer): *default Brooklyn*; *Tech Brooklyn*,
   which fills the far side of the street with the 7-story VOXL tower (every
   floor furnished and walkable, stairs to the helipad roof) and the FLEX luxury
   gym with a rooftop pool, plus a cybertruck and robotaxi at the curb;
@@ -29,7 +29,11 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   campus — brick-podium HQ with a golden cod in the lobby, the Freedom
   Trail ending at its turnstiles, a specimen-tank lab, nap pods, a ball-pit
   conference room, an org-chart wall with fresh gaps, plus a steaming-kettle
-  plaza with robo-dogs and a CHOWDAH truck
+  plaza with robo-dogs and a CHOWDAH truck; and **Boston Long** — the whole
+  Brooklyn block (brownstone, deli, construction lot) plus the church,
+  burying ground, DUNKS, a sunken T stop, and a triple-decker carrying the
+  VOXGO sign, all lining one side of a widened street with a walk-through
+  Green Line trolley parked on fresh rails
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 

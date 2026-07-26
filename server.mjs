@@ -138,6 +138,7 @@ const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff];
 const SPAWNS = {
   default: [[21.5, 2, 17.5], [40.5, 2, 18.5], [-8.5, 2, 16.5], [13.5, 2, 50.5]],
   boston: [[10.5, 2, 17.5], [64.5, 2, 17.5], [36.5, 2, 50.5], [-14.5, 2, 50.5]],
+  bostonlong: [[21.5, 2, 17.5], [40.5, 2, 18.5], [80.5, 2, 17.5], [13.5, 2, 58.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const RESPAWN_MS = +(process.env.RESPAWN_MS || 10000);
@@ -285,7 +286,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
         console.log(`scene -> ${scene} by ${p.name}`);
