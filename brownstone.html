@@ -222,7 +222,6 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
     color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7);caret-color:#e0a85a;
     pointer-events:none;   /* display-only for everyone but the corpo */
   }
-  #marquee::placeholder{color:rgba(255,255,255,.22);}
   body.mq-edit #marquee{pointer-events:auto;}
   body.mq-edit #marquee:hover,body.mq-edit #marquee:focus{background:rgba(10,14,22,.4);}
   #ui input[type=text]{
@@ -4948,7 +4947,6 @@ function wsConnect() {
     net.online = false; net.role = null; net.id = 0; net.alive = false;
     document.body.classList.remove('mq-edit');
     marqueeEl.readOnly = true;
-    marqueeEl.placeholder = '';
     for (const r of remotes.values()) scene.remove(r.group);
     remotes.clear();
     mpJoinEl.style.display = 'none';
@@ -5026,7 +5024,6 @@ function handleNet(m) {
         sendTime();   // the corpo's clock becomes everyone's clock
         document.body.classList.add('mq-edit');
         marqueeEl.readOnly = false;
-        marqueeEl.placeholder = 'type to the room';
       } else {
         mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
