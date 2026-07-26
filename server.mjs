@@ -138,9 +138,11 @@ const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff];
 const SPAWNS = {
   default: [[21.5, 2, 17.5], [40.5, 2, 18.5], [-8.5, 2, 16.5], [13.5, 2, 50.5]],
   boston: [[10.5, 2, 17.5], [64.5, 2, 17.5], [36.5, 2, 50.5], [-14.5, 2, 50.5]],
-  bostonlong: [[21.5, 2, 17.5], [40.5, 2, 18.5], [80.5, 2, 17.5], [13.5, 2, 58.5]],
+  bostonlong: [[21.5, 2, 17.5], [44.5, 2, 18.5], [80.5, 2, 17.5], [102.5, 2, 17.5],
+               [134.5, 2, 17.5], [13.5, 2, 58.5], [72.5, 2, 58.5], [118.5, 2, 58.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
+const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
 const RESPAWN_MS = +(process.env.RESPAWN_MS || 10000);
 const players = new Map(); // id -> player
 const booms = [];          // [x,y,z] history, replayed to new connections
@@ -215,7 +217,7 @@ function onMessage(conn, m) {
         role = 'human';
       }
       const id = nextId++;
-      const spawn = spawnsFor()[humans % 4];
+      const spawn = randomSpawn();
       const pl = {
         id, conn, name, role, score: 0,
         alive: role === 'human', diedAt: 0,
@@ -270,7 +272,7 @@ function onMessage(conn, m) {
     case 'respawn':
       if (p && p.role === 'human' && !p.alive && Date.now() - p.diedAt >= RESPAWN_MS) {
         p.alive = true;
-        const s = spawnsFor()[Math.floor(Math.random() * 4)];
+        const s = randomSpawn();
         p.x = s[0]; p.y = s[1]; p.z = s[2];
         broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z });
         pushPlayers();

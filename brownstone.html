@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Voxel Block — Brooklyn</title>
+<title>LAYOFF SIMULATOR</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;touch-action:manipulation;}
   canvas{display:block;}
@@ -186,7 +186,7 @@
 </head>
 <body>
 <div id="ui">
-  <div class="panel-head" id="ui-head"><h1>Brooklyn Block</h1><span class="caret">&#9662;</span></div>
+  <div class="panel-head" id="ui-head"><h1>Layoff Simulator</h1><span class="caret">&#9662;</span></div>
   <div class="panel-body" id="ui-body">
     <div class="sub">brownstone &middot; corner deli &middot; construction site</div>
     <div id="clock">2:30 PM</div>
@@ -233,7 +233,7 @@
     <div id="mp-join" style="display:none">
       <input id="mp-name" placeholder="your name" maxlength="12">
       <div class="mp-btns">
-        <button id="join-human">join as human</button>
+        <button id="join-human">jump in</button>
         <button id="join-corpo">join as corpo</button>
       </div>
       <div class="help">human — survive on foot, +1 pt per second alive (4 seats) &middot;
@@ -250,10 +250,9 @@
 </div>
 <div id="aud">
   <div id="aud-card">
-    <h2>BROOKLYN BLOCK</h2>
-    <div class="aud-sub">humans vs. the corpo &middot; live</div>
+    <h2>LAYOFF SIMULATOR</h2>
     <input id="aud-name" placeholder="your name" maxlength="12">
-    <button id="aud-join">join as human</button>
+    <button id="aud-join">jump in</button>
     <div id="aud-status"></div>
     <div class="help">survive on foot — every second alive pays 1 pt. the corpo is hunting.</div>
     <span id="aud-dismiss">just watch</span>
@@ -609,7 +608,7 @@ function markDoor(x0, y0, z0, x1, y1, z1) {
 
 // the church / burying-ground / DUNKS row, placeable at an x offset so
 // Boston and Boston Long can share it (the techDistrict trick)
-function bostonSouthRow(dx) {
+function bostonSouthRow(dx, people = true) {
   const V = (x, y, z, hex, o = {}) => Vb(x + dx, y, z, hex, o);
   const fillB = (x0, y0, z0, x1, y1, z1, hex, o = {}) => fillBb(x0 + dx, y0, z0, x1 + dx, y1, z1, hex, o);
   const clearB = (x0, y0, z0, x1, y1, z1) => clearBb(x0 + dx, y0, z0, x1 + dx, y1, z1);
@@ -777,7 +776,7 @@ function bostonSouthRow(dx) {
     markDoor(68, 2, -12, 69, 6, -11);
     // brick forecourt + a tourist squinting up
     fillB(44, 1, 9, 70, 1, 12, BB.brickWalk, { j: 0.09 });
-    person(60, 10, 0x30608a, 0x2a2018);
+    if (people) person(60, 10, 0x30608a, 0x2a2018);
   }
 
   /* ============================================================
@@ -872,8 +871,10 @@ function bostonSouthRow(dx) {
       fillB(tx3, 4, tz3, tx3 + 1, 4, tz3, BB.trimWhite, { j: 0.03 });
       V(tx3, 2, tz3, BB.steel); V(tx3 + 1, 2, tz3 + 1, 0x23262a);
     }
-    person(85, 9, 0x2a3a55, 0x23262a);                             // the cop
-    V(84, 4, 9, BB.pink, { j: 0 });                                // his donut
+    if (people) {
+      person(85, 9, 0x2a3a55, 0x23262a);                           // the cop
+      V(84, 4, 9, BB.pink, { j: 0 });                              // his donut
+    }
   }
 }
 
@@ -2078,6 +2079,13 @@ function buildBostonLong() {
   clearB(0, 8, 44, 20, 26, 46);             // canopy overhang of the removed tree
   clearB(-2, 1, 41, 9, 8, 46);              // far-lane cars would sit mid-street now
   clearB(18, 1, 41, 31, 8, 46);
+  /* ---- no bystanders in this scene: the audience IS the crowd ---- */
+  clearB(13, 2, 16, 13, 7, 16);             // sidewalk pedestrian
+  clearB(-20, 2, 15, -20, 7, 15);           // dog walker
+  clearB(-18, 2, 15, -16, 3, 15);           // and the dog
+  clearB(-20, 2, -12, -20, 7, -12);         // hi-vis worker
+  clearB(-12, 2, 5, -12, 7, 5);             // second worker
+  clearB(-20, 13, -9, -20, 18, -9);         // scaffold worker
   // ground: east extension + a lawn behind the new far sidewalk
   fillB(61, -2, -56, XE, -1, 74, 0x4a3a2a, { j: 0.05 });
   fillB(61, 0, -56, XE, 0, 74, P.grass, { j: 0.12 });
@@ -2091,18 +2099,23 @@ function buildBostonLong() {
       fillB(px, 0, pz, px + 2 + Math.floor(r() * 4), 0, pz + 1 + Math.floor(r() * 2), P.asphaltPatch, { j: 0.06 });
     }
   }
-  // stripes east + trolley rails across the full width
-  for (let x = 61; x <= XE; x++) {
-    if (x >= 116 && x <= 129) continue;
+  // markings: erase the half-width leftovers, restripe the full length,
+  // and lay ladder crossings with rungs square to the walker
+  fillB(43, 0, 23, 44, 0, 33, P.asphalt, { j: 0.05 });          // stray old stop line
+  fillB(46, 0, 23, 56, 0, 53, P.asphalt, { j: 0.05 });          // old zebra columns
+  for (let x = X0; x <= XE; x++) {
+    if ((x >= 44 && x <= 58) || (x >= 114 && x <= 129)) continue;
     V(x, 0, 33, P.lineY, { j: 0.04 }); V(x, 0, 35, P.lineY, { j: 0.04 });
   }
-  for (let x = 64; x <= XE; x += 6) {
-    if (x >= 116 && x <= 129) continue;
+  for (let x = X0 + 2; x <= XE; x += 6) {
+    if ((x >= 44 && x <= 58) || (x >= 114 && x <= 129)) continue;
     for (let d = 0; d < 3 && x + d <= XE; d++) { V(x + d, 0, 29, P.lineW, { j: 0.08 }); V(x + d, 0, 41, P.lineW, { j: 0.08 }); }
   }
+  for (let z = 24; z <= 51; z += 3) {
+    fillB(46, 0, z, 56, 0, z + 1, 0xc4c4c0, { j: 0.1 });
+    fillB(116, 0, z, 127, 0, z + 1, 0xc4c4c0, { j: 0.1 });
+  }
   for (let x = X0; x <= XE; x++) { V(x, 0, 49, 0x8a8e94, { j: 0.03 }); V(x, 0, 52, 0x8a8e94, { j: 0.03 }); }
-  for (const sx of [46, 49, 52, 55]) fillB(sx, 0, 46, sx + 1, 0, 53, 0xc4c4c0, { j: 0.1 });
-  for (const sx of [117, 120, 123, 126]) fillB(sx, 0, 23, sx + 1, 0, 53, 0xc4c4c0, { j: 0.1 });
   fillB(100, 0, 36, 102, 0, 38, 0x2a2a2c, { j: 0.04 }); V(101, 0, 37, 0x222224);
   // near sidewalk east of the deli: boston brick, granite curb, the trail
   fillB(61, 0, 13, XE, 0, 21, 0x7a7a76, { j: 0.04 });
@@ -2123,16 +2136,13 @@ function buildBostonLong() {
   bench(0, 61, true); bench(64, 61, true); bench(100, 61, true);
   fillB(52, 2, 57, 52, 4, 57, 0xd8b020, { j: 0.05 }); V(52, 5, 57, 0x2e7a3c);   // hydrant
   treeAt(-24, 68, 7201, 15); treeAt(20, 70, 7202, 16); treeAt(70, 68, 7203, 14); treeAt(118, 70, 7204, 15);
-  // east curbside: cars, people, pigeons
+  // east curbside: cars + pigeons (people removed — players fill the streets)
   car(64, 23, 0xe8e4da, { taxi: true });
   car(96, 23, 0x2a4a7a);
-  person(70, 17, 0x8a3030, 0x2a3038);
-  person(99, 18, 0x3a7a4a, 0x3a3a3e);
-  person(30, 58, 0x30608a, 0x2a2018);
   pigeon(95, 2, 14); pigeon(97, 2, 15); V(96, 2, 17, 0x6e7076, { j: 0.06 });
 
   /* ---- the landmark row, twenty east of its Boston berth ---- */
-  bostonSouthRow(20);
+  bostonSouthRow(20, false);
 
   /* ---- green line trolley on the rails, doors to the curb side ---- */
   {
@@ -2165,7 +2175,6 @@ function buildBostonLong() {
     for (let x = tx0 + 3; x <= tx1 - 5; x += 6) V(x, 3, 52, BB.tan, { j: 0.06 });
     for (const px6 of [tx0 + 7, tx0 + 17]) fillB(px6, 2, 50, px6, 7, 50, BB.steel, { j: 0.02 });
     V(tx1 - 2, 2, 50, BB.steel); V(tx1 - 2, 3, 50, 0x23262a);
-    person(tx1 - 3, 51, 0x2a4a34, 0x23262a);
   }
 
   /* ---- T station sunk into the near sidewalk, x 112..126 ---- */
@@ -2189,76 +2198,138 @@ function buildBostonLong() {
     fillB(113, 7, 12, 124, 7, 21, P.glass, { t: 1, j: 0.02 });
     fillB(113, 7, 12, 124, 7, 12, 0x2a4a34, { j: 0.04 });
     fillB(116, 8, 15, 121, 8, 18, 0x2a4a34, { j: 0.04 });
-    fillB(113, 5, 21, 125, 8, 21, BB.tGreenDk, { j: 0.04 });     // board faces the street
-    sign('LATE', 115, 5, 22, 1, 0xffb84a, 2);
     fillB(112, 2, 17, 112, 8, 17, 0x2a4a34, { j: 0.04 });        // the roundel totem
     for (let dx2 = -2; dx2 <= 2; dx2++) for (let dy = -2; dy <= 2; dy++)
       if (Math.abs(dx2) + Math.abs(dy) <= 3) V(112 + dx2, 11 + dy, 17, 0xf2f2ee, { t: 3, j: 0 });
     fillB(112, 9, 17, 112, 12, 17, 0x16181c, { t: 0, j: 0 });
     fillB(111, 12, 17, 113, 12, 17, 0x16181c, { t: 0, j: 0 });
     V(120, 0, 18, 0x53555c, { j: 0.05 }); V(119, 0, 18, 0x6e7076, { j: 0.05 });
-    person(126, 15, 0x8a8e94, 0x2a3038); V(127, 3, 15, 0x5a3a26);
   }
 
-  /* ---- triple-decker, porches to the street, VOXGO riding the roof ---- */
+  /* ---- triple-decker: tall 8-voxel floors, balcony porches, and an
+     interior switchback core from the ground to the roof ---- */
   {
-    const hx0 = 128, hx1 = 140;
-    for (let y = 2; y <= 21; y++) {
+    const hx0 = 126, hx1 = 140;
+    for (let y = 2; y <= 23; y++) {
       const c = (y % 4 < 2) ? BB.sidingA : BB.sidingB;
       fillB(hx0, y, 8, hx1, y, 8, c, { j: 0.05 });
-      fillB(hx0, y, -6, hx1, y, -6, c, { j: 0.05 });
-      fillB(hx0, y, -5, hx0, y, 7, c, { j: 0.05 });
-      fillB(hx1, y, -5, hx1, y, 7, c, { j: 0.05 });
+      fillB(hx0, y, -8, hx1, y, -8, c, { j: 0.05 });
+      fillB(hx0, y, -7, hx0, y, 7, c, { j: 0.05 });
+      fillB(hx1, y, -7, hx1, y, 7, c, { j: 0.05 });
     }
-    for (const cx4 of [hx0, hx1]) for (const cz3 of [8, -6])
-      fillB(cx4, 2, cz3, cx4, 21, cz3, BB.trimWhite, { j: 0.04 });
-    for (const sy of [1, 8, 15]) for (let x = hx0 + 1; x <= hx1 - 1; x++) for (let z = -5; z <= 7; z++)
+    for (const cx4 of [hx0, hx1]) for (const cz3 of [8, -8])
+      fillB(cx4, 2, cz3, cx4, 23, cz3, BB.trimWhite, { j: 0.04 });
+    for (const sy of [1, 9, 17]) for (let x = hx0 + 1; x <= hx1 - 1; x++) for (let z = -7; z <= 7; z++)
       V(x, sy, z, ((x + (z >> 2)) % 2 === 0) ? P.floorA : P.floorB, { j: 0.05 });
-    fillB(hx0, 22, -6, hx1, 22, 8, P.roof, { j: 0.04 });
-    fillB(hx0, 22, 9, hx1, 22, 12, P.roof, { j: 0.04 });
-    for (const wy of [3, 10, 17]) for (const wx3 of [hx0 + 2, hx1 - 4]) for (const wz3 of [8, -6]) {
+    fillB(hx0, 25, -8, hx1, 25, 8, P.roof, { j: 0.04 });
+    fillB(hx0, 25, 9, hx1, 25, 12, P.roof, { j: 0.04 });
+    for (const wy of [3, 11, 19]) for (const wx3 of [hx0 + 2, hx1 - 4]) for (const wz3 of [8, -8]) {
       clearB(wx3, wy, wz3, wx3 + 2, wy + 3, wz3);
       fillB(wx3, wy, wz3, wx3 + 2, wy + 3, wz3, P.glass, { t: 1, j: 0.02 });
       fillB(wx3 + 1, wy + 1, wz3, wx3 + 1, wy + 1, wz3, P.sash, { j: 0.03 });
     }
-    for (const dy of [1, 8, 15]) fillB(hx0 + 1, dy, 9, hx1 - 1, dy, 12, BB.fence, { j: 0.07 });
-    for (const py of [2, 9, 16]) for (const px7 of [hx0 + 1, hx0 + 6, hx1 - 1]) fillB(px7, py, 12, px7, py + 5, 12, BB.trimWhite, { j: 0.04 });
-    for (const ry of [2, 9, 16]) for (let x = hx0 + 1; x <= hx1 - 1; x++)
-      if ((x - hx0) % 2 === 0) V(x, ry, 12, BB.trimWhite, { j: 0.04 });
-    for (const ry2 of [3, 10, 17]) fillB(hx0 + 1, ry2, 12, hx1 - 1, ry2, 12, BB.trimWhite, { j: 0.04 });
-    for (let i = 0; i <= 5; i++) fillB(hx0 + 1 + i, 2 + i, 10, hx0 + 1 + i, 2 + i, 11, BB.stair, { j: 0.05 });
-    clearB(hx0 + 2, 2, 12, hx0 + 9, 8, 12);                        // open rail over the run + the walk-up
-    clearB(hx0 + 3, 8, 10, hx0 + 6, 8, 11);                        // stairwell opening in the 2nd deck
-    for (let i = 0; i <= 5; i++) fillB(hx1 - 1 - i, 9 + i, 10, hx1 - 1 - i, 9 + i, 11, BB.stair, { j: 0.05 });
-    clearB(hx1 - 6, 10, 12, hx1 - 2, 15, 12);
-    clearB(hx1 - 6, 15, 10, hx1 - 3, 15, 11);                      // and in the 3rd
-    const dxd = hx0 + 5;
-    for (const dy2 of [2, 9, 16]) {
+    // balcony porches: decks, posts, full railings (gap only at the front walk)
+    for (const dy of [1, 9, 17]) fillB(hx0 + 1, dy, 9, hx1 - 1, dy, 12, BB.fence, { j: 0.07 });
+    for (const py of [2, 10, 18]) for (const px7 of [hx0 + 1, hx0 + 7, hx1 - 1]) fillB(px7, py, 12, px7, py + 6, 12, BB.trimWhite, { j: 0.04 });
+    for (const ry of [2, 10, 18]) for (let x = hx0 + 1; x <= hx1 - 1; x++)
+      if ((x - hx0) % 2 === 0 && (ry > 2 || x < hx0 + 5 || x > hx0 + 8)) V(x, ry, 12, BB.trimWhite, { j: 0.04 });
+    for (const ry2 of [3, 11, 19]) for (let x = hx0 + 1; x <= hx1 - 1; x++)
+      if (ry2 > 3 || x < hx0 + 5 || x > hx0 + 8) V(x, ry2, 12, BB.trimWhite, { j: 0.04 });
+    // front doors on every floor, opening onto the balconies
+    const dxd = hx0 + 6;
+    for (const dy2 of [2, 10, 18]) {
       clearB(dxd, dy2, 8, dxd + 1, dy2 + 4, 8);
       fillB(dxd, dy2, 8, dxd + 1, dy2 + 4, 8, BB.doorBlack, { j: 0.04 });
       V(dxd, dy2 + 2, 9, P.brass, { t: 2, j: 0 });
       markDoor(dxd, dy2, 8, dxd + 1, dy2 + 4, 9);
     }
-    fillB(hx0 + 2, 2, -4, hx0 + 5, 2, -2, 0x2f5f5a, { j: 0.06 });   // living room
-    fillB(hx0 + 2, 3, -5, hx0 + 5, 3, -5, 0x2f5f5a, { j: 0.06 });
-    fillB(hx0 + 8, 3, -4, hx0 + 9, 4, -4, BB.screen, { j: 0.02 });
-    fillB(hx0 + 8, 2, -4, hx0 + 9, 2, -4, BB.wood, { j: 0.05 });
-    fillB(hx0 + 3, 9, -4, hx0 + 7, 9, -1, 0x3a2516, { j: 0.04 });   // bedroom
-    fillB(hx0 + 3, 10, -4, hx0 + 7, 10, -1, 0xe8e4da, { j: 0.03 });
-    fillB(hx0 + 4, 10, -4, hx0 + 7, 10, -1, 0x8a6a4a, { j: 0.05 });
-    V(hx0 + 3, 11, -2, 0xf2eee4);
-    fillB(hx0 + 2, 16, -5, hx0 + 7, 18, -4, 0x4a5e6a, { j: 0.04 }); // kitchenette
-    fillB(hx0 + 2, 19, -5, hx0 + 7, 19, -4, 0xd9d4c8, { j: 0.03 });
-    fillB(hx0 + 9, 16, -5, hx0 + 10, 20, -4, 0xb8bcc2, { j: 0.04 });
-    fillB(hx0 - 3, 1, 10, hx0 - 2, 3, 11, 0x6a6e72, { j: 0.06 });   // barrels
+    // the interior stair core, northwest corner, every floor to the roof
+    bstair(1, 9, 127, -1, -1);
+    bstair(9, 17, 127, -1, -1);
+    bstair(17, 25, 127, -1, -1);
+    for (const yT5 of [9, 17, 25]) V(131, yT5, -7, 0x2ee868, { t: 2, j: 0 });   // exit cues
+    // roof bulkhead over the core
+    fillB(126, 26, -8, 131, 29, -1, BB.sidingB, { j: 0.05 });
+    clearB(127, 26, -7, 130, 29, -2);
+    clearB(131, 26, -5, 131, 29, -3);
+    fillB(126, 30, -8, 131, 30, -1, P.roofTrim, { j: 0.04 });
+    // flats, kept clear of the stair core
+    fillB(134, 2, -6, 137, 2, -4, 0x2f5f5a, { j: 0.06 });          // ground: sofa
+    fillB(134, 3, -7, 137, 3, -7, 0x2f5f5a, { j: 0.06 });
+    fillB(138, 3, -5, 138, 4, -3, BB.screen, { j: 0.02 });          // tv on the east wall
+    fillB(134, 2, 3, 136, 2, 5, 0x8e3a3a, { j: 0.06 });             // rug by the door
+    fillB(134, 10, -6, 138, 10, -3, 0x3a2516, { j: 0.04 });         // 2nd: bed
+    fillB(134, 11, -6, 138, 11, -3, 0xe8e4da, { j: 0.03 });
+    fillB(135, 11, -6, 138, 11, -3, 0x8a6a4a, { j: 0.05 });
+    V(134, 12, -5, 0xf2eee4);
+    fillB(133, 10, 5, 135, 11, 6, 0x4a3220, { j: 0.05 });           // dresser
+    fillB(133, 18, -7, 138, 20, -6, 0x4a5e6a, { j: 0.04 });         // 3rd: kitchenette
+    fillB(133, 21, -7, 138, 21, -6, 0xd9d4c8, { j: 0.03 });
+    fillB(139, 18, -7, 139, 22, -6, 0xb8bcc2, { j: 0.04 });         // fridge
+    fillB(134, 20, 2, 136, 20, 4, BB.wood, { j: 0.05 });            // table
+    V(134, 18, 2, 0x3a2516); V(136, 18, 4, 0x3a2516);
+    // barrels by the drive
+    fillB(hx0 - 3, 1, 10, hx0 - 2, 3, 11, 0x6a6e72, { j: 0.06 });
     V(hx0 - 3, 4, 10, 0x53555c);
-    fillB(hx0 + 2, 10, 10, hx0 + 2, 11, 10, 0x30608a, { j: 0.05 }); // porch sitter, clear of the stairs
-    V(hx0 + 2, 12, 10, P.skin); V(hx0 + 2, 13, 10, 0x6e4a26);
-    for (const px8 of [hx0 + 1, hx0 + 6, hx1 - 1]) fillB(px8, 23, -4, px8, 29, -3, BB.steel, { j: 0.04 });
-    fillB(hx0 - 3, 30, -4, hx1 + 2, 43, -3, 0xf2f0ea, { j: 0.03 });
+    // VOXGO rides the roof, posts clear of the stair openings
+    for (const px8 of [hx0 + 7, hx0 + 10, hx1 - 1]) fillB(px8, 26, -4, px8, 32, -3, BB.steel, { j: 0.04 });
+    fillB(hx0 - 3, 33, -4, hx1 + 2, 46, -3, 0xf2f0ea, { j: 0.03 });
     for (let i = 0; i <= 5; i++)
-      fillB(hx0 + 1 + i, 33 + i, -2, hx1 - 1 - i, 33 + i, -2, 0xd03028, { t: 3, j: 0 });
-    sign('VOXGO', hx0 - 2, 30, -2, 1, 0x2858c8, 3, 0);
+      fillB(hx0 + 1 + i, 36 + i, -2, hx1 - 1 - i, 36 + i, -2, 0xd03028, { t: 3, j: 0 });
+    sign('VOXGO', hx0 - 2, 33, -2, 1, 0x2858c8, 3, 0);
+  }
+
+  /* ---- glowing exit cues in the other dark stairwells ---- */
+  for (const yT3 of [10, 21, 30, 39]) V(24, yT3, -15, 0x2ee868, { t: 2, j: 0 });   // brownstone
+  for (const yT4 of [11, 19, 27]) V(54, yT4, -19, 0x2ee868, { t: 2, j: 0 });       // deli
+  V(73, 10, 6, 0x2ee868, { t: 2, j: 0 });                                          // church tower
+  V(73, 19, 6, 0x2ee868, { t: 2, j: 0 });
+  V(73, 30, 7, 0x2ee868, { t: 2, j: 0 });
+
+  /* ---- the LAYOFF SIMULATOR billboard, high over the back field ---- */
+  {
+    const LOGO = [
+      '...........RR...........',
+      '......R....RR....R......',
+      '......RR..RRRR..RR......',
+      '...R..RrR.RROR.RrR..R...',
+      '...RR.ROrRROOORrOR.RR...',
+      '..RrRRROORROYORROORRrR..',
+      '..ROOROOOOROYYOROOOROR..',
+      '.RROOOOOOOOYYYOOOOOOORR.',
+      '.ROOOKKKKKKKKKKKKKKOOOR.',
+      '.ROOKHHHHHHHHHHHHHHKOOR.',
+      'RROKHHHHHHHHHHHHHHHHKORR',
+      'ROOKHHSSSSSSSSSSSSHHKOOR',
+      'ROOKHSKKKKKSSKKKKKSHKOOR',
+      'RrOKHSKWWWKSSKWWWKSHKOrR',
+      'ROOKHSKWKWKSSKWKWKSHKOOR',
+      'ROOKHSKKKKKSSKKKKKSHKOOR',
+      '.ROKSSSSSSSSSSSSSSSSKOR.',
+      '.ROKSSSMMMMMMMMMMSSSKOR.',
+      '.ROKSSSMTTTTTTTTMSSSKOR.',
+      '.ROKSSSSSSSSSSSSSSSSKOR.',
+      '..RKBBBBBBBBBBBBBBBBKR..',
+      '..RKAAAAAAAAAAAAAAAAKR..',
+      '...KBBBBBBBBBBBBBBBBK...',
+      '...KPPPPPPPPPPPPPPPPK...',
+      '....KPPPPPKCCKPPPPPK....',
+      '.......KDDKCCKDDK.......',
+    ];
+    const LP = { R: 0xd82818, r: 0xf05038, O: 0xf07818, Y: 0xffd080, K: 0x141414, H: 0xc05a14,
+                 S: 0xe8b088, W: 0xf0f8f0, M: 0x2a5a50, T: 0xb02020, B: 0xa8d0f0, A: 0x84909c,
+                 P: 0xb08850, C: 0x9aa2ac, D: 0x34383e };
+    for (const px9 of [112, 129]) {
+      fillB(px9, 1, -16, px9 + 1, 13, -15, BB.steel, { j: 0.04 });
+      fillB(px9, 6, -16, px9 + 1, 6, -15, 0x464c54, { j: 0.04 });
+    }
+    fillB(107, 14, -16, 136, 42, -15, 0x1c2026, { j: 0.03 });
+    LOGO.forEach((row, ry) => {
+      for (let cx = 0; cx < row.length; cx++) {
+        const ch = row[cx];
+        if (ch !== '.') V(110 + cx, 41 - ry, -14, LP[ch], { t: 2, j: 0 });
+      }
+    });
   }
 }
 
