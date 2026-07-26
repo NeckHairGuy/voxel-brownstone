@@ -3352,6 +3352,10 @@ function handleNet(m) {
       audMsg(m.reason);
       document.exitPointerLock();
       break;
+    case 'msg':   // server-side notices (e.g. show-mode gates)
+      mpStatus.textContent = m.text;
+      audMsg(m.text);
+      break;
     case 'players':
       updateRoster(m.list || []);
       setWatch(m.w);
@@ -3490,7 +3494,9 @@ function doJoin(want) {
   }
   localStorage.setItem('vb-name', name);
   if (want === 'human' && !isTouch) renderer.domElement.requestPointerLock();   // in the click gesture
-  nsend({ t: 'join', name, want });
+  // show mode: the operator's URL carries ?corpo=<key> to unlock the seat
+  const key = want === 'corpo' ? (new URLSearchParams(location.search).get('corpo') || undefined) : undefined;
+  nsend({ t: 'join', name, want, key });
 }
 joinHumanBtn.addEventListener('click', () => doJoin('human'));
 joinCorpoBtn.addEventListener('click', () => doJoin('corpo'));

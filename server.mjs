@@ -58,8 +58,24 @@ function frame(data, op = 1) {
 const sockets = new Set(); // all live conns (players + spectators)
 const MAX_CONNS = +(process.env.MAX_CONNS || 400);   // audience headroom, runaway guard
 
+// CORPO_KEY set => "show mode": the corpo seat needs the key (?corpo=… in the
+// operator's URL) and reset/scene-switch are corpo-only. Empty => casual mode.
+const CORPO_KEY = process.env.CORPO_KEY || '';
+
 server.on('upgrade', (req, socket) => {
   if (sockets.size >= MAX_CONNS) { socket.destroy(); return; }
+  // browsers always send Origin: reject pages on foreign hosts trying to
+  // ride along; non-browser clients (no Origin) pass — the rate limiter
+  // and role gates bound what they can do anyway
+  const origin = req.headers.origin;
+  if (origin) {
+    let oh;
+    try { oh = new URL(origin).host; } catch { socket.destroy(); return; }
+    const sameHost = oh === (req.headers.host || '');
+    const tsnet = /\.ts\.net(:\d+)?$/.test(oh);
+    const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(oh);
+    if (!sameHost && !tsnet && !local) { socket.destroy(); return; }
+  }
   const key = req.headers['sec-websocket-key'];
   if (!key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
   const accept = createHash('sha1').update(key + MAGIC).digest('base64');
@@ -73,6 +89,7 @@ server.on('upgrade', (req, socket) => {
     socket,
     player: null,
     closed: false,
+    tokens: 80, tLast: Date.now(),   // message-rate token bucket
     send(obj) { if (!socket.destroyed) socket.write(frame(JSON.stringify(obj))); },
   };
   sockets.add(conn);
@@ -97,7 +114,14 @@ server.on('upgrade', (req, socket) => {
       if (op === 8) { dropConn(conn); socket.destroy(); return; }
       if (op === 9) { if (!socket.destroyed) socket.write(frame(payload, 10)); continue; } // ping -> pong
       if (op === 10) continue;
-      if (op === 1) { try { onMessage(conn, JSON.parse(payload.toString('utf8'))); } catch { /* ignore bad msg */ } }
+      if (op === 1) {
+        // ~40 msg/s sustained (burst 80) is 2.5x a busy client; floods get cut
+        const now = Date.now();
+        conn.tokens = Math.min(80, conn.tokens + (now - conn.tLast) * 0.04);
+        conn.tLast = now;
+        if (--conn.tokens < 0) { dropConn(conn); socket.destroy(); return; }
+        try { onMessage(conn, JSON.parse(payload.toString('utf8'))); } catch { /* ignore bad msg */ }
+      }
     }
   });
   socket.on('close', () => dropConn(conn));
@@ -176,6 +200,9 @@ function onMessage(conn, m) {
       const humans = [...players.values()].filter(q => q.role === 'human').length;
       let role;
       if (m.want === 'corpo') {
+        if (CORPO_KEY && String(m.key || '') !== CORPO_KEY) {
+          conn.send({ t: 'denied', reason: 'the corpo seat is locked for this show' }); return;
+        }
         if (corpoTaken) { conn.send({ t: 'denied', reason: 'corpo seat is taken' }); return; }
         role = 'corpo';
       } else {
@@ -244,14 +271,16 @@ function onMessage(conn, m) {
         pushPlayers();
       }
       break;
-    case 'reset': // any seated player may rebuild the block (client confirms first)
+    case 'reset': // any seated player may rebuild the block (corpo-only in show mode)
       if (p) {
+        if (CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can reset the scene' }); break; }
         booms.length = 0;
         console.log(`scene reset by ${p.name}`);
         broadcast({ t: 'reset' });
       }
       break;
-    case 'scene': // any seated player may switch scenes for everyone
+    case 'scene': // any seated player may switch scenes (corpo-only in show mode)
+      if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
       if (p && ['default', 'tech', 'techlong'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
@@ -277,5 +306,6 @@ setInterval(() => {
 }, 30000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`voxel-brownstone (multiplayer) listening on http://${HOST}:${PORT}`);
+  console.log(`voxel-brownstone (multiplayer) listening on http://${HOST}:${PORT}`
+    + (CORPO_KEY ? ' — show mode: corpo seat locked, reset/scene are corpo-only' : ''));
 });
