@@ -219,6 +219,19 @@
       <label><input id="spot" type="checkbox" checked> corpo night spotlight</label>
     </div>
     <div class="help">spotlight — the corpo's searchlight after dark</div>
+    <div class="row">
+      <label><input id="pit" type="checkbox" checked> flame ocean</label>
+    </div>
+    <div class="help">flame ocean — the block rises from a sea of fire (your view only)</div>
+    <select id="pitcol">
+      <option value="inferno">ocean: inferno</option>
+      <option value="toxic">ocean: toxic sludge</option>
+      <option value="arctic">ocean: arctic melt</option>
+      <option value="neon">ocean: neon vapor</option>
+      <option value="gold">ocean: molten gold</option>
+      <option value="ash">ocean: cold ash</option>
+    </select>
+    <div class="help">ocean color — repaint the sea (your view only)</div>
     <button id="fpv">&#9654; enter FPV</button>
     <div class="help" id="fpv-help">FPV — walk the block as a voxel figure</div>
     <button id="reset">reset scene</button>
@@ -5405,6 +5418,168 @@ function stepSpot(dt) {
   corpoSpot.intensity = 1100 * nightF;
 }
 
+/* ---- the void treatment: a black monolith under the map, a sea of
+       animated voxel flames 25 below grade, and hazard rails on every
+       rim. Pure meshes (no world voxels), local to each viewer. ---- */
+const pitBox = document.getElementById('pit');
+const pitCol = document.getElementById('pitcol');
+const PIT_SEAS = {
+  inferno: { floor: 0x9c1a0a, ramp: [0xc42a10, 0xe85a14, 0xf2a83c, 0xffd75a] },
+  toxic:   { floor: 0x1a5a10, ramp: [0x2a7a14, 0x4fae1c, 0x8ade2c, 0xd8f860] },
+  arctic:  { floor: 0x123a72, ramp: [0x1c50b0, 0x2a78e0, 0x58b0f2, 0xb8ecff] },
+  neon:    { floor: 0x55104f, ramp: [0x8a1a9e, 0xc22ae0, 0xf25ab8, 0xff9ae0] },
+  gold:    { floor: 0x8a5a0a, ramp: [0xc2871a, 0xe0aa14, 0xf2ce3c, 0xffeb90] },
+  ash:     { floor: 0x17171b, ramp: [0x232329, 0x33333c, 0x4c4c58, 0x757583] },
+};
+try { const s = localStorage.getItem('vb-sea'); if (s && PIT_SEAS[s]) pitCol.value = s; } catch {}
+const pitGroup = new THREE.Group();
+pitGroup.visible = false;
+scene.add(pitGroup);
+const pit = { flames: null, cursor: 0, builtFor: null };
+const pitKey = () => sceneId + '/' + pitCol.value;
+const pitDummy = new THREE.Object3D();
+function worldRect() {
+  const tech = sceneId === 'tech', long = sceneId === 'techlong';
+  const bos = sceneId === 'boston', blong = sceneId === 'bostonlong';
+  return {
+    x0: X0, x1: long ? 152 : blong ? 142 : bos ? 90 : 60,
+    z0: -56, z1: tech ? 102 : (bos || blong) ? 74 : 54,
+  };
+}
+function buildPit() {
+  for (const c of [...pitGroup.children]) {
+    pitGroup.remove(c);
+    if (c.isInstancedMesh) c.dispose();
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }
+  pit.flames = null;
+  const { x0, x1, z0, z1 } = worldRect();
+  const w = x1 - x0 + 1, d = z1 - z0 + 1;
+  // the monolith, slightly proud so it swallows the earthen sides
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.1, 46, d + 0.1),
+    new THREE.MeshBasicMaterial({ color: 0x07070a }));
+  base.position.set(x0 + w / 2, -25, z0 + d / 2);
+  pitGroup.add(base);
+  // hazard rails one cell outside the playable rim, two courses tall
+  {
+    const cells = [];
+    for (let x = x0 - 1; x <= x1 + 1; x++) { cells.push([x, z0 - 1], [x, z1 + 1]); }
+    for (let z = z0; z <= z1; z++) { cells.push([x0 - 1, z], [x1 + 1, z]); }
+    const rail = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({}), cells.length * 2);
+    const cY = new THREE.Color(0xd8b31c), cK = new THREE.Color(0x17171a);
+    let i = 0;
+    for (const [cx, cz] of cells) for (const cy of [1.5, 2.5]) {
+      pitDummy.position.set(cx + 0.5, cy, cz + 0.5);
+      pitDummy.rotation.set(0, 0, 0); pitDummy.scale.setScalar(1);
+      pitDummy.updateMatrix();
+      rail.setMatrixAt(i, pitDummy.matrix);
+      rail.setColorAt(i, ((cx + cz + Math.floor(cy)) % 2 === 0) ? cY : cK);
+      i++;
+    }
+    rail.instanceMatrix.needsUpdate = true;
+    if (rail.instanceColor) rail.instanceColor.needsUpdate = true;
+    pitGroup.add(rail);
+  }
+  // the flame sea: a molten floor running past the fog line in every
+  // direction, with single-voxel tongues at map scale — an animated ring
+  // hugging the rim, a static shimmer field beyond it, haze after that
+  {
+    const sea = PIT_SEAS[pitCol.value] || PIT_SEAS.inferno;
+    const floor = new THREE.Mesh(
+      new THREE.BoxGeometry(3000, 1.6, 3000),
+      new THREE.MeshBasicMaterial({ color: sea.floor }));
+    floor.position.set((x0 + x1) / 2, -25.8, (z0 + z1) / 2);
+    pitGroup.add(floor);
+
+    const touch = matchMedia('(pointer: coarse)').matches;
+    const FAR = touch ? 320 : 450;          // tongue reach past the rim
+    const dens = touch ? 0.5 : 1;           // thinner far field on phones
+    const near = [], far = [];
+    for (let x = x0 - FAR; x < x1 + FAR; x++) for (let z = z0 - FAR; z < z1 + FAR; z++) {
+      const d = Math.max(x0 - x, x - x1, z0 - z, z - z1);
+      if (d <= 0) continue;                                    // under the map
+      const p = d <= 40 ? 0.42 : d <= 150 ? 0.10 * dens : 0.025 * dens;
+      if (h3(x, 9, z) > p) continue;
+      (d <= 40 ? near : far).push(x, z);
+    }
+    const gm = new THREE.BoxGeometry(1, 1, 1);
+    gm.translate(0, 0.5, 0);                    // tongues grow from their base
+    const col = new THREE.Color();
+    const tint = (mesh, i, x, z) => {
+      const r = h3(x, 7, z);
+      col.set(r < 0.45 ? sea.ramp[0] : r < 0.85 ? sea.ramp[1] : r < 0.97 ? sea.ramp[2] : sea.ramp[3]);
+      mesh.setColorAt(i, col);
+    };
+    { // static shimmer out toward the horizon
+      const n = far.length / 2;
+      const still = new THREE.InstancedMesh(gm, new THREE.MeshBasicMaterial({}), n);
+      for (let i = 0; i < n; i++) {
+        const fx = far[i * 2], fz = far[i * 2 + 1];
+        tint(still, i, fx, fz);
+        pitDummy.position.set(fx + 0.5, -25.2, fz + 0.5);
+        pitDummy.rotation.set(0, 0, 0);
+        pitDummy.scale.set(1, 0.8 + h3(fx, 4, fz) * 3.2, 1);
+        pitDummy.updateMatrix();
+        still.setMatrixAt(i, pitDummy.matrix);
+      }
+      still.instanceMatrix.needsUpdate = true;
+      if (still.instanceColor) still.instanceColor.needsUpdate = true;
+      pitGroup.add(still);
+    }
+    { // animated ring hugging the rim
+      const n = near.length / 2;
+      const pos = [], phase = [], speed = [], amp = [];
+      for (let i = 0; i < n; i++) {
+        const fx = near[i * 2], fz = near[i * 2 + 1];
+        pos.push(fx + 0.5, fz + 0.5);
+        phase.push(h3(fx, 0, fz) * Math.PI * 2);
+        speed.push(1.6 + h3(fx, 1, fz) * 2.6);
+        amp.push(1 + h3(fx, 2, fz) * 3.5);
+      }
+      const flames = new THREE.InstancedMesh(gm, new THREE.MeshBasicMaterial({}), n);
+      for (let i = 0; i < n; i++) {
+        tint(flames, i, near[i * 2], near[i * 2 + 1]);
+        pitDummy.position.set(pos[i * 2], -25.2, pos[i * 2 + 1]);
+        pitDummy.rotation.set(0, 0, 0);
+        pitDummy.scale.set(1, 1 + amp[i] * 0.5, 1);
+        pitDummy.updateMatrix();
+        flames.setMatrixAt(i, pitDummy.matrix);
+      }
+      flames.instanceMatrix.needsUpdate = true;
+      if (flames.instanceColor) flames.instanceColor.needsUpdate = true;
+      pitGroup.add(flames);
+      pit.flames = { mesh: flames, pos, phase, speed, amp, n };
+    }
+  }
+  pit.builtFor = pitKey();
+}
+function stepPit() {
+  if (!pitGroup.visible || !pit.flames) return;
+  const t = clock.elapsedTime;
+  const F = pit.flames, n = F.n, slice = Math.ceil(n / 6);
+  for (let k = 0; k < slice; k++) {
+    const i = (pit.cursor + k) % n;
+    pitDummy.position.set(F.pos[i * 2], -25.2, F.pos[i * 2 + 1]);
+    pitDummy.rotation.set(0, 0, 0);
+    pitDummy.scale.set(1, 1 + (Math.sin(t * F.speed[i] + F.phase[i]) + 1) * 0.5 * F.amp[i], 1);
+    pitDummy.updateMatrix();
+    F.mesh.setMatrixAt(i, pitDummy.matrix);
+  }
+  pit.cursor = (pit.cursor + slice) % n;
+  F.mesh.instanceMatrix.needsUpdate = true;
+}
+pitBox.addEventListener('change', () => {
+  pitGroup.visible = pitBox.checked;
+  if (pitBox.checked && pit.builtFor !== pitKey()) buildPit();
+});
+pitCol.addEventListener('change', () => {
+  try { localStorage.setItem('vb-sea', pitCol.value); } catch {}
+  if (pitBox.checked) buildPit();
+});
+
 function applySceneEnv() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong', bos = sceneId === 'boston';
   const blong = sceneId === 'bostonlong';
@@ -5427,6 +5602,9 @@ function applySceneEnv() {
   tlRed.position.set(tx + 0.5, 15.5, tz + 0.5);
   tlAmber.position.set(tx + 0.5, 14.5, tz + 0.5);
   tlGreen.position.set(tx + 0.5, 13.5, tz + 0.5);
+  // the flame ocean follows the scene's footprint
+  pitGroup.visible = pitBox.checked;
+  if (pitBox.checked && pit.builtFor !== pitKey()) buildPit();
 }
 applySceneEnv();
 
@@ -5450,7 +5628,7 @@ function rampColor(el, out) {
   return out.copy(skyStops[skyStops.length - 1][1]);
 }
 const skyCol = new THREE.Color();
-scene.fog = new THREE.Fog(0x9ccaf0, 110, 340);
+scene.fog = new THREE.Fog(0x9ccaf0, 190, 520);   // haze holds back from the camera
 
 // stars
 const starGeo = new THREE.BufferGeometry();
@@ -5547,6 +5725,7 @@ renderer.setAnimationLoop(() => {
   stepPlayer(dt);
   stepNet(dt);
   stepSpot(dt);
+  stepPit();
 
   if (playBox.checked) {
     let t = +slider.value + dt * 90; // ~16 s per full day

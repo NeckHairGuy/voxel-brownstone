@@ -6,6 +6,11 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
 - A corner deli building with a striped awning, apartments, roof terrace, and water tower
 - A construction site with a tower crane, scaffolding, and machinery
 - Day/night cycle, dollhouse facade toggle, animated traffic lights
+- **Flame ocean** (panel toggle, per-viewer): the block stands on a black
+  monolith rising from an endless sea of animated single-voxel flames that
+  stretches past the haze in every direction, ringed by hazard-striped
+  barriers — with six selectable sea palettes (inferno, toxic sludge,
+  arctic melt, neon vapor, molten gold, cold ash)
 - **Click any voxel to explode it** — debris cubes tumble with real collision against
   the voxel grid and settle back into the world as permanent rubble
 - **Load-bearing collapse** — structures cut off from the ground break loose and
