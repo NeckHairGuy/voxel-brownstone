@@ -14,6 +14,10 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   molten gold, and cold ash shade with the daylight)
 - **Fog color picker** (panel, per-viewer): tint the haze and sky any
   color, or leave `auto` checked to follow the sun
+- **Scan-to-play QR card** (bottom-right corner): a white card with the
+  audience `/join` URL as a QR code — appears automatically on the
+  operator's `?corpo=` URL for the big screen, toggleable from the panel
+  for anyone else, never shown in audience mode
 - **Click any voxel to explode it** — debris cubes tumble with real collision against
   the voxel grid and settle back into the world as permanent rubble
 - **Load-bearing collapse** — structures cut off from the ground break loose and
