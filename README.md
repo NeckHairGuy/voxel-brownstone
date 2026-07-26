@@ -30,6 +30,9 @@ server), the scene becomes a game. Join from the panel in the top right:
   goes up in flame and disappears. +50 points per layoff.
 - **Humans** (up to 4 seats): each possesses an FPV figure and earns
   **1 point per second alive**. Laid-off humans can respawn after 10 s.
+- Everyone else spectates in the free orbit camera; the panel shows a live
+  **connected head-count** so you can watch the room fill up. Connections are
+  capped at 400 (`MAX_CONNS` env to change).
 
 The roster, roles, and live scores are shown in the top-right panel. World
 destruction is synchronized — explosions are broadcast and replayed to anyone
@@ -49,11 +52,14 @@ Or open `brownstone.html` directly in a browser for the offline sandbox.
 
 - drag — orbit · scroll — zoom · right-drag — pan · **click — explode**
 - **FPV mode** (button in the panel): possess a red voxel figure — WASD to move,
-  shift to run, ctrl/C to crouch (one voxel shorter, slower — squeeze up tight
-  stairwells), space to jump, mouse to look, click to explode at the crosshair,
-  esc to exit. Doors ghost transparent and can be walked through. On mobile,
-  joining as human brings up touch controls: a virtual joystick (full tilt
-  sprints), drag to look, and jump/crouch buttons.
+  shift to run, space to jump, mouse to look, click to explode at the crosshair,
+  esc to exit. The figure **auto-ducks** through tight stairwell headroom and
+  gets nudged through narrow doorways; ctrl/C still crouches deliberately
+  (slower, one voxel shorter). Doors ghost transparent and can be walked
+  through. **V toggles a third-person chase camera** (walls pull it in, never
+  through). On mobile, joining as human brings up touch controls: a virtual
+  joystick (full tilt sprints), drag to look, and jump / crouch / **3P camera**
+  buttons.
 - Time-of-day slider and `cycle day` checkbox in the panel
 - URL hash presets: `#t=1290&cam=x,y,z&tgt=x,y,z&boom=x,y,z&scene=tech`
 
@@ -63,4 +69,7 @@ Pushes to `main` auto-deploy via GitHub Actions (`.github/workflows/deploy.yml`)
 which SSHes to the server with a forced-command deploy key that can only
 fast-forward this repo and restart the service.
 
-No build step and no runtime dependencies; three.js loads from a CDN.
+No build step and no runtime dependencies; three.js is vendored in `vendor/`
+and served by `server.mjs`, so a room full of phones never touches a CDN.
+(The file:// offline sandbox still loads three.js from the CDN, since
+browsers refuse module imports from file: origins.)

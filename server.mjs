@@ -9,11 +9,28 @@ const HOST = process.env.HOST || '127.0.0.1';
 const PORT = +(process.env.PORT || 3101);
 
 // Single-page app: every GET serves the scene, so it works mounted at any
-// base path (e.g. behind `tailscale serve` at /brownstone).
+// base path (e.g. behind `tailscale serve` at /brownstone). The vendored
+// three.js files are the only other routes, matched by path suffix so they
+// resolve under any mount point too.
+const VENDOR = new Map([
+  ['/vendor/three.module.min.js', readFileSync(join(here, 'vendor/three.module.min.js'))],
+  ['/vendor/addons/controls/OrbitControls.js', readFileSync(join(here, 'vendor/addons/controls/OrbitControls.js'))],
+]);
 const server = createServer((req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { allow: 'GET, HEAD' }).end();
     return;
+  }
+  const path = (req.url || '').split('?')[0];
+  for (const [suffix, body] of VENDOR) {
+    if (path.endsWith(suffix)) {
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'public, max-age=86400',
+      });
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
   }
   const page = readFileSync(join(here, 'brownstone.html'));
   res.writeHead(200, {
@@ -39,8 +56,10 @@ function frame(data, op = 1) {
 }
 
 const sockets = new Set(); // all live conns (players + spectators)
+const MAX_CONNS = +(process.env.MAX_CONNS || 400);   // audience headroom, runaway guard
 
 server.on('upgrade', (req, socket) => {
+  if (sockets.size >= MAX_CONNS) { socket.destroy(); return; }
   const key = req.headers['sec-websocket-key'];
   if (!key || (req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
   const accept = createHash('sha1').update(key + MAGIC).digest('base64');
@@ -84,7 +103,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster(), time: timeState || undefined });
+  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined });
 });
 
 /* ============================================================
@@ -110,6 +129,11 @@ function broadcast(obj, except = null) {
   for (const c of sockets) if (c !== except && !c.socket.destroyed) c.socket.write(s);
 }
 
+// roster + connected head-count, shown in every client's panel
+function pushPlayers() {
+  broadcast({ t: 'players', list: roster(), w: sockets.size });
+}
+
 function dropConn(conn) {
   if (conn.closed) return;
   conn.closed = true;
@@ -117,7 +141,7 @@ function dropConn(conn) {
   if (conn.player) {
     players.delete(conn.player.id);
     console.log(`left: ${conn.player.name} (${conn.player.role})`);
-    broadcast({ t: 'players', list: roster() });
+    pushPlayers();
   }
 }
 
@@ -149,7 +173,7 @@ function onMessage(conn, m) {
       players.set(id, pl);
       console.log(`joined: ${name} as ${role}`);
       conn.send({ t: 'welcome', id, role, color: pl.color, x: pl.x, y: pl.y, z: pl.z });
-      broadcast({ t: 'players', list: roster() });
+      pushPlayers();
       break;
     }
     case 'pos':
@@ -186,7 +210,7 @@ function onMessage(conn, m) {
           p.score += 50;
           console.log(`layoff: ${tgt.name} by ${p.name}`);
           broadcast({ t: 'layoff', id: tgt.id, by: p.id, x: tgt.x, y: tgt.y, z: tgt.z });
-          broadcast({ t: 'players', list: roster() });
+          pushPlayers();
         }
       }
       break;
@@ -196,7 +220,7 @@ function onMessage(conn, m) {
         const s = SPAWNS[Math.floor(Math.random() * SPAWNS.length)];
         p.x = s[0]; p.y = s[1]; p.z = s[2];
         broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z });
-        broadcast({ t: 'players', list: roster() });
+        pushPlayers();
       }
       break;
     case 'reset': // any seated player may rebuild the block (client confirms first)
@@ -219,11 +243,11 @@ function onMessage(conn, m) {
   }
 }
 
-// survival pay: +1/sec to every living human; rebroadcast the roster
+// survival pay: +1/sec to every living human; the once-a-second push also
+// keeps every client's scoreboard and connected head-count fresh
 setInterval(() => {
-  let changed = false;
-  for (const p of players.values()) if (p.role === 'human' && p.alive) { p.score++; changed = true; }
-  if (changed) broadcast({ t: 'players', list: roster() });
+  for (const p of players.values()) if (p.role === 'human' && p.alive) p.score++;
+  if (sockets.size) pushPlayers();
 }, 1000);
 
 // protocol-level keepalive so idle proxies don't drop us

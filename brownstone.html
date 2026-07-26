@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Voxel Block — Brooklyn</title>
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;touch-action:manipulation;}
   canvas{display:block;}
   #ui{
     position:fixed;top:14px;left:14px;z-index:10;
@@ -52,7 +52,7 @@
     min-width:220px;user-select:none;
   }
   #mp-head{font-weight:650;font-size:13px;}
-  #mp-status{font-size:11px;opacity:.62;margin-bottom:6px;}
+  #mp-status,#mp-watch{font-size:11px;opacity:.62;margin-bottom:6px;}
   #mp input{
     width:100%;box-sizing:border-box;margin-bottom:6px;padding:5px 8px;border-radius:6px;
     border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);
@@ -92,7 +92,9 @@
   }
   #laidoff button:disabled{opacity:.4;cursor:default;}
   #stick{
-    position:fixed;left:22px;bottom:26px;width:110px;height:110px;border-radius:50%;
+    position:fixed;width:110px;height:110px;border-radius:50%;
+    left:calc(22px + env(safe-area-inset-left, 0px));
+    bottom:calc(26px + env(safe-area-inset-bottom, 0px));
     background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
     z-index:9;display:none;touch-action:none;
   }
@@ -101,15 +103,20 @@
     background:rgba(255,255,255,.25);pointer-events:none;
   }
   .tbtn{
-    position:fixed;right:24px;width:58px;height:58px;border-radius:50%;z-index:9;
+    position:fixed;width:58px;height:58px;border-radius:50%;z-index:9;
+    right:calc(24px + env(safe-area-inset-right, 0px));
     background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);
     color:#fff;font:26px/58px -apple-system,sans-serif;text-align:center;display:none;
     touch-action:none;user-select:none;-webkit-user-select:none;
   }
-  #tjump{bottom:26px;}
-  #tcrouch{bottom:96px;}
-  #tcrouch.on{background:rgba(224,168,90,.45);border-color:#e0a85a;}
+  #tjump{bottom:calc(26px + env(safe-area-inset-bottom, 0px));}
+  #tcrouch{bottom:calc(96px + env(safe-area-inset-bottom, 0px));}
+  #tcam{bottom:calc(166px + env(safe-area-inset-bottom, 0px));font-size:17px;}
+  #tcrouch.on,#tcam.on{background:rgba(224,168,90,.45);border-color:#e0a85a;}
   body.touchfpv #stick,body.touchfpv .tbtn{display:block;}
+  /* 16px stops iOS Safari from auto-zooming the page when the name field is
+     focused — the zoom used to persist into FPV, hiding the touch controls */
+  @media (pointer:coarse){ #mp input{font-size:16px;} }
 </style>
 </head>
 <body>
@@ -147,6 +154,7 @@
   <div class="panel-head" id="mp-head"><span>players</span><span class="caret">&#9662;</span></div>
   <div class="panel-body" id="mp-body">
     <div id="mp-status">connecting&hellip;</div>
+    <div id="mp-watch" style="display:none"></div>
     <div id="mp-join" style="display:none">
       <input id="mp-name" placeholder="your name" maxlength="12">
       <div class="mp-btns">
@@ -165,12 +173,25 @@
 <div id="stick"><div id="knob"></div></div>
 <div id="tjump" class="tbtn">&#8673;</div>
 <div id="tcrouch" class="tbtn">&#8675;</div>
+<div id="tcam" class="tbtn">3P</div>
 
-<script type="importmap">
-{ "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-} }
+<script>
+// three.js comes from the local vendor/ dir when served (a room full of
+// phones must not depend on a CDN); the file:// sandbox falls back to the
+// CDN because browsers refuse module imports from file: origins.
+{
+  const base = location.host ? location.pathname.replace(/\/+$/, '') : null;
+  const imports = base !== null
+    ? { 'three': base + '/vendor/three.module.min.js',
+        'three/addons/': base + '/vendor/addons/' }
+    : { 'three': 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+        'three/addons/': 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/' };
+  document.write('<script type="importmap">' + JSON.stringify({ imports }) + '<\/script>');
+  // belt-and-suspenders vs the viewport meta: Safari-only gesture events;
+  // a page pinch-zoom would strand the touch controls off-screen mid-game
+  addEventListener('gesturestart', e => e.preventDefault());
+  addEventListener('gesturechange', e => e.preventDefault());
+}
 </script>
 
 <script type="module">
@@ -180,8 +201,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 /* ============================================================
    1. RENDERER / SCENE / CAMERA
    ============================================================ */
+const COARSE = matchMedia('(pointer: coarse)').matches;   // phones & tablets
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? 1.75 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -730,6 +752,9 @@ stair2(FLOORS.fourth, FLOORS.roof);
   // curtains on the parlor windows
   for (const wx of [2, 8, 10, 16]) fillB(wx, fy + 1, -1, wx, 19, -1, 0x7a3040, { j: 0.06 });
   fillB(2, 19, -1, 16, 19, -1, 0x5e2432, { j: 0.05 });        // valance
+  // drawn drape behind the sofa: plugs the 1-voxel well between the x8/x10
+  // panels that a player could drop into off the sofa back and not jump out of
+  fillB(9, fy, -1, 9, 13, -1, 0x7a3040, { j: 0.06 });
   // ---- rear parlor (dining/library) ----
   // marble fireplace on the west wall
   fillB(1, fy, -24, 2, 16, -20, 0xded8cc, { j: 0.04 });
@@ -1086,6 +1111,11 @@ V(24, 2, 15, 0x6e7076, { j: 0.06 });                  // one pecking at the side
       fillB(54, yF + i + 1, -14 - hA + i, 55, yF + hA + i, -14 - hA + i, P.stairWood, { j: 0.05 });
   }
   dstair(1, 11); dstair(11, 19); dstair(19, 27);
+  // the hollow behind/under the ground-floor half landing was a well —
+  // overshoot the landing turn and you dropped 5 voxels into a sealed
+  // pocket. Fill it flush with the landing so the back edge is just floor.
+  fillB(52, 2, -21, 55, 6, -20, P.wallCream, { j: 0.03 });   // behind the landing
+  fillB(52, 2, -19, 55, 5, -18, P.wallCream, { j: 0.03 });   // under the landing
 
   /* ---- street facade (group 1 — dollhouse-hideable) ---- */
   G = 1;
@@ -2721,9 +2751,9 @@ const player = {
   x: 21.5, y: 2, z: 17.5,      // sidewalk in front of the stoop
   vx: 0, vy: 0, vz: 0,
   yaw: 0, pitch: -0.05,
-  grounded: false, crouch: false,
+  grounded: false, crouch: false, autoDuck: false,
 };
-const P_HALF = 0.38, P_H = 3.9, P_H_CROUCH = 2.9, P_EYE = 3.45;
+const P_HALF = 0.30, P_H = 3.9, P_H_CROUCH = 2.9, P_EYE = 3.45;
 const P_SPEED = 9, P_SPRINT = 15, P_JUMP = 13.5;
 let P_Hcur = P_H;       // current collision height (crouching shrinks it)
 let playZMax = 54.5;    // northern world edge (extended by Tech Brooklyn)
@@ -2763,6 +2793,7 @@ const keys = new Set();
 addEventListener('keydown', e => {
   if (!player.active) return;
   keys.add(e.code);
+  if (e.code === 'KeyV' && !e.repeat) setCam3(!cam3);
   if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'ControlRight') e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -2776,7 +2807,7 @@ const fpvBtn = document.getElementById('fpv');
 const xhair = document.getElementById('xhair');
 const hintEl = document.querySelector('#ui .hint');
 const HINT_ORBIT = hintEl.textContent;
-const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space — jump · click — explode · esc — exit';
+const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space — jump · V — camera · click — explode · esc — exit';
 const savedCam = { pos: new THREE.Vector3(), tgt: new THREE.Vector3() };
 
 fpvBtn.addEventListener('click', () => {
@@ -2811,17 +2842,21 @@ function enterFPV() {
   player.vx = player.vy = player.vz = 0;
   playerGroup.visible = true;
   camera.rotation.order = 'YXZ';
+  camera.fov = isTouch ? 70 : 58;   // wider than the orbit lens: less tunnel vision indoors
+  camera.updateProjectionMatrix();
   matDoor.opacity = 0.45;
   matDoor.depthWrite = false;
   xhair.style.display = 'block';
   if (isTouch) document.body.classList.add('touchfpv');
-  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — jump / crouch' : HINT_FPV;
+  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — cam / crouch / jump' : HINT_FPV;
   fpvBtn.textContent = isTouch ? 'exit FPV' : 'exit FPV (esc)';
 }
 function exitFPV() {
   player.active = false;
   playerGroup.visible = false;
   controls.enabled = true;
+  camera.fov = 46;
+  camera.updateProjectionMatrix();
   camera.position.copy(savedCam.pos);
   controls.target.copy(savedCam.tgt);
   matDoor.opacity = 1;
@@ -2833,6 +2868,41 @@ function exitFPV() {
   hintEl.textContent = HINT_ORBIT;
   fpvBtn.innerHTML = '&#9654; enter FPV';
   isoBox.disabled = false;
+}
+
+/* ---- third-person chase camera (FPV alternative; V key or 3P button) ---- */
+let cam3 = localStorage.getItem('vb-cam3') === '1';
+const CAM3_DIST = 10.5;
+const tcamBtn = document.getElementById('tcam');
+function setCam3(on) {
+  cam3 = on;
+  localStorage.setItem('vb-cam3', on ? '1' : '0');
+  tcamBtn.classList.toggle('on', on);
+  tcamBtn.textContent = on ? '1P' : '3P';   // label = what a tap switches to
+}
+tcamBtn.addEventListener('pointerdown', e => { e.preventDefault(); setCam3(!cam3); });
+setCam3(cam3);
+
+// grid-march from the player's eye away from the view direction; returns how
+// far back the chase camera can sit before a wall would swallow it
+function camClearance(ox, oy, oz, dx, dy, dz, maxD) {
+  let x = fl(ox), y = fl(oy), z = fl(oz);
+  const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+  const ix = Math.abs(dx) > 1e-9 ? Math.abs(1 / dx) : 1e9;
+  const iy = Math.abs(dy) > 1e-9 ? Math.abs(1 / dy) : 1e9;
+  const iz = Math.abs(dz) > 1e-9 ? Math.abs(1 / dz) : 1e9;
+  let tx = (sx > 0 ? x + 1 - ox : ox - x) * ix;
+  let ty = (sy > 0 ? y + 1 - oy : oy - y) * iy;
+  let tz = (sz > 0 ? z + 1 - oz : oz - z) * iz;
+  let t = 0;
+  while (t < maxD) {
+    if (tx <= ty && tx <= tz) { t = tx; tx += ix; x += sx; }
+    else if (ty <= tz) { t = ty; ty += iy; y += sy; }
+    else { t = tz; tz += iz; z += sz; }
+    if (t >= maxD) break;
+    if (playerSolid(x, y, z)) return Math.max(2, t - 0.4);
+  }
+  return maxD;
 }
 
 /* ---- isometric camera (corpo & spectator modes only) ---- */
@@ -2872,7 +2942,7 @@ function setIso(on) {
 isoBox.addEventListener('change', () => setIso(isoBox.checked));
 
 /* ---- mobile touch controls: joystick, look-drag, jump + crouch ---- */
-const isTouch = matchMedia('(pointer: coarse)').matches;
+const isTouch = COARSE;
 const touchStick = { x: 0, y: 0, len: 0 };
 {
   const stick = document.getElementById('stick');
@@ -2923,19 +2993,50 @@ const touchStick = { x: 0, y: 0, len: 0 };
   addEventListener('pointercancel', e => { if (e.pointerId === lid) lid = -1; });
 }
 
+// one horizontal axis of movement, most permissive resolution first: plain
+// move → 1-voxel auto-step (stairs, curbs) → auto-duck (tight stairwell
+// headroom, no crouch key needed) → sideways nudge (slips the player
+// through 1-voxel doorways they'd otherwise catch the frame of)
+function moveAxis(dx, dz) {
+  const nx = player.x + dx, nz = player.z + dz;
+  if (boxFree(nx, player.y, nz)) { player.x = nx; player.z = nz; return; }
+  if (player.grounded && boxFree(nx, player.y + 1.02, nz)) {
+    player.x = nx; player.z = nz; player.y += 1.02; return;
+  }
+  if (!player.crouch) {          // would it fit crouched? duck automatically
+    P_Hcur = P_H_CROUCH;
+    if (boxFree(nx, player.y, nz)) {
+      player.crouch = player.autoDuck = true;
+      player.x = nx; player.z = nz; return;
+    }
+    if (player.grounded && boxFree(nx, player.y + 1.02, nz)) {
+      player.crouch = player.autoDuck = true;
+      player.x = nx; player.z = nz; player.y += 1.02; return;
+    }
+    P_Hcur = P_H;
+  }
+  for (let d = 0.07; d <= 0.22; d += 0.05) for (const s of [1, -1]) {
+    const px = dz ? player.x + s * d : nx, pz = dx ? player.z + s * d : nz;
+    if (boxFree(px, player.y, pz)) { player.x = px; player.z = pz; return; }
+  }
+}
+
 function stepPlayer(dt) {
   if (!player.active) return;
   const n = Math.min(4, Math.max(1, Math.ceil(dt / 0.033)));
   const h = dt / n;
   // crouch (ctrl or C): one voxel shorter and slower — squeezes up tight stairs
   const wantCrouch = keys.has('ControlLeft') || keys.has('ControlRight') || keys.has('KeyC');
-  if (wantCrouch) player.crouch = true;
+  if (wantCrouch) { player.crouch = true; player.autoDuck = false; }
   else if (player.crouch) {
     P_Hcur = P_H;
     player.crouch = !boxFree(player.x, player.y, player.z);   // stand only with headroom
   }
+  if (!player.crouch) player.autoDuck = false;
   P_Hcur = player.crouch ? P_H_CROUCH : P_H;
-  const sp = ((keys.has('ShiftLeft') || keys.has('ShiftRight')) ? P_SPRINT : P_SPEED) * (player.crouch ? 0.45 : 1);
+  // auto-duck keeps most of the walking pace; deliberate crouch stays slow
+  const sp = ((keys.has('ShiftLeft') || keys.has('ShiftRight')) ? P_SPRINT : P_SPEED)
+           * (player.crouch ? (player.autoDuck ? 0.8 : 0.45) : 1);
   let mx = 0, mz = 0;
   if (keys.has('KeyW')) { mx -= Math.sin(player.yaw); mz -= Math.cos(player.yaw); }
   if (keys.has('KeyS')) { mx += Math.sin(player.yaw); mz += Math.cos(player.yaw); }
@@ -2952,13 +3053,8 @@ function stepPlayer(dt) {
   if (L > 0) { mx = mx / L * sp * analog; mz = mz / L * sp * analog; }
 
   for (let s = 0; s < n; s++) {
-    // horizontal, with 1-voxel auto-step (stairs, curbs, stoops) when grounded
-    const nx = player.x + mx * h;
-    if (boxFree(nx, player.y, player.z)) player.x = nx;
-    else if (player.grounded && boxFree(nx, player.y + 1.02, player.z)) { player.x = nx; player.y += 1.02; }
-    const nz = player.z + mz * h;
-    if (boxFree(player.x, player.y, nz)) player.z = nz;
-    else if (player.grounded && boxFree(player.x, player.y + 1.02, nz)) { player.z = nz; player.y += 1.02; }
+    if (mx) moveAxis(mx * h, 0);
+    if (mz) moveAxis(0, mz * h);
     // vertical
     player.vy -= GRAV * h;
     const ny = player.y + player.vy * h;
@@ -2974,8 +3070,19 @@ function stepPlayer(dt) {
   playerGroup.position.set(player.x, player.y, player.z);
   playerGroup.rotation.y = player.yaw;
   playerGroup.children[3].visible = !player.crouch;   // tuck the head voxel
-  camera.position.set(player.x, player.y + (player.crouch ? P_EYE - 1 : P_EYE), player.z);
-  camera.rotation.set(player.pitch, player.yaw, 0);
+  const eyeY = player.y + (player.crouch ? P_EYE - 1 : P_EYE);
+  if (cam3) {
+    // chase camera: back up the view ray, stopping short of walls, so the
+    // crosshair ray through the camera center stays the player's view ray
+    const cp = Math.cos(player.pitch);
+    const fx = -Math.sin(player.yaw) * cp, fy = Math.sin(player.pitch), fz = -Math.cos(player.yaw) * cp;
+    const d = camClearance(player.x, eyeY, player.z, -fx, -fy, -fz, CAM3_DIST);
+    camera.position.set(player.x - fx * d, eyeY - fy * d, player.z - fz * d);
+    camera.lookAt(player.x + fx * 2, eyeY + fy * 2, player.z + fz * 2);
+  } else {
+    camera.position.set(player.x, eyeY, player.z);
+    camera.rotation.set(player.pitch, player.yaw, 0);
+  }
 }
 
 /* ============================================================
@@ -2988,6 +3095,12 @@ const net = { ws: null, online: false, id: 0, role: null, alive: false };
 const remotes = new Map();   // id -> {group, alive, x,y,z,yaw, tx,ty,tz,tyaw}
 let lastRoster = [];
 const mpStatus = document.getElementById('mp-status');
+const mpWatchEl = document.getElementById('mp-watch');
+function setWatch(w) {   // live head-count for the theater crowd
+  if (typeof w !== 'number') return;
+  mpWatchEl.style.display = 'block';
+  mpWatchEl.textContent = w + ' connected';
+}
 const mpJoinEl = document.getElementById('mp-join');
 const mpListEl = document.getElementById('mp-list');
 const mpNameEl = document.getElementById('mp-name');
@@ -3027,6 +3140,7 @@ function wsConnect() {
     remotes.clear();
     mpJoinEl.style.display = 'none';
     mpListEl.innerHTML = '';
+    mpWatchEl.style.display = 'none';
     laidoffEl.style.display = 'none';
     fpvBtn.style.display = '';
     bearingBox.disabled = false;
@@ -3048,6 +3162,7 @@ function handleNet(m) {
       if (m.scene) setSceneLocal(m.scene);
       for (const b of m.booms || []) explode(b[0], b[1], b[2], true);
       updateRoster(m.players || []);
+      setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
       break;
     case 'time':
@@ -3080,6 +3195,7 @@ function handleNet(m) {
       break;
     case 'players':
       updateRoster(m.list || []);
+      setWatch(m.w);
       break;
     case 'pos': {
       const r = remotes.get(m.id);
@@ -3257,6 +3373,12 @@ function stepNet(dt) {
 }
 wsConnect();
 
+// debug/automation handle (the module scope is otherwise sealed); tick()
+// steps the player sim by hand where rAF is throttled (hidden tabs, tests)
+window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick,
+  tick: dt => stepPlayer(dt), boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
+  render: () => renderer.render(scene, activeCam) };
+
 /* ---- reset scene: rebuild every voxel in place (synced when online) ---- */
 function resetWorld() {
   vox.clear();
@@ -3328,7 +3450,7 @@ scene.add(hemi);
 
 const sun = new THREE.DirectionalLight(0xfff2dd, 3);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(COARSE ? 2048 : 4096, COARSE ? 2048 : 4096);
 sun.shadow.camera.left = -95; sun.shadow.camera.right = 95;
 sun.shadow.camera.top = 95; sun.shadow.camera.bottom = -95;
 sun.shadow.camera.near = 10; sun.shadow.camera.far = 420;
