@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>LAYOFF SIMULATOR</title>
+<script>
+// audience URLs must never paint the control panels, not even for a frame —
+// the module script that sets body.audience runs long after first paint
+if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience'))
+  document.documentElement.classList.add('audience');
+</script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;touch-action:manipulation;}
   canvas{display:block;}
@@ -119,6 +125,7 @@
      focused — the zoom used to persist into FPV, hiding the touch controls */
   @media (pointer:coarse){ #mp input,#aud-card input{font-size:16px;} }
   /* ---- audience mode (QR URL /join): no menus, a dedicated join card ---- */
+  html.audience #ui,html.audience #mp,
   body.audience #ui,body.audience #mp{display:none !important;}
   #aud{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;pointer-events:none;}
   body.audience.audjoin #aud{display:flex;}
@@ -250,7 +257,7 @@
     </div>
     <div class="help">spotlight — the corpo's searchlight after dark</div>
     <div class="row">
-      <label><input id="pit" type="checkbox" checked> flame ocean</label>
+      <label><input id="pit" type="checkbox"> flame ocean</label>
     </div>
     <div class="help">flame ocean — the block rises from a sea of fire (your view only)</div>
     <select id="pitcol">
@@ -263,8 +270,8 @@
     </select>
     <div class="help">ocean color — repaint the sea (your view only)</div>
     <div class="row">
-      <label>fog <input id="fogcol" type="color" value="#9ccaf0"></label>
-      <label><input id="fogauto" type="checkbox" checked> auto</label>
+      <label>fog <input id="fogcol" type="color" value="#5a1410"></label>
+      <label><input id="fogauto" type="checkbox"> auto</label>
     </div>
     <div class="help">fog — tint the haze; auto follows the sky (your view only)</div>
     <div class="row">
@@ -5789,6 +5796,7 @@ fogPick.addEventListener('input', () => { fogAuto.checked = false; applyFogPick(
 fogAuto.addEventListener('change', () => {
   if (fogAuto.checked) updateSun(+slider.value); else applyFogPick();
 });
+if (!fogAuto.checked) applyFogPick();   // manual tint from the first frame
 
 // "scan to play" card: shows itself on the operator URL, toggleable for anyone
 const qrBox = document.getElementById('qr');
