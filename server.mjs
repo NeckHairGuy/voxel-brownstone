@@ -12,9 +12,11 @@ const PORT = +(process.env.PORT || 3101);
 // base path (e.g. behind `tailscale serve` at /brownstone). The vendored
 // three.js files are the only other routes, matched by path suffix so they
 // resolve under any mount point too.
+const JS = 'text/javascript; charset=utf-8';
 const VENDOR = new Map([
-  ['/vendor/three.module.min.js', readFileSync(join(here, 'vendor/three.module.min.js'))],
-  ['/vendor/addons/controls/OrbitControls.js', readFileSync(join(here, 'vendor/addons/controls/OrbitControls.js'))],
+  ['/vendor/three.module.min.js', { body: readFileSync(join(here, 'vendor/three.module.min.js')), type: JS }],
+  ['/vendor/addons/controls/OrbitControls.js', { body: readFileSync(join(here, 'vendor/addons/controls/OrbitControls.js')), type: JS }],
+  ['/vendor/press-start-2p.woff2', { body: readFileSync(join(here, 'vendor/press-start-2p.woff2')), type: 'font/woff2' }],
 ]);
 const server = createServer((req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -22,13 +24,13 @@ const server = createServer((req, res) => {
     return;
   }
   const path = (req.url || '').split('?')[0];
-  for (const [suffix, body] of VENDOR) {
+  for (const [suffix, file] of VENDOR) {
     if (path.endsWith(suffix)) {
       res.writeHead(200, {
-        'content-type': 'text/javascript; charset=utf-8',
+        'content-type': file.type,
         'cache-control': 'public, max-age=86400',
       });
-      res.end(req.method === 'HEAD' ? undefined : body);
+      res.end(req.method === 'HEAD' ? undefined : file.body);
       return;
     }
   }

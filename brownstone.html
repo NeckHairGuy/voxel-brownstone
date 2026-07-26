@@ -184,16 +184,34 @@
   /* third person is benched for now — keep its button and tip hidden */
   #tcam,#tip-cam{display:none !important;}
   #tcrouch,#tip-crouch{display:none !important;}   /* crouch button parked for now */
+  @font-face{
+    font-family:'Press Start 2P';
+    src:url('vendor/press-start-2p.woff2') format('woff2');
+    font-display:swap;
+  }
   #qr{
-    position:fixed;right:14px;bottom:14px;z-index:30;display:none;
-    flex-direction:column;align-items:center;gap:7px;background:#fff;
-    border-radius:12px;padding:10px;box-shadow:0 6px 22px rgba(0,0,0,.5);
+    position:fixed;right:44px;bottom:44px;z-index:30;display:none;
+    flex-direction:column;align-items:center;gap:10px;background:#fff;
+    border-radius:12px;padding:12px;box-shadow:0 6px 22px rgba(0,0,0,.5);
     pointer-events:none;
   }
   #qr.show{display:flex;}
   #qr svg{width:clamp(140px,22vh,250px);height:auto;display:block;}
-  #qr-label{font:800 clamp(13px,1.9vh,19px)/1 -apple-system,Segoe UI,system-ui,sans-serif;color:#111;letter-spacing:.08em;}
+  #qr-label{font:400 clamp(10px,1.7vh,15px)/1.4 'Press Start 2P',monospace;color:#111;}
   body.audience #qr{display:none !important;}
+  #wifi{
+    position:fixed;left:44px;bottom:44px;z-index:30;display:none;
+    flex-direction:column;gap:9px;background:#fff;border-radius:12px;
+    padding:14px 16px;box-shadow:0 6px 22px rgba(0,0,0,.5);pointer-events:none;
+  }
+  #wifi.show{display:flex;}
+  #wifi div{font:400 clamp(10px,1.7vh,15px)/1.4 'Press Start 2P',monospace;color:#111;white-space:nowrap;}
+  body.audience #wifi{display:none !important;}
+  #ui input[type=text]{
+    width:100%;margin-top:6px;padding:4px 6px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.15);background:#232838;color:#e9e4d8;
+    font:12px -apple-system,Segoe UI,system-ui,sans-serif;box-sizing:border-box;
+  }
   /* touch FPV crowds the bottom edge — the ? explainer yields to the button tips */
   body.touchfpv #tip-help{display:none;}
 </style>
@@ -253,6 +271,12 @@
       <label><input id="qrshow" type="checkbox"> join QR</label>
     </div>
     <div class="help">join QR — scan-to-play card in the corner (your view only)</div>
+    <div class="row">
+      <label><input id="wifishow" type="checkbox"> wifi card</label>
+    </div>
+    <input id="wifiname" type="text" value="Pavilion Guest" maxlength="32" spellcheck="false">
+    <input id="wifipass" type="text" value="Pavili0n" maxlength="32" spellcheck="false">
+    <div class="help">wifi card — network + password in the corner (your view only)</div>
     <button id="fpv">&#9654; enter FPV</button>
     <div class="help" id="fpv-help">FPV — walk the block as a voxel figure</div>
     <button id="reset">reset scene</button>
@@ -264,6 +288,10 @@
 <div id="qr">
   <div id="qr-label">SCAN TO PLAY</div>
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h41v41H0z"/><path stroke="#000000" d="M4 4.5h7m2 0h3m2 0h2m2 0h2m1 0h3m2 0h7M4 5.5h1m5 0h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m2 0h3m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m3 0h1m1 0h1m10 0h2m1 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m2 0h5m1 0h1m1 0h1m1 0h1m2 0h1m3 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m8 0h3m2 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m2 0h2m2 0h2m2 0h1m3 0h1m1 0h1m2 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M13 11.5h1m1 0h4m1 0h3m1 0h3M4 12.5h1m1 0h1m1 0h1m1 0h1m2 0h1m1 0h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h2m3 0h1m2 0h1M6 13.5h3m3 0h4m8 0h1m1 0h1m1 0h4m3 0h2M4 14.5h3m1 0h4m3 0h3m2 0h2m2 0h1m1 0h1m4 0h1m2 0h1m1 0h1M8 15.5h2m3 0h4m3 0h1m3 0h3m1 0h2m2 0h1m3 0h1M4 16.5h4m1 0h2m1 0h1m2 0h2m6 0h1m1 0h1m2 0h1m1 0h2m1 0h1m2 0h1M4 17.5h1m1 0h1m1 0h2m3 0h3m1 0h1m1 0h1m3 0h1m1 0h1m2 0h1m1 0h2m2 0h1m1 0h1M4 18.5h2m1 0h5m1 0h1m8 0h1m6 0h1m5 0h2M4 19.5h1m7 0h3m2 0h3m1 0h3m1 0h1m2 0h1m1 0h3m2 0h1M4 20.5h3m1 0h1m1 0h5m3 0h1m2 0h1m2 0h2m1 0h1m1 0h2M5 21.5h2m1 0h1m2 0h2m1 0h1m1 0h1m1 0h1m2 0h1m6 0h4m4 0h1M4 22.5h2m1 0h2m1 0h1m1 0h4m2 0h1m3 0h1m2 0h1m3 0h2m3 0h3M4 23.5h3m4 0h2m2 0h1m3 0h5m1 0h1m1 0h1m1 0h1m1 0h2m2 0h1M4 24.5h1m1 0h7m2 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h1m1 0h2M5 25.5h2m4 0h1m1 0h5m1 0h2m1 0h4m4 0h2m2 0h3M4 26.5h1m2 0h1m1 0h4m1 0h4m1 0h2m2 0h2m1 0h1m3 0h1m1 0h1m2 0h2M5 27.5h4m5 0h2m4 0h2m2 0h3m3 0h1m5 0h1M4 28.5h1m1 0h6m1 0h1m1 0h9m1 0h2m1 0h5m2 0h1M12 29.5h1m1 0h3m3 0h1m1 0h1m4 0h2m3 0h2m2 0h1M4 30.5h7m3 0h4m3 0h1m2 0h2m1 0h2m1 0h1m1 0h1m1 0h3M4 31.5h1m5 0h1m2 0h1m2 0h4m3 0h1m4 0h1m3 0h1m2 0h2M4 32.5h1m1 0h3m1 0h1m1 0h4m1 0h2m9 0h6m1 0h1M4 33.5h1m1 0h3m1 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m3 0h1m4 0h1m2 0h2M4 34.5h1m1 0h3m1 0h1m1 0h3m3 0h1m2 0h1m5 0h1m4 0h3m1 0h1M4 35.5h1m5 0h1m2 0h1m3 0h3m1 0h1m1 0h1m1 0h2m1 0h1m3 0h1m2 0h1M4 36.5h7m1 0h1m1 0h2m1 0h1m3 0h2m2 0h2m1 0h1m1 0h1m1 0h2m1 0h2"/></svg>
+</div>
+<div id="wifi">
+  <div id="wifi-ssid">WIFI: Pavilion Guest</div>
+  <div id="wifi-pass">PW: Pavili0n</div>
 </div>
 <div id="mp">
   <div class="panel-head" id="mp-head"><span>players</span><span class="caret">&#9662;</span></div>
@@ -5769,6 +5797,29 @@ qrShow.checked = new URLSearchParams(location.search).has('corpo');
 const applyQrCard = () => qrBox.classList.toggle('show', qrShow.checked);
 qrShow.addEventListener('change', applyQrCard);
 applyQrCard();
+
+// wifi card: two configurable lines for the venue's network, remembered
+const wifiBox = document.getElementById('wifi');
+const wifiShow = document.getElementById('wifishow');
+const wifiName = document.getElementById('wifiname');
+const wifiPass = document.getElementById('wifipass');
+try {
+  const s = JSON.parse(localStorage.getItem('vb-wifi') || 'null');
+  if (s && typeof s.n === 'string' && typeof s.p === 'string') {
+    wifiName.value = s.n; wifiPass.value = s.p;
+  }
+} catch {}
+function applyWifi() {
+  document.getElementById('wifi-ssid').textContent = 'WIFI: ' + wifiName.value;
+  document.getElementById('wifi-pass').textContent = 'PW: ' + wifiPass.value;
+  wifiBox.classList.toggle('show', wifiShow.checked);
+  try { localStorage.setItem('vb-wifi', JSON.stringify({ n: wifiName.value, p: wifiPass.value })); } catch {}
+}
+wifiShow.checked = new URLSearchParams(location.search).has('corpo');
+wifiShow.addEventListener('change', applyWifi);
+wifiName.addEventListener('input', applyWifi);
+wifiPass.addEventListener('input', applyWifi);
+applyWifi();
 
 // optional URL-hash presets, e.g. #t=1290&cam=70,30,60&tgt=40,12,0
 {
