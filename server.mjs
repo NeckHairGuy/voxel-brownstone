@@ -119,6 +119,26 @@ let nextId = 1;
 let scene = 'default';     // 'default' | 'tech' | 'techlong' — all clients build the same scene
 let timeState = null;      // { m, play } — the corpo's time of day, followed by everyone
 
+/* ---- name filter: slurs and hate terms are refused; casual profanity is
+       not our problem. Kept in sync with the copy in brownstone.html. ---- */
+const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '9': 'g', '@': 'a', '$': 's', '!': 'i', '+': 't' };
+const SLUR_PART = ['nigg', 'niga', 'fagg', 'fagot', 'kike', 'wetback', 'beaner', 'trann', 'hitler', 'swastik', 'towelhead', 'raghead', 'pedoph', 'negro'];
+const SLUR_WORD = new Set(['fag', 'fags', 'spic', 'spics', 'coon', 'coons', 'gook', 'gooks', 'dyke', 'dykes',
+  'paki', 'pakis', 'chink', 'chinks', 'jap', 'japs', 'nazi', 'nazis', 'retard', 'retards', 'tard',
+  'rape', 'raping', 'rapist', 'heeb', 'yid', 'kys', 'pedo', 'pedos', 'homo']);
+function nameOffensive(raw) {
+  let flat = '', cur = '';
+  const tokens = [];
+  for (const ch of String(raw).toLowerCase()) {
+    const c = LEET[ch] !== undefined ? LEET[ch] : ch;
+    if (c >= 'a' && c <= 'z') { flat += c; cur += c; }
+    else { if (cur) tokens.push(cur); cur = ''; }
+  }
+  if (cur) tokens.push(cur);
+  for (const p of SLUR_PART) if (flat.includes(p)) return true;
+  return tokens.some(w => SLUR_WORD.has(w));
+}
+
 const roster = () => [...players.values()].map(p => ({
   id: p.id, name: p.name, role: p.role, score: p.score, alive: p.alive,
   color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw,
@@ -151,6 +171,7 @@ function onMessage(conn, m) {
     case 'join': {
       if (p) return;
       const name = String(m.name || '').trim().slice(0, 12) || 'player';
+      if (nameOffensive(name)) { conn.send({ t: 'denied', reason: "that name won't fly — pick another" }); return; }
       const corpoTaken = [...players.values()].some(q => q.role === 'corpo');
       const humans = [...players.values()].filter(q => q.role === 'human').length;
       let role;

@@ -116,7 +116,38 @@
   body.touchfpv #stick,body.touchfpv .tbtn{display:block;}
   /* 16px stops iOS Safari from auto-zooming the page when the name field is
      focused — the zoom used to persist into FPV, hiding the touch controls */
-  @media (pointer:coarse){ #mp input{font-size:16px;} }
+  @media (pointer:coarse){ #mp input,#aud-card input{font-size:16px;} }
+  /* ---- audience mode (QR URL /join): no menus, a dedicated join card ---- */
+  body.audience #ui,body.audience #mp{display:none !important;}
+  #aud{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;pointer-events:none;}
+  body.audience.audjoin #aud{display:flex;}
+  #aud-card{
+    pointer-events:auto;text-align:center;width:min(320px,86vw);
+    background:rgba(12,14,20,.86);backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 22px;
+    color:#e9e4d8;font:13px/1.5 -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #aud-card h2{margin:0;font-size:18px;font-weight:700;letter-spacing:.6px;}
+  .aud-sub{font-size:11px;opacity:.6;margin-bottom:12px;}
+  #aud-card input{
+    width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px 10px;text-align:center;
+    border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);
+    color:#e9e4d8;font:15px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #aud-card button{
+    width:100%;padding:11px 0;border:none;border-radius:8px;cursor:pointer;
+    background:#e0a85a;color:#221608;font:700 14px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #aud-card button:disabled{opacity:.45;cursor:default;}
+  #aud-status{font-size:11.5px;margin-top:8px;min-height:15px;color:#ffb14d;}
+  #aud-dismiss{display:inline-block;margin-top:10px;font-size:11.5px;opacity:.6;cursor:pointer;text-decoration:underline;}
+  #aud-reopen{
+    display:none;position:fixed;z-index:10;cursor:pointer;
+    left:calc(14px + env(safe-area-inset-left, 0px));bottom:calc(14px + env(safe-area-inset-bottom, 0px));
+    background:#e0a85a;color:#221608;font:700 13px/1 -apple-system,Segoe UI,system-ui,sans-serif;
+    padding:11px 16px;border-radius:22px;user-select:none;-webkit-user-select:none;
+  }
+  body.audience:not(.audjoin):not(.seated) #aud-reopen{display:block;}
   /* ---- red help tips (the ? button toggles body.showhelp) ---- */
   .help{
     display:none;color:#ff5347;font-size:11.5px;font-weight:600;line-height:1.35;
@@ -215,6 +246,18 @@
   <button id="respawn">respawn</button>
   <div class="help">respawn — back to the streets once the cooldown ends</div>
 </div>
+<div id="aud">
+  <div id="aud-card">
+    <h2>BROOKLYN BLOCK</h2>
+    <div class="aud-sub">humans vs. the corpo &middot; live</div>
+    <input id="aud-name" placeholder="your name" maxlength="12">
+    <button id="aud-join">join as human</button>
+    <div id="aud-status"></div>
+    <div class="help">survive on foot — every second alive pays 1 pt. the corpo is hunting.</div>
+    <span id="aud-dismiss">just watch</span>
+  </div>
+</div>
+<div id="aud-reopen">join the game</div>
 <div id="stick"><div id="knob"></div></div>
 <div id="tjump" class="tbtn">&#8673;</div>
 <div id="tcrouch" class="tbtn">&#8675;</div>
@@ -3172,9 +3215,44 @@ const respawnBtn = document.getElementById('respawn');
 let diedAtLocal = 0;
 
 // audience mode — the QR-code URL (path ends in /join, or ?audience):
-// human seats and spectating only, and the panels vanish once seated
+// both menus stay hidden for good; a centered card offers name + join-as-human
 const AUDIENCE = /(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience');
-if (AUDIENCE) joinCorpoBtn.style.display = 'none';
+const audJoinBtn = document.getElementById('aud-join');
+const audNameEl = document.getElementById('aud-name');
+const audStatusEl = document.getElementById('aud-status');
+let audMsgUntil = 0;   // keeps error messages from being wiped by the roster tick
+function audMsg(text) { audStatusEl.textContent = text; audMsgUntil = performance.now() + 4000; }
+if (AUDIENCE) {
+  document.body.classList.add('audience');
+  if (location.host) document.body.classList.add('audjoin');
+  audNameEl.value = localStorage.getItem('vb-name') || '';
+  audJoinBtn.disabled = true;               // until the socket opens
+  audStatusEl.textContent = 'connecting…';
+  audJoinBtn.addEventListener('click', () => { mpNameEl.value = audNameEl.value; doJoin('human'); });
+  document.getElementById('aud-dismiss').addEventListener('click', () => document.body.classList.remove('audjoin'));
+  document.getElementById('aud-reopen').addEventListener('click', () => document.body.classList.add('audjoin'));
+}
+
+/* ---- name filter: slurs and hate terms are refused; casual profanity is
+       not our problem. Kept in sync with the copy in server.mjs (the server
+       is the enforcement point — this copy just gives instant feedback). ---- */
+const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '9': 'g', '@': 'a', '$': 's', '!': 'i', '+': 't' };
+const SLUR_PART = ['nigg', 'niga', 'fagg', 'fagot', 'kike', 'wetback', 'beaner', 'trann', 'hitler', 'swastik', 'towelhead', 'raghead', 'pedoph', 'negro'];
+const SLUR_WORD = new Set(['fag', 'fags', 'spic', 'spics', 'coon', 'coons', 'gook', 'gooks', 'dyke', 'dykes',
+  'paki', 'pakis', 'chink', 'chinks', 'jap', 'japs', 'nazi', 'nazis', 'retard', 'retards', 'tard',
+  'rape', 'raping', 'rapist', 'heeb', 'yid', 'kys', 'pedo', 'pedos', 'homo']);
+function nameOffensive(raw) {
+  let flat = '', cur = '';
+  const tokens = [];
+  for (const ch of String(raw).toLowerCase()) {
+    const c = LEET[ch] !== undefined ? LEET[ch] : ch;
+    if (c >= 'a' && c <= 'z') { flat += c; cur += c; }
+    else { if (cur) tokens.push(cur); cur = ''; }
+  }
+  if (cur) tokens.push(cur);
+  for (const p of SLUR_PART) if (flat.includes(p)) return true;
+  return tokens.some(w => SLUR_WORD.has(w));
+}
 
 mpNameEl.value = localStorage.getItem('vb-name') || '';
 
@@ -3192,6 +3270,8 @@ function wsConnect() {
   ws.onopen = () => {
     net.online = true;
     mpStatus.textContent = 'pick a side';
+    audJoinBtn.disabled = false;
+    if (performance.now() > audMsgUntil) audStatusEl.textContent = '';
     mpJoinEl.style.display = 'block';
     fpvBtn.style.display = 'none';
     document.getElementById('fpv-help').style.display = 'none';   // online: seats, not the button
@@ -3209,9 +3289,11 @@ function wsConnect() {
     mpListEl.innerHTML = '';
     mpWatchEl.style.display = 'none';
     laidoffEl.style.display = 'none';
-    if (AUDIENCE) {   // dropped mid-game: bring the panels back to rejoin
-      document.getElementById('ui').style.display = '';
-      document.getElementById('mp').style.display = '';
+    if (AUDIENCE && location.host) {   // dropped mid-game: offer the card again
+      document.body.classList.remove('seated');
+      document.body.classList.add('audjoin');
+      audJoinBtn.disabled = true;
+      audStatusEl.textContent = 'reconnecting…';
     }
     fpvBtn.style.display = '';
     document.getElementById('fpv-help').style.display = '';
@@ -3251,9 +3333,9 @@ function handleNet(m) {
       net.id = m.id; net.role = m.role; net.alive = m.role === 'human';
       mpJoinEl.style.display = 'none';
       applyTimeLock();
-      if (AUDIENCE) {   // seated audience members get an uncluttered view
-        document.getElementById('ui').style.display = 'none';
-        document.getElementById('mp').style.display = 'none';
+      if (AUDIENCE) {   // seated: hide the join card, remember we're playing
+        document.body.classList.remove('audjoin');
+        document.body.classList.add('seated');
       }
       if (m.role === 'corpo') {
         mpStatus.textContent = 'you are the CORPO — click a human to lay them off';
@@ -3267,6 +3349,7 @@ function handleNet(m) {
       break;
     case 'denied':
       mpStatus.textContent = 'denied: ' + m.reason;
+      audMsg(m.reason);
       document.exitPointerLock();
       break;
     case 'players':
@@ -3358,7 +3441,13 @@ function updateRoster(list) {
   for (const [id, r] of remotes) if (!seen.has(id)) { scene.remove(r.group); remotes.delete(id); }
   // seat availability
   joinCorpoBtn.disabled = list.some(p => p.role === 'corpo');
-  joinHumanBtn.disabled = list.filter(p => p.role === 'human').length >= 4;
+  const humansFull = list.filter(p => p.role === 'human').length >= 4;
+  joinHumanBtn.disabled = humansFull;
+  if (AUDIENCE && !net.role) {
+    audJoinBtn.disabled = humansFull || !net.online;
+    if (performance.now() > audMsgUntil)
+      audStatusEl.textContent = humansFull ? 'all 4 human seats are taken — drag to look around; a seat frees when someone leaves' : '';
+  }
   // scoreboard
   mpListEl.innerHTML = '';
   for (const p of [...list].sort((a, b) => b.score - a.score)) {
@@ -3394,6 +3483,11 @@ function localLayoff() {
 function doJoin(want) {
   if (AUDIENCE && want === 'corpo') return;   // audience URL: humans only
   const name = (mpNameEl.value || '').trim() || 'player';
+  if (nameOffensive(name)) {
+    mpStatus.textContent = "that name won't fly — pick another";
+    audMsg("that name won't fly — pick another");
+    return;
+  }
   localStorage.setItem('vb-name', name);
   if (want === 'human' && !isTouch) renderer.domElement.requestPointerLock();   // in the click gesture
   nsend({ t: 'join', name, want });
