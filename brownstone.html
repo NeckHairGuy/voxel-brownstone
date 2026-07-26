@@ -25,6 +25,7 @@
     font:12px -apple-system,Segoe UI,system-ui,sans-serif;
   }
   #ui .sub{font-size:11px;opacity:.62;margin-bottom:10px;}
+  #ui input[type=color]{width:34px;height:20px;padding:0;border:1px solid rgba(255,255,255,.15);border-radius:5px;background:#232838;cursor:pointer;}
   #clock{font-size:22px;font-weight:300;font-variant-numeric:tabular-nums;margin:2px 0 4px;}
   input[type=range]{width:100%;accent-color:#e0a85a;cursor:pointer;}
   .row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;}
@@ -232,6 +233,11 @@
       <option value="ash">ocean: cold ash</option>
     </select>
     <div class="help">ocean color — repaint the sea (your view only)</div>
+    <div class="row">
+      <label>fog <input id="fogcol" type="color" value="#9ccaf0"></label>
+      <label><input id="fogauto" type="checkbox" checked> auto</label>
+    </div>
+    <div class="help">fog — tint the haze; auto follows the sky (your view only)</div>
     <button id="fpv">&#9654; enter FPV</button>
     <div class="help" id="fpv-help">FPV — walk the block as a voxel figure</div>
     <button id="reset">reset scene</button>
@@ -5423,13 +5429,13 @@ function stepSpot(dt) {
        rim. Pure meshes (no world voxels), local to each viewer. ---- */
 const pitBox = document.getElementById('pit');
 const pitCol = document.getElementById('pitcol');
-const PIT_SEAS = {
-  inferno: { floor: 0x9c1a0a, ramp: [0xc42a10, 0xe85a14, 0xf2a83c, 0xffd75a] },
-  toxic:   { floor: 0x1a5a10, ramp: [0x2a7a14, 0x4fae1c, 0x8ade2c, 0xd8f860] },
-  arctic:  { floor: 0x123a72, ramp: [0x1c50b0, 0x2a78e0, 0x58b0f2, 0xb8ecff] },
-  neon:    { floor: 0x55104f, ramp: [0x8a1a9e, 0xc22ae0, 0xf25ab8, 0xff9ae0] },
-  gold:    { floor: 0x8a5a0a, ramp: [0xc2871a, 0xe0aa14, 0xf2ce3c, 0xffeb90] },
-  ash:     { floor: 0x17171b, ramp: [0x232329, 0x33333c, 0x4c4c58, 0x757583] },
+const PIT_SEAS = {   // glow: unlit, self-luminous sea; otherwise lit by the sun
+  inferno: { glow: true,  floor: 0x9c1a0a, ramp: [0xc42a10, 0xe85a14, 0xf2a83c, 0xffd75a] },
+  toxic:   { glow: false, floor: 0x1a5a10, ramp: [0x2a7a14, 0x4fae1c, 0x8ade2c, 0xd8f860] },
+  arctic:  { glow: false, floor: 0x123a72, ramp: [0x1c50b0, 0x2a78e0, 0x58b0f2, 0xb8ecff] },
+  neon:    { glow: true,  floor: 0x55104f, ramp: [0x8a1a9e, 0xc22ae0, 0xf25ab8, 0xff9ae0] },
+  gold:    { glow: false, floor: 0x8a5a0a, ramp: [0xc2871a, 0xe0aa14, 0xf2ce3c, 0xffeb90] },
+  ash:     { glow: false, floor: 0x17171b, ramp: [0x232329, 0x33333c, 0x4c4c58, 0x757583] },
 };
 try { const s = localStorage.getItem('vb-sea'); if (s && PIT_SEAS[s]) pitCol.value = s; } catch {}
 const pitGroup = new THREE.Group();
@@ -5446,6 +5452,31 @@ function worldRect() {
     z0: -56, z1: tech ? 102 : (bos || blong) ? 74 : 54,
   };
 }
+let rockTex = null;
+function rockTexture() {   // near-black strata: banded sediment, seams, rare flecks
+  if (rockTex) return rockTex;
+  const W = 128, H = 48;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  for (let y = 0; y < H; y++) {
+    const band = 0.72 + 0.28 * Math.sin(y * 0.55 + h3(3, y >> 2, 17) * 2.4);
+    const depth = 1 - (y / H) * 0.35;
+    const seam = h3(11, y, 5) < 0.10 ? 0.55 : 1;
+    for (let x = 0; x < W; x++) {
+      let v = 30 * band * depth * seam * (0.82 + h3(x, y, 29) * 0.36);
+      if (h3(x, y, 41) > 0.985) v += 24;
+      v = Math.max(7, Math.min(58, Math.round(v)));
+      g.fillStyle = `rgb(${Math.round(v * 0.92)},${Math.round(v * 0.97)},${v})`;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  rockTex = new THREE.CanvasTexture(cv);
+  rockTex.colorSpace = THREE.SRGBColorSpace;
+  rockTex.magFilter = rockTex.minFilter = THREE.NearestFilter;
+  rockTex.generateMipmaps = false;
+  return rockTex;
+}
 function buildPit() {
   for (const c of [...pitGroup.children]) {
     pitGroup.remove(c);
@@ -5459,7 +5490,7 @@ function buildPit() {
   // the monolith, slightly proud so it swallows the earthen sides
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(w + 0.1, 46, d + 0.1),
-    new THREE.MeshBasicMaterial({ color: 0x07070a }));
+    new THREE.MeshBasicMaterial({ map: rockTexture() }));
   base.position.set(x0 + w / 2, -25, z0 + d / 2);
   pitGroup.add(base);
   // hazard rails one cell outside the playable rim, two courses tall
@@ -5468,8 +5499,8 @@ function buildPit() {
     for (let x = x0 - 1; x <= x1 + 1; x++) { cells.push([x, z0 - 1], [x, z1 + 1]); }
     for (let z = z0; z <= z1; z++) { cells.push([x0 - 1, z], [x1 + 1, z]); }
     const rail = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({}), cells.length * 2);
-    const cY = new THREE.Color(0xd8b31c), cK = new THREE.Color(0x17171a);
+      new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({}), cells.length * 2);
+    const cY = new THREE.Color(0x8a7620), cK = new THREE.Color(0x1a1a1e);
     let i = 0;
     for (const [cx, cz] of cells) for (const cy of [1.5, 2.5]) {
       pitDummy.position.set(cx + 0.5, cy, cz + 0.5);
@@ -5488,9 +5519,11 @@ function buildPit() {
   // hugging the rim, a static shimmer field beyond it, haze after that
   {
     const sea = PIT_SEAS[pitCol.value] || PIT_SEAS.inferno;
+    const seaMat = opt => sea.glow
+      ? new THREE.MeshBasicMaterial(opt) : new THREE.MeshLambertMaterial(opt);
     const floor = new THREE.Mesh(
       new THREE.BoxGeometry(3000, 1.6, 3000),
-      new THREE.MeshBasicMaterial({ color: sea.floor }));
+      seaMat({ color: sea.floor }));
     floor.position.set((x0 + x1) / 2, -25.8, (z0 + z1) / 2);
     pitGroup.add(floor);
 
@@ -5515,7 +5548,7 @@ function buildPit() {
     };
     { // static shimmer out toward the horizon
       const n = far.length / 2;
-      const still = new THREE.InstancedMesh(gm, new THREE.MeshBasicMaterial({}), n);
+      const still = new THREE.InstancedMesh(gm, seaMat({}), n);
       for (let i = 0; i < n; i++) {
         const fx = far[i * 2], fz = far[i * 2 + 1];
         tint(still, i, fx, fz);
@@ -5539,7 +5572,7 @@ function buildPit() {
         speed.push(1.6 + h3(fx, 1, fz) * 2.6);
         amp.push(1 + h3(fx, 2, fz) * 3.5);
       }
-      const flames = new THREE.InstancedMesh(gm, new THREE.MeshBasicMaterial({}), n);
+      const flames = new THREE.InstancedMesh(gm, seaMat({}), n);
       for (let i = 0; i < n; i++) {
         tint(flames, i, near[i * 2], near[i * 2 + 1]);
         pitDummy.position.set(pos[i * 2], -25.2, pos[i * 2 + 1]);
@@ -5664,8 +5697,10 @@ function updateSun(minutes) {
   sun.color.copy(sunHorizon).lerp(sunNoon, clamp01(el / 0.45));
 
   rampColor(el, skyCol);
-  scene.background = skyCol;
-  scene.fog.color.copy(skyCol);
+  if (fogAuto.checked) {
+    scene.background = skyCol;
+    scene.fog.color.copy(skyCol);
+  }
 
   hemi.color.copy(hemiNight).lerp(hemiDay, clamp01((el + 0.08) / 0.3));
   hemi.intensity = 0.22 + 0.75 * clamp01(el / 0.25);
@@ -5695,6 +5730,18 @@ function updateSun(minutes) {
 
 const slider = document.getElementById('time');
 slider.addEventListener('input', () => updateSun(+slider.value));
+
+// fog tint: pick a color to lock the haze (and sky) to it; auto follows the sun
+const fogPick = document.getElementById('fogcol');
+const fogAuto = document.getElementById('fogauto');
+function applyFogPick() {
+  scene.fog.color.set(fogPick.value);
+  scene.background = scene.fog.color;
+}
+fogPick.addEventListener('input', () => { fogAuto.checked = false; applyFogPick(); });
+fogAuto.addEventListener('change', () => {
+  if (fogAuto.checked) updateSun(+slider.value); else applyFogPick();
+});
 
 // optional URL-hash presets, e.g. #t=1290&cam=70,30,60&tgt=40,12,0
 {
