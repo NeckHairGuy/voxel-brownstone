@@ -180,6 +180,8 @@
     border:1px solid rgba(255,83,71,.35);
   }
   body.showhelp #tip-help{display:block;}
+  /* third person is benched for now — keep its button and tip hidden */
+  #tcam,#tip-cam{display:none !important;}
   /* touch FPV crowds the bottom edge — the ? explainer yields to the button tips */
   body.touchfpv #tip-help{display:none;}
 </style>
@@ -544,8 +546,9 @@ function markDoor(x0, y0, z0, x1, y1, z1) {
     H: ['#.#', '###', '#.#'], I: ['#', '#', '#'], J: ['..#', '..#', '##.'],
     K: ['#.#', '##.', '#.#'], L: ['#..', '#..', '###'], M: ['##.##', '#.#.#', '#...#'],
     N: ['#..#', '##.#', '#.##'], O: ['###', '#.#', '###'], P: ['##.', '##.', '#..'],
-    S: ['.##', '.#.', '##.'], T: ['###', '.#.', '.#.'], U: ['#.#', '#.#', '###'],
-    V: ['#.#', '#.#', '.#.'], X: ['#.#', '.#.', '#.#'], Y: ['#.#', '.#.', '.#.'],
+    R: ['##.', '##.', '#.#'], S: ['.##', '.#.', '##.'], T: ['###', '.#.', '.#.'],
+    U: ['#.#', '#.#', '###'], V: ['#.#', '#.#', '.#.'], W: ['#...#', '#.#.#', '.#.#.'],
+    X: ['#.#', '.#.', '#.#'], Y: ['#.#', '.#.', '.#.'],
   };
   function sign(word, x0, y0, z, scale, color, t = 3, sp = 1) {
     let lx = x0;
@@ -2286,7 +2289,8 @@ function buildBostonLong() {
   V(73, 19, 6, 0x2ee868, { t: 2, j: 0 });
   V(73, 30, 7, 0x2ee868, { t: 2, j: 0 });
 
-  /* ---- the LAYOFF SIMULATOR billboard, high over the back field ---- */
+  /* ---- the show billboard: wide classic board set well back in the
+     field, headline over the burning-worker logo ---- */
   {
     const LOGO = [
       '...........RR...........',
@@ -2313,21 +2317,24 @@ function buildBostonLong() {
       '..RKAAAAAAAAAAAAAAAAKR..',
       '...KBBBBBBBBBBBBBBBBK...',
       '...KPPPPPPPPPPPPPPPPK...',
-      '....KPPPPPKCCKPPPPPK....',
-      '.......KDDKCCKDDK.......',
+      '....KPPPPPKKKKPPPPPK....',
+      '......KDDDK..KDDDK......',
     ];
     const LP = { R: 0xd82818, r: 0xf05038, O: 0xf07818, Y: 0xffd080, K: 0x141414, H: 0xc05a14,
                  S: 0xe8b088, W: 0xf0f8f0, M: 0x2a5a50, T: 0xb02020, B: 0xa8d0f0, A: 0x84909c,
-                 P: 0xb08850, C: 0x9aa2ac, D: 0x34383e };
-    for (const px9 of [112, 129]) {
-      fillB(px9, 1, -16, px9 + 1, 13, -15, BB.steel, { j: 0.04 });
-      fillB(px9, 6, -16, px9 + 1, 6, -15, 0x464c54, { j: 0.04 });
+                 P: 0xb08850, D: 0x34383e };
+    for (const px9 of [92, 111, 128]) {
+      fillB(px9, 1, -32, px9 + 1, 11, -31, BB.steel, { j: 0.04 });
+      fillB(px9, 6, -32, px9 + 1, 6, -31, 0x464c54, { j: 0.04 });
     }
-    fillB(107, 14, -16, 136, 42, -15, 0x1c2026, { j: 0.03 });
+    fillB(82, 12, -32, 141, 51, -31, 0x1c2026, { j: 0.03 });
+    fillB(82, 12, -32, 141, 13, -31, 0x464c54, { j: 0.03 });
+    sign('TECH ROAST SHOW', 83, 46, -30, 1, 0xf2f0ea, 2);
+    sign('VS BOSTON', 94, 41, -30, 1, BB.coral, 2);
     LOGO.forEach((row, ry) => {
       for (let cx = 0; cx < row.length; cx++) {
         const ch = row[cx];
-        if (ch !== '.') V(110 + cx, 41 - ry, -14, LP[ch], { t: 2, j: 0 });
+        if (ch !== '.') V(99 + cx, 39 - ry, -30, LP[ch], { t: 2, j: 0 });
       }
     });
   }
@@ -4410,6 +4417,7 @@ const player = {
 const P_HALF = 0.30, P_H = 3.9, P_H_CROUCH = 2.9, P_EYE = 3.45;
 const P_SPEED = 9, P_SPRINT = 15, P_JUMP = 13.5;
 let P_Hcur = P_H;       // current collision height (crouching shrinks it)
+let bobPhase = 0, bobAmp = 0;   // first-person walk bob
 let playZMax = 54.5;    // northern world edge (extended by Tech Brooklyn / Boston)
 let playXMax = 60.5;    // eastern world edge (extended by Tech Brooklyn Long / Boston)
 let playXMin = X0 + 0.5, playZMin = -55.5;
@@ -4450,7 +4458,6 @@ const keys = new Set();
 addEventListener('keydown', e => {
   if (!player.active) return;
   keys.add(e.code);
-  if (e.code === 'KeyV' && !e.repeat) setCam3(!cam3);
   if (e.code === 'Space' || e.code === 'ControlLeft' || e.code === 'ControlRight') e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
@@ -4464,7 +4471,7 @@ const fpvBtn = document.getElementById('fpv');
 const xhair = document.getElementById('xhair');
 const hintEl = document.querySelector('#ui .hint');
 const HINT_ORBIT = hintEl.textContent;
-const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space — jump · V — camera · click — explode · esc — exit';
+const HINT_FPV = 'WASD — move · shift — run · ctrl — crouch · space — jump · click — explode · esc — exit';
 const savedCam = { pos: new THREE.Vector3(), tgt: new THREE.Vector3() };
 
 fpvBtn.addEventListener('click', () => {
@@ -4508,7 +4515,7 @@ function enterFPV() {
   matDoor.depthWrite = false;
   xhair.style.display = 'block';
   if (isTouch) document.body.classList.add('touchfpv');
-  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — cam / crouch / jump' : HINT_FPV;
+  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — crouch / jump' : HINT_FPV;
   fpvBtn.textContent = isTouch ? 'exit FPV' : 'exit FPV (esc)';
 }
 function exitFPV() {
@@ -4531,18 +4538,15 @@ function exitFPV() {
   isoBox.disabled = false;
 }
 
-/* ---- third-person chase camera (FPV alternative; V key or 3P button) ---- */
-let cam3 = localStorage.getItem('vb-cam3') === '1';
+/* ---- third-person chase camera (disabled for now; machinery kept) ---- */
+let cam3 = false;
 const CAM3_DIST = 10.5;
 const tcamBtn = document.getElementById('tcam');
 function setCam3(on) {
   cam3 = on;
-  localStorage.setItem('vb-cam3', on ? '1' : '0');
   tcamBtn.classList.toggle('on', on);
   tcamBtn.textContent = on ? '1P' : '3P';   // label = what a tap switches to
 }
-tcamBtn.addEventListener('pointerdown', e => { e.preventDefault(); setCam3(!cam3); });
-setCam3(cam3);
 
 // grid-march from the player's eye away from the view direction; returns how
 // far back the chase camera can sit before a wall would swallow it
@@ -4728,6 +4732,11 @@ function stepPlayer(dt) {
   player.x = Math.max(playXMin, Math.min(playXMax, player.x));
   player.z = Math.max(playZMin, Math.min(playZMax, player.z));
 
+  // subtle head bob while walking (fades in/out, scales with pace)
+  const striding = player.grounded && (mx !== 0 || mz !== 0);
+  bobAmp += ((striding ? 1 : 0) - bobAmp) * Math.min(1, dt * 8);
+  if (striding) bobPhase += dt * sp * 1.35;
+
   playerGroup.position.set(player.x, player.y, player.z);
   playerGroup.rotation.y = player.yaw;
   playerGroup.children[3].visible = !player.crouch;   // tuck the head voxel
@@ -4751,7 +4760,7 @@ function stepPlayer(dt) {
     playerGroup.scale.set(0.5, 1, 0.5);
     playerGroup.children[2].visible = false;
     playerGroup.children[3].visible = false;
-    camera.position.set(player.x, eyeY, player.z);
+    camera.position.set(player.x, eyeY + Math.sin(bobPhase) * 0.07 * bobAmp, player.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
   }
 }
