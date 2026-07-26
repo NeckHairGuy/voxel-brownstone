@@ -60,6 +60,8 @@ Or open `brownstone.html` directly in a browser for the offline sandbox.
   through). On mobile, joining as human brings up touch controls: a virtual
   joystick (full tilt sprints), drag to look, and jump / crouch / **3P camera**
   buttons.
+- Red help tips label every control; the round **?** button (bottom center)
+  hides or shows them, and the choice is remembered.
 - Time-of-day slider and `cycle day` checkbox in the panel
 - URL hash presets: `#t=1290&cam=x,y,z&tgt=x,y,z&boom=x,y,z&scene=tech`
 

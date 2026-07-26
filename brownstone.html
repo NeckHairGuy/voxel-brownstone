@@ -117,6 +117,40 @@
   /* 16px stops iOS Safari from auto-zooming the page when the name field is
      focused — the zoom used to persist into FPV, hiding the touch controls */
   @media (pointer:coarse){ #mp input{font-size:16px;} }
+  /* ---- red help tips (the ? button toggles body.showhelp) ---- */
+  .help{
+    display:none;color:#ff5347;font-size:11.5px;font-weight:600;line-height:1.35;
+    margin-top:3px;letter-spacing:.2px;
+  }
+  body.showhelp .help{display:block;}
+  .ttip{
+    position:fixed;z-index:9;display:none;pointer-events:none;
+    color:#ff5347;font:600 12px/1.2 -apple-system,Segoe UI,system-ui,sans-serif;
+    background:rgba(10,12,18,.78);padding:4px 9px;border-radius:7px;
+    border:1px solid rgba(255,83,71,.35);
+  }
+  body.touchfpv.showhelp .ttip{display:block;}
+  #tip-stick{left:calc(22px + env(safe-area-inset-left, 0px));bottom:calc(142px + env(safe-area-inset-bottom, 0px));}
+  #tip-jump{right:calc(90px + env(safe-area-inset-right, 0px));bottom:calc(44px + env(safe-area-inset-bottom, 0px));}
+  #tip-crouch{right:calc(90px + env(safe-area-inset-right, 0px));bottom:calc(114px + env(safe-area-inset-bottom, 0px));}
+  #tip-cam{right:calc(90px + env(safe-area-inset-right, 0px));bottom:calc(184px + env(safe-area-inset-bottom, 0px));}
+  #help-toggle{
+    position:fixed;bottom:calc(14px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%);z-index:11;
+    width:34px;height:34px;border-radius:50%;cursor:pointer;
+    background:rgba(12,14,20,.78);border:1px solid rgba(255,83,71,.55);
+    color:#ff5347;font:700 16px/32px -apple-system,Segoe UI,system-ui,sans-serif;text-align:center;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;
+  }
+  #tip-help{
+    position:fixed;bottom:calc(56px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%);z-index:11;
+    display:none;pointer-events:none;white-space:nowrap;
+    color:#ff5347;font:600 12px -apple-system,Segoe UI,system-ui,sans-serif;
+    background:rgba(10,12,18,.78);padding:4px 9px;border-radius:7px;
+    border:1px solid rgba(255,83,71,.35);
+  }
+  body.showhelp #tip-help{display:block;}
+  /* touch FPV crowds the bottom edge — the ? explainer yields to the button tips */
+  body.touchfpv #tip-help{display:none;}
 </style>
 </head>
 <body>
@@ -126,26 +160,34 @@
     <div class="sub">brownstone &middot; corner deli &middot; construction site</div>
     <div id="clock">2:30 PM</div>
     <input id="time" type="range" min="0" max="1439" step="1" value="870">
+    <div class="help">slider — set the time of day</div>
     <div class="row">
       <label><input id="play" type="checkbox"> cycle day</label>
       <label><input id="facade" type="checkbox"> hide facades (dollhouse)</label>
     </div>
+    <div class="help">cycle day — the sun runs on its own &middot; hide facades — peek inside (your view only)</div>
     <div class="row">
       <label><input id="bearing" type="checkbox" checked> load-bearing collapse</label>
     </div>
+    <div class="help">collapse — structures cut from the ground break off and fall</div>
     <select id="scene">
       <option value="default">scene: default Brooklyn</option>
       <option value="tech">scene: Tech Brooklyn</option>
       <option value="techlong">scene: Tech Brooklyn Long</option>
     </select>
+    <div class="help">scene — swap the map (switches it for everyone online)</div>
     <div class="row">
       <label><input id="iso" type="checkbox"> isometric camera</label>
     </div>
+    <div class="help">isometric — flat angled city view</div>
     <div class="row">
       <label><input id="spot" type="checkbox" checked> corpo night spotlight</label>
     </div>
+    <div class="help">spotlight — the corpo's searchlight after dark</div>
     <button id="fpv">&#9654; enter FPV</button>
+    <div class="help" id="fpv-help">FPV — walk the block as a voxel figure</div>
     <button id="reset">reset scene</button>
+    <div class="help">reset — rebuild every destroyed voxel (for everyone online)</div>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
   </div>
 </div>
@@ -161,6 +203,8 @@
         <button id="join-human">join as human</button>
         <button id="join-corpo">join as corpo</button>
       </div>
+      <div class="help">human — survive on foot, +1 pt per second alive (4 seats) &middot;
+        corpo — orbit view, tap voxels to explode, tap a human to lay them off (1 seat)</div>
     </div>
     <ul id="mp-list"></ul>
   </div>
@@ -169,11 +213,18 @@
   <div class="lo-title">LAID OFF</div>
   <div class="lo-sub">the corpo restructured you out of the org chart</div>
   <button id="respawn">respawn</button>
+  <div class="help">respawn — back to the streets once the cooldown ends</div>
 </div>
 <div id="stick"><div id="knob"></div></div>
 <div id="tjump" class="tbtn">&#8673;</div>
 <div id="tcrouch" class="tbtn">&#8675;</div>
 <div id="tcam" class="tbtn">3P</div>
+<div id="tip-stick" class="ttip">drag — move &middot; full tilt — sprint</div>
+<div id="tip-jump" class="ttip">jump</div>
+<div id="tip-crouch" class="ttip">crouch (tap to toggle)</div>
+<div id="tip-cam" class="ttip">switch 1st / 3rd person view</div>
+<div id="help-toggle">?</div>
+<div id="tip-help">red tips — tap ? to hide or show</div>
 
 <script>
 // three.js comes from the local vendor/ dir when served (a room full of
@@ -2843,6 +2894,9 @@ function enterFPV() {
   playerGroup.visible = true;
   camera.rotation.order = 'YXZ';
   camera.fov = isTouch ? 70 : 58;   // wider than the orbit lens: less tunnel vision indoors
+  // near plane must sit inside the 0.30-half-width collider, or walls
+  // within arm's reach get sliced open by the frustum
+  camera.near = 0.12;
   camera.updateProjectionMatrix();
   matDoor.opacity = 0.45;
   matDoor.depthWrite = false;
@@ -2856,6 +2910,7 @@ function exitFPV() {
   playerGroup.visible = false;
   controls.enabled = true;
   camera.fov = 46;
+  camera.near = 0.5;   // orbit range: restore depth precision
   camera.updateProjectionMatrix();
   camera.position.copy(savedCam.pos);
   controls.target.copy(savedCam.tgt);
@@ -2900,8 +2955,8 @@ function camClearance(ox, oy, oz, dx, dy, dz, maxD) {
     else if (ty <= tz) { t = ty; ty += iy; y += sy; }
     else { t = tz; tz += iz; z += sz; }
     if (t >= maxD) break;
-    if (playerSolid(x, y, z)) return Math.max(2, t - 0.4);
-  }
+    if (playerSolid(x, y, z)) return Math.max(0.55, t - 0.45);   // never past a wall —
+  }                                    // in a tight spot the chase cam collapses toward 1st person
   return maxD;
 }
 
@@ -3077,9 +3132,11 @@ function stepPlayer(dt) {
     const cp = Math.cos(player.pitch);
     const fx = -Math.sin(player.yaw) * cp, fy = Math.sin(player.pitch), fz = -Math.cos(player.yaw) * cp;
     const d = camClearance(player.x, eyeY, player.z, -fx, -fy, -fz, CAM3_DIST);
+    playerGroup.visible = d > 1.8;   // pulled in tight, own figure would fill the lens
     camera.position.set(player.x - fx * d, eyeY - fy * d, player.z - fz * d);
     camera.lookAt(player.x + fx * 2, eyeY + fy * 2, player.z + fz * 2);
   } else {
+    playerGroup.visible = true;
     camera.position.set(player.x, eyeY, player.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
   }
@@ -3128,6 +3185,7 @@ function wsConnect() {
     mpStatus.textContent = 'pick a side';
     mpJoinEl.style.display = 'block';
     fpvBtn.style.display = 'none';
+    document.getElementById('fpv-help').style.display = 'none';   // online: seats, not the button
     // physics must match across clients, so online it's always on
     loadBearing = true;
     bearingBox.checked = true;
@@ -3143,6 +3201,7 @@ function wsConnect() {
     mpWatchEl.style.display = 'none';
     laidoffEl.style.display = 'none';
     fpvBtn.style.display = '';
+    document.getElementById('fpv-help').style.display = '';
     bearingBox.disabled = false;
     if (player.active) { document.exitPointerLock(); exitFPV(); }
     lastRoster = [];
@@ -3428,6 +3487,15 @@ sceneSel.addEventListener('change', () => {
     setSceneLocal(want);
   }
 });
+
+/* ---- red help tips: the ? button shows/hides every .help / .ttip ---- */
+const helpToggle = document.getElementById('help-toggle');
+function setHelp(on) {
+  document.body.classList.toggle('showhelp', on);
+  localStorage.setItem('vb-help', on ? '1' : '0');
+}
+helpToggle.addEventListener('click', () => setHelp(!document.body.classList.contains('showhelp')));
+setHelp(localStorage.getItem('vb-help') !== '0');   // default: shown
 
 /* ---- collapsible panels (start collapsed on small screens) ---- */
 function makeCollapsible(panelId, headId) {
