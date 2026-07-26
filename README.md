@@ -88,10 +88,8 @@ Or open `brownstone.html` directly in a browser for the offline sandbox.
   esc to exit. The figure **auto-ducks** through tight stairwell headroom and
   gets nudged through narrow doorways; ctrl/C still crouches deliberately
   (slower, one voxel shorter). Doors ghost transparent and can be walked
-  through. **V toggles a third-person chase camera** (walls pull it in, never
-  through). On mobile, joining as human brings up touch controls: a virtual
-  joystick (full tilt sprints), drag to look, and jump / crouch / **3P camera**
-  buttons.
+  through. On mobile, joining as human brings up touch controls: a virtual
+  joystick (full tilt sprints), drag to look, and a jump button.
 - Red help tips label every control; the round **?** button (bottom center)
   hides or shows them, and the choice is remembered.
 - Time-of-day slider and `cycle day` checkbox in the panel

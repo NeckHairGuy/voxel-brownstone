@@ -183,6 +183,7 @@
   body.showhelp #tip-help{display:block;}
   /* third person is benched for now — keep its button and tip hidden */
   #tcam,#tip-cam{display:none !important;}
+  #tcrouch,#tip-crouch{display:none !important;}   /* crouch button parked for now */
   /* touch FPV crowds the bottom edge — the ? explainer yields to the button tips */
   body.touchfpv #tip-help{display:none;}
 </style>
@@ -4534,7 +4535,7 @@ function enterFPV() {
   matDoor.depthWrite = false;
   xhair.style.display = 'block';
   if (isTouch) document.body.classList.add('touchfpv');
-  hintEl.textContent = isTouch ? 'stick — move · drag — look · buttons — crouch / jump' : HINT_FPV;
+  hintEl.textContent = isTouch ? 'stick — move · drag — look · button — jump' : HINT_FPV;
   fpvBtn.textContent = isTouch ? 'exit FPV' : 'exit FPV (esc)';
 }
 function exitFPV() {
