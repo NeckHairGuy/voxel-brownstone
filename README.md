@@ -33,6 +33,10 @@ server), the scene becomes a game. Join from the panel in the top right:
 - Everyone else spectates in the free orbit camera; the panel shows a live
   **connected head-count** so you can watch the room fill up. Connections are
   capped at 400 (`MAX_CONNS` env to change).
+- **Audience URL**: append `/join` (or `?audience`) — e.g.
+  `https://host/join` — for the link you hand a crowd: the corpo seat is
+  hidden (humans and spectators only), and once seated the control panels
+  disappear for an uncluttered view. Panels return if the connection drops.
 
 The roster, roles, and live scores are shown in the top-right panel. World
 destruction is synchronized — explosions are broadcast and replayed to anyone

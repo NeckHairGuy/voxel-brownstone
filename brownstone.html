@@ -2668,8 +2668,10 @@ renderer.domElement.addEventListener('pointerup', e => {
       -((e.clientY - rect.top) / rect.height) * 2 + 1
     );
   }
-  // online, only the corpo can act; offline it's a sandbox
-  if (net.online && net.role !== 'corpo') return;
+  // only the corpo can act; local explosions exist solely in the true
+  // file:// sandbox. A served page between reconnects stays inert — a phone
+  // waking from sleep must not detonate its first tap.
+  if (!sandbox && net.role !== 'corpo') return;
   _ray.setFromCamera(_ndc, activeCam);
   const targets = [];
   if (net.online) for (const r of remotes.values())
@@ -3149,6 +3151,8 @@ function stepPlayer(dt) {
    falls back to the offline sandbox when no server is there.
    ============================================================ */
 const net = { ws: null, online: false, id: 0, role: null, alive: false };
+let sandbox = false;   // true only when no game server is expected (file:// open) —
+                       // a served page that momentarily drops its socket is NOT a sandbox
 const remotes = new Map();   // id -> {group, alive, x,y,z,yaw, tx,ty,tz,tyaw}
 let lastRoster = [];
 const mpStatus = document.getElementById('mp-status');
@@ -3167,17 +3171,22 @@ const laidoffEl = document.getElementById('laidoff');
 const respawnBtn = document.getElementById('respawn');
 let diedAtLocal = 0;
 
+// audience mode — the QR-code URL (path ends in /join, or ?audience):
+// human seats and spectating only, and the panels vanish once seated
+const AUDIENCE = /(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience');
+if (AUDIENCE) joinCorpoBtn.style.display = 'none';
+
 mpNameEl.value = localStorage.getItem('vb-name') || '';
 
 function nsend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
 
 function wsConnect() {
-  if (!location.host) { mpStatus.textContent = 'offline sandbox (open via the server for multiplayer)'; return; }
+  if (!location.host) { sandbox = true; mpStatus.textContent = 'offline sandbox (open via the server for multiplayer)'; return; }
   const base = location.pathname.replace(/\/+$/, '');
   let ws;
   try {
     ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + base + '/ws');
-  } catch { mpStatus.textContent = 'offline sandbox'; return; }
+  } catch { sandbox = true; mpStatus.textContent = 'offline sandbox'; return; }
   net.ws = ws;
   mpStatus.textContent = 'connecting…';
   ws.onopen = () => {
@@ -3200,6 +3209,10 @@ function wsConnect() {
     mpListEl.innerHTML = '';
     mpWatchEl.style.display = 'none';
     laidoffEl.style.display = 'none';
+    if (AUDIENCE) {   // dropped mid-game: bring the panels back to rejoin
+      document.getElementById('ui').style.display = '';
+      document.getElementById('mp').style.display = '';
+    }
     fpvBtn.style.display = '';
     document.getElementById('fpv-help').style.display = '';
     bearingBox.disabled = false;
@@ -3238,6 +3251,10 @@ function handleNet(m) {
       net.id = m.id; net.role = m.role; net.alive = m.role === 'human';
       mpJoinEl.style.display = 'none';
       applyTimeLock();
+      if (AUDIENCE) {   // seated audience members get an uncluttered view
+        document.getElementById('ui').style.display = 'none';
+        document.getElementById('mp').style.display = 'none';
+      }
       if (m.role === 'corpo') {
         mpStatus.textContent = 'you are the CORPO — click a human to lay them off';
         sendTime();   // the corpo's clock becomes everyone's clock
@@ -3375,6 +3392,7 @@ function localLayoff() {
 }
 
 function doJoin(want) {
+  if (AUDIENCE && want === 'corpo') return;   // audience URL: humans only
   const name = (mpNameEl.value || '').trim() || 'player';
   localStorage.setItem('vb-name', name);
   if (want === 'human' && !isTouch) renderer.domElement.requestPointerLock();   // in the click gesture
@@ -3436,7 +3454,7 @@ wsConnect();
 // steps the player sim by hand where rAF is throttled (hidden tabs, tests)
 window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick,
   tick: dt => stepPlayer(dt), boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
-  render: () => renderer.render(scene, activeCam) };
+  render: () => renderer.render(scene, activeCam), debrisCount: () => debris.length };
 
 /* ---- reset scene: rebuild every voxel in place (synced when online) ---- */
 function resetWorld() {
