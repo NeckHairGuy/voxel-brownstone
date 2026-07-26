@@ -18,6 +18,10 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   audience `/join` URL as a QR code — appears automatically on the
   operator's `?corpo=` URL for the big screen, toggleable from the panel
   for anyone else, never shown in audience mode
+- **Corpo marquee**: the corpo clicks the subtle line at the top center
+  of the screen and types — every keystroke is relayed live to the top
+  of every connected screen, audience phones included (Enter or Esc to
+  drop focus; late joiners see the current line)
 - **Click any voxel to explode it** — debris cubes tumble with real collision against
   the voxel grid and settle back into the world as permanent rubble
 - **Load-bearing collapse** — structures cut off from the ground break loose and

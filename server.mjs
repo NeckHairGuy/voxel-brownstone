@@ -129,7 +129,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined });
+  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined });
 });
 
 /* ============================================================
@@ -151,6 +151,7 @@ const booms = [];          // [x,y,z] history, replayed to new connections
 let nextId = 1;
 let scene = 'default';     // 'default' | 'tech' | 'techlong' — all clients build the same scene
 let timeState = null;      // { m, play } — the corpo's time of day, followed by everyone
+let marqueeText = '';      // the corpo's line to the room, shown top-center everywhere
 
 /* ---- name filter: slurs and hate terms are refused; casual profanity is
        not our problem. Kept in sync with the copy in brownstone.html. ---- */
@@ -250,6 +251,12 @@ function onMessage(conn, m) {
         t: 'spot', x: +m.x || 0, y: +m.y || 0, z: +m.z || 0,
         ox: +m.ox || 0, oy: +m.oy || 0, oz: +m.oz || 0,
       }, conn);
+      break;
+    case 'marquee': // the corpo types a line to the room
+      if (p && p.role === 'corpo') {
+        marqueeText = String(m.text ?? '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 80);
+        broadcast({ t: 'marquee', text: marqueeText }, conn);
+      }
       break;
     case 'boom': // corpo-only ability
       if (p && p.role === 'corpo') {

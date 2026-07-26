@@ -214,6 +214,17 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
   #wifi.show{display:flex;}
   #wifi div{font:400 clamp(10px,1.7vh,15px)/1.4 'Press Start 2P',monospace;color:#111;white-space:nowrap;}
   body.audience #wifi{display:none !important;}
+  #marquee{
+    position:fixed;top:calc(10px + env(safe-area-inset-top, 0px));left:50%;
+    transform:translateX(-50%);width:min(72vw,760px);z-index:28;text-align:center;
+    background:transparent;border:none;outline:none;border-radius:8px;padding:6px 10px;
+    font:400 clamp(12px,2.3vh,24px)/1.5 'Press Start 2P',monospace;
+    color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7);caret-color:#e0a85a;
+    pointer-events:none;   /* display-only for everyone but the corpo */
+  }
+  #marquee::placeholder{color:rgba(255,255,255,.22);}
+  body.mq-edit #marquee{pointer-events:auto;}
+  body.mq-edit #marquee:hover,body.mq-edit #marquee:focus{background:rgba(10,14,22,.4);}
   #ui input[type=text]{
     width:100%;margin-top:6px;padding:4px 6px;border-radius:6px;
     border:1px solid rgba(255,255,255,.15);background:#232838;color:#e9e4d8;
@@ -300,6 +311,7 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
   <div id="wifi-ssid">WIFI: Pavilion Guest</div>
   <div id="wifi-pass">PW: Pavili0n</div>
 </div>
+<input id="marquee" type="text" maxlength="80" spellcheck="false" autocomplete="off" readonly>
 <div id="mp">
   <div class="panel-head" id="mp-head"><span>players</span><span class="caret">&#9662;</span></div>
   <div class="panel-body" id="mp-body">
@@ -4934,6 +4946,9 @@ function wsConnect() {
   ws.onclose = () => {
     const retry = net.online || net.ws === ws;
     net.online = false; net.role = null; net.id = 0; net.alive = false;
+    document.body.classList.remove('mq-edit');
+    marqueeEl.readOnly = true;
+    marqueeEl.placeholder = '';
     for (const r of remotes.values()) scene.remove(r.group);
     remotes.clear();
     mpJoinEl.style.display = 'none';
@@ -4961,6 +4976,23 @@ function wsConnect() {
   };
 }
 
+// the corpo's line to the room — a subtle marquee across the top of every screen
+const marqueeEl = document.getElementById('marquee');
+let mqLastSent = 0, mqTimer = null;
+function mqSend() {
+  mqTimer = null;
+  mqLastSent = performance.now();
+  nsend({ t: 'marquee', text: marqueeEl.value });
+}
+marqueeEl.addEventListener('input', () => {
+  if (net.role !== 'corpo') return;
+  if (!mqTimer) mqTimer = setTimeout(mqSend, Math.max(0, 120 - (performance.now() - mqLastSent)));
+});
+marqueeEl.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter' || e.key === 'Escape') marqueeEl.blur();
+});
+
 function handleNet(m) {
   switch (m.t) {
     case 'hello':
@@ -4969,6 +5001,7 @@ function handleNet(m) {
       updateRoster(m.players || []);
       setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
+      if (m.marquee !== undefined) marqueeEl.value = m.marquee;
       break;
     case 'time':
       if (net.role !== 'corpo') {
@@ -4991,6 +5024,9 @@ function handleNet(m) {
       if (m.role === 'corpo') {
         mpStatus.textContent = 'you are the CORPO — click a human to lay them off';
         sendTime();   // the corpo's clock becomes everyone's clock
+        document.body.classList.add('mq-edit');
+        marqueeEl.readOnly = false;
+        marqueeEl.placeholder = 'type to the room';
       } else {
         mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
@@ -5006,6 +5042,9 @@ function handleNet(m) {
     case 'msg':   // server-side notices (e.g. show-mode gates)
       mpStatus.textContent = m.text;
       audMsg(m.text);
+      break;
+    case 'marquee':
+      if (document.activeElement !== marqueeEl) marqueeEl.value = m.text || '';
       break;
     case 'players':
       updateRoster(m.list || []);
