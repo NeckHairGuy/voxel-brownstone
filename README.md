@@ -11,12 +11,25 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
 - **Load-bearing collapse** — structures cut off from the ground break loose and
   fall as rigid pieces, landing intact or shattering into debris (blow out the
   crane mast or the water-tower legs)
-- **Three scenes** (synced in multiplayer): *default Brooklyn*; *Tech Brooklyn*,
+- **Four scenes** (synced in multiplayer): *default Brooklyn*; *Tech Brooklyn*,
   which fills the far side of the street with the 7-story VOXL tower (every
   floor furnished and walkable, stairs to the helipad roof) and the FLEX luxury
-  gym with a rooftop pool, plus a cybertruck and robotaxi at the curb; and
+  gym with a rooftop pool, plus a cybertruck and robotaxi at the curb;
   *Tech Brooklyn Long*, which instead extends the street east so all five
-  buildings line the same side
+  buildings line the same side; and **Boston** — a standalone map ~1.5x the
+  Brooklyn block: three Beacon-Hill bowfronts with walkable interiors (a law
+  office, a bookshop with a sleeping cat, a family house climbable to its
+  roof deck) and hidden walled gardens; the Common with a wadeable Frog Pond,
+  swan boat, ducklings statues, gazebo, and a popcorn cart mobbed by pigeons;
+  an Old-North-style church with pews, organ, stained glass, and a climbable
+  steeple (two lanterns, golden cod weathervane); a crooked burying ground;
+  DUNKS with a giant sprinkle donut on the roof; a T station (mind the rat,
+  the board says LATE), a walk-through Green Line trolley, triple-deckers
+  with climbable stacked porches under a rooftop VOXGO sign; and the HUBB
+  campus — brick-podium HQ with a golden cod in the lobby, the Freedom
+  Trail ending at its turnstiles, a specimen-tank lab, nap pods, a ball-pit
+  conference room, an org-chart wall with fresh gaps, plus a steaming-kettle
+  plaza with robo-dogs and a CHOWDAH truck
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 
