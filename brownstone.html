@@ -9,6 +9,9 @@
 // the module script that sets body.audience runs long after first paint
 if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience'))
   document.documentElement.classList.add('audience');
+// same trick for the building-catalogue page: swap chrome before first paint
+if (new URLSearchParams(location.search).has('catalog'))
+  document.documentElement.classList.add('catalog');
 </script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#0a0e16;touch-action:manipulation;}
@@ -224,6 +227,38 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
   }
   body.mq-edit #marquee{pointer-events:auto;}
   body.mq-edit #marquee:hover,body.mq-edit #marquee:focus{background:rgba(10,14,22,.4);}
+  /* ---- building catalogue mode (?catalog) ---- */
+  html.catalog #ui,html.catalog #mp,html.catalog #qr,html.catalog #wifi,
+  html.catalog #marquee,html.catalog #help-toggle,html.catalog #tip-help,
+  html.catalog #xhair{display:none !important;}
+  #cat,#cat-hud{display:none;}
+  html.catalog #cat{
+    display:flex;flex-direction:column;position:fixed;top:14px;left:14px;bottom:14px;
+    width:232px;z-index:40;background:rgba(13,17,26,.92);border-radius:14px;
+    padding:14px;box-sizing:border-box;color:#e9e4d8;
+    font:12px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #cat h1{font:400 13px/1.6 'Press Start 2P',monospace;margin:0 0 8px;color:#f0c040;}
+  #cat-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px;}
+  .cat-scene{font-size:10px;letter-spacing:.12em;opacity:.5;margin:10px 0 2px;}
+  #cat-list button{
+    text-align:left;padding:7px 9px;border:none;border-radius:8px;cursor:pointer;
+    background:#232838;color:#e9e4d8;font:12px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #cat-list button:hover{background:#2e3548;}
+  #cat-list button.sel{background:#e0a85a;color:#1a1408;font-weight:700;}
+  #cat-back{margin-top:10px;color:#8ab4ff;font-size:12px;text-decoration:none;}
+  html.catalog #cat-hud{
+    display:flex;position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    z-index:40;background:rgba(13,17,26,.92);border-radius:14px;padding:12px 16px;
+    flex-direction:column;gap:8px;min-width:360px;max-width:86vw;box-sizing:border-box;
+    color:#e9e4d8;font:12px -apple-system,Segoe UI,system-ui,sans-serif;
+  }
+  #cat-name{font:400 12px/1.5 'Press Start 2P',monospace;color:#fff;text-align:center;}
+  #cat-opts{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  #cat-sides{display:flex;gap:14px;flex-wrap:wrap;}
+  #cat-opts label{display:flex;gap:5px;align-items:center;cursor:pointer;}
+  #cat-hud input[type=range]{width:100%;accent-color:#e0a85a;}
   #ui input[type=text]{
     width:100%;margin-top:6px;padding:4px 6px;border-radius:6px;
     border:1px solid rgba(255,255,255,.15);background:#232838;color:#e9e4d8;
@@ -296,6 +331,8 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
     <div class="help">wifi card — network + password in the corner (your view only)</div>
     <button id="fpv">&#9654; enter FPV</button>
     <div class="help" id="fpv-help">FPV — walk the block as a voxel figure</div>
+    <button id="catalog-btn">building catalogue</button>
+    <div class="help">catalogue — every building as a spinning diorama (new tab)</div>
     <button id="reset">reset scene</button>
     <div class="help">reset — rebuild every destroyed voxel (for everyone online)</div>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
@@ -311,6 +348,24 @@ if (/(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.s
   <div id="wifi-pass">PW: Pavili0n</div>
 </div>
 <input id="marquee" type="text" maxlength="80" spellcheck="false" autocomplete="off" readonly>
+<div id="cat">
+  <h1>THE CATALOGUE</h1>
+  <div id="cat-list"></div>
+  <a id="cat-back" href="./">&larr; back to the game</a>
+</div>
+<div id="cat-hud">
+  <div id="cat-name"></div>
+  <input id="cat-time" type="range" min="0" max="1439" value="840">
+  <div id="cat-opts">
+    <label><input id="cat-spin" type="checkbox" checked> spin</label>
+    <span id="cat-sides">
+      <label><input id="side-n" type="checkbox" checked> N wall</label>
+      <label><input id="side-s" type="checkbox" checked> S wall</label>
+      <label><input id="side-e" type="checkbox" checked> E wall</label>
+      <label><input id="side-w" type="checkbox" checked> W wall</label>
+    </span>
+  </div>
+</div>
 <div id="mp">
   <div class="panel-head" id="mp-head"><span>players</span><span class="caret">&#9662;</span></div>
   <div class="panel-body" id="mp-body">
@@ -383,6 +438,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    1. RENDERER / SCENE / CAMERA
    ============================================================ */
 const COARSE = matchMedia('(pointer: coarse)').matches;   // phones & tablets
+const CATALOG = new URLSearchParams(location.search).has('catalog');   // building-viewer page
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? 1.75 : 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -4921,6 +4977,7 @@ mpNameEl.value = localStorage.getItem('vb-name') || '';
 function nsend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
 
 function wsConnect() {
+  if (CATALOG) { sandbox = true; return; }   // the catalogue never takes a seat
   if (!location.host) { sandbox = true; mpStatus.textContent = 'offline sandbox (open via the server for multiplayer)'; return; }
   const base = location.pathname.replace(/\/+$/, '');
   let ws;
@@ -5878,6 +5935,155 @@ applyWifi();
   if (boom.length === 3 && boom.every(isFinite)) explode(boom[0], boom[1], boom[2]);
 }
 updateSun(+slider.value);
+
+/* ============================================================
+   19B. BUILDING CATALOGUE (?catalog) — every landmark as a
+   rotating diorama with a time slider and per-side facade
+   peels. extract/place voxel records carry color, type, group
+   and door flags, so a future level editor can stamp any of
+   these buildings onto a custom map at any offset.
+   ============================================================ */
+const CAT_ITEMS = [   // walls: has an interior worth peeling open
+  { id: 'brownstone', name: 'The Brownstone',        scene: 'default',    box: [-1, 28, -53, 13],  top: 44, walls: true },
+  { id: 'deli',       name: 'The Corner Deli',       scene: 'default',    box: [28, 58, -27, 20],  walls: true },
+  { id: 'site',       name: 'The Construction Site', scene: 'default',    box: [-36, -3, -29, 13], walls: false },
+  { id: 'voxl',       name: 'VOXL Tower',            scene: 'tech',       box: [-27, 21, 47, 98],  walls: true },
+  { id: 'flex',       name: 'FLEX Gym',              scene: 'tech',       box: [25, 59, 47, 84],   walls: true },
+  { id: 'bowfronts',  name: 'Beacon Hill Row',       scene: 'boston',     box: [-11, 28, -44, 4],  walls: true },
+  { id: 'church',     name: 'The Old Church',        scene: 'boston',     box: [44, 70, -30, 10],  walls: true },
+  { id: 'graves',     name: 'The Burying Ground',    scene: 'boston',     box: [70, 90, -26, 0],   walls: false },
+  { id: 'dunks',      name: 'DUNKS',                 scene: 'boston',     box: [72, 92, 0, 18],    walls: true },
+  { id: 'common',     name: 'The Common',            scene: 'boston',     box: [-36, -10, -46, 14], walls: false },
+  { id: 'tstop',      name: 'The T Station',         scene: 'boston',     box: [-6, 11, 45, 58],   walls: true },
+  { id: 'trolley',    name: 'Green Line Trolley',    scene: 'boston',     box: [-22, 5, 37, 45],   walls: true },
+  { id: 'hubb',       name: 'HUBB HQ',               scene: 'boston',     box: [44, 91, 54, 76],   walls: true },
+  { id: 'plaza',      name: 'Kettle Plaza',          scene: 'boston',     box: [8, 45, 48, 76],    walls: false },
+  { id: 'tripledeck', name: 'The Triple-Decker',     scene: 'bostonlong', box: [125, 141, -10, 14], walls: true },
+  { id: 'billboard',  name: 'The Roast Billboard',   scene: 'bostonlong', box: [80, 143, -36, -29], walls: false },
+];
+const sideBox = {
+  n: document.getElementById('side-n'), s: document.getElementById('side-s'),
+  e: document.getElementById('side-e'), w: document.getElementById('side-w'),
+};
+// future-editor primitive: stamp one voxel record at an offset, keeping
+// its baked color, glass/emissive type, facade group and door flag
+function placeVoxRecord(r, dx, dy, dz) {
+  const x = r.x + dx, y = r.y + dy, z = r.z + dz;
+  const k = x + '|' + y + '|' + z;
+  vox.set(k, { ...r, x, y, z });
+  const ck = ckOf(x, z);
+  let cs = chunkIndex.get(ck);
+  if (!cs) { cs = new Set(); chunkIndex.set(ck, cs); }
+  cs.add(k);
+}
+// one-scene snapshot so browsing within a scene never rebuilds it
+let catSnap = null;
+function catWorldFor(sc) {
+  vox.clear(); chunkIndex.clear(); pendingDirty.clear();
+  debris.length = 0; sparkArr.length = 0;
+  for (const g of fallingGroups) { scene.remove(g.mesh); g.mesh.dispose(); }
+  fallingGroups.length = 0;
+  sceneId = sc;
+  if (catSnap && catSnap.scene === sc) {
+    for (const r of catSnap.list) placeVoxRecord(r, 0, 0, 0);
+  } else {
+    buildWorld();
+    catSnap = { scene: sc, list: [...vox.values()].map(v => ({ ...v })) };
+  }
+}
+function cropToBox(x0, x1, z0, z1, top = Infinity) {
+  const gone = [];
+  for (const v of vox.values())
+    if (v.x < x0 || v.x > x1 || v.z < z0 || v.z > z1 || v.y > top) gone.push(v);
+  for (const v of gone) removeVox(v.x, v.y, v.z);
+}
+// dollhouse peel: strip what a viewer on that side would see first
+// (up to a 2-voxel shell per sightline; the ground plinth stays)
+function peelSide(axis, dir) {
+  const first = new Map();
+  for (const v of vox.values()) {
+    if (v.y < 2) continue;
+    const key = axis === 'x' ? v.y + '|' + v.z : v.y + '|' + v.x;
+    const c = axis === 'x' ? v.x : v.z;
+    const cur = first.get(key);
+    if (cur === undefined || (dir > 0 ? c > cur : c < cur)) first.set(key, c);
+  }
+  for (const [key, c] of first) {
+    const [y, o] = key.split('|').map(Number);
+    for (let i = 0; i < 2; i++) {
+      const cc = c - dir * i;
+      const [x, z] = axis === 'x' ? [cc, o] : [o, cc];
+      if (i > 0 && !getV(x, y, z)) break;
+      removeVox(x, y, z);
+    }
+  }
+}
+let catItem = null;
+function catShow(item) {
+  catItem = item;
+  catWorldFor(item.scene);
+  const [x0, x1, z0, z1] = item.box;
+  cropToBox(x0, x1, z0, z1, item.top);
+  document.getElementById('cat-sides').style.display = item.walls ? 'flex' : 'none';
+  if (item.walls) {
+    if (!sideBox.n.checked) peelSide('z', -1);
+    if (!sideBox.s.checked) peelSide('z', 1);
+    if (!sideBox.e.checked) peelSide('x', 1);
+    if (!sideBox.w.checked) peelSide('x', -1);
+  }
+  const all = new Set([...chunkMeshes.keys(), ...chunkIndex.keys()]);
+  for (const ck of all) meshChunk(ck);
+  applySceneEnv();
+  // the live traffic bulbs float if their signal head got cropped away
+  const tlIn = tlRed.position.x >= x0 && tlRed.position.x <= x1 + 1
+            && tlRed.position.z >= z0 && tlRed.position.z <= z1 + 1;
+  tlRed.visible = tlAmber.visible = tlGreen.visible = tlIn;
+  // frame the diorama
+  let maxY = 6;
+  for (const v of vox.values()) if (v.y > maxY) maxY = v.y;
+  const cx = (x0 + x1) / 2 + 0.5, cz = (z0 + z1) / 2 + 0.5;
+  controls.target.set(cx, Math.max(5, maxY * 0.42), cz);
+  // portrait screens need extra pull-back to fit the diorama's width
+  const pad = Math.max(1, 1 / Math.pow(Math.min(1, camera.aspect), 0.85));
+  const R = (Math.max(x1 - x0, z1 - z0, maxY * 1.15) + 26) * pad;
+  camera.position.set(cx + R * 0.72, Math.max(16, maxY * 0.85 + 10 * pad), cz + R * 0.72);
+  document.getElementById('cat-name').textContent = item.name;
+  for (const el of document.querySelectorAll('#cat-list button'))
+    el.classList.toggle('sel', el.dataset.id === item.id);
+}
+document.getElementById('catalog-btn').addEventListener('click', () => window.open('?catalog', '_blank'));
+if (CATALOG) {
+  document.body.classList.add('catalog');
+  fogAuto.checked = true;          // showroom daylight: sky follows the sun
+  document.getElementById('play').checked = false;   // the catalogue's slider owns the clock
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 1.1;
+  const listEl = document.getElementById('cat-list');
+  const SCENE_LABEL = { default: 'BROOKLYN', tech: 'TECH BROOKLYN', boston: 'BOSTON', bostonlong: 'BOSTON LONG' };
+  let lastScene = null;
+  for (const it of CAT_ITEMS) {
+    if (it.scene !== lastScene) {
+      const h = document.createElement('div');
+      h.className = 'cat-scene';
+      h.textContent = SCENE_LABEL[it.scene];
+      listEl.appendChild(h);
+      lastScene = it.scene;
+    }
+    const b = document.createElement('button');
+    b.textContent = it.name;
+    b.dataset.id = it.id;
+    b.addEventListener('click', () => catShow(it));
+    listEl.appendChild(b);
+  }
+  const catTime = document.getElementById('cat-time');
+  catTime.addEventListener('input', () => updateSun(+catTime.value));
+  document.getElementById('cat-spin').addEventListener('change',
+    e => { controls.autoRotate = e.target.checked; });
+  for (const el of Object.values(sideBox))
+    el.addEventListener('change', () => catItem && catShow(catItem));
+  updateSun(+catTime.value);
+  catShow(CAT_ITEMS[0]);
+}
 
 /* ============================================================
    20. ANIMATION LOOP

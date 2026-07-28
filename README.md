@@ -52,6 +52,13 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   Green Line trolley parked on fresh rails
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
+- **The Catalogue** (`?catalog`, or the "building catalogue" button in the
+  panel): every landmark building as a standalone rotating diorama —
+  pick from the sidebar, scrub the time of day, toggle auto-spin, and
+  peel any of the four walls off buildings with interiors, dollhouse
+  style. Explosions still work. The extract/place primitives behind it
+  are the seed of a future level editor that will stamp these buildings
+  onto custom maps.
 
 ## Multiplayer — humans vs the corpo
 
