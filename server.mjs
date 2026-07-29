@@ -129,7 +129,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined });
+  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined, pk: pkState() });
 });
 
 /* ============================================================
@@ -145,7 +145,7 @@ const SPAWNS = {
   seattle: [[-12.5, 3, 60.5], [-2.5, 3, 10.5], [45.5, 11, 14.5], [17.5, 3, -13.5],
             [56.5, 11, -28.5], [78.5, 17, 6.5], [46.5, 11, 54.5], [78.5, 17, -30.5]],
   seattlelong: [[-45.5, 3, -10.5], [8.5, 3, -4.5], [30.5, 3, 11.5], [44.5, 3, -11.5],
-                [80.5, 3, -4.5], [106.5, 3, -4.5], [30.5, 3, 30.5], [13.5, 3, 50.5]],
+                [80.5, 3, -4.5], [106.5, 3, -4.5], [110.5, 3, 30.5], [96.5, 3, 50.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -156,6 +156,21 @@ let nextId = 1;
 let scene = 'default';     // 'default' | 'tech' | 'techlong' — all clients build the same scene
 let timeState = null;      // { m, play } — the corpo's time of day, followed by everyone
 let marqueeText = '';      // the corpo's line to the room, shown top-center everywhere
+let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
+let pickupsOn = false;
+const PICKUP_SPOTS = {
+  seattlelong: [
+    { kind: 'sticker', x: -39.5, y: 58.5, z: -19.5 },   // Space Needle open-air deck
+    { kind: 'sticker', x: 43.5, y: 26.5, z: -18.5 },    // crown of the big sphere
+    { kind: 'tshirt', x: 77.5, y: 13.5, z: 46.5 },      // ferry cabin, second deck
+  ],
+};
+const genCode = kind => (kind === 'tshirt' ? 'TEE-' : 'STKR-') +
+  Array.from({ length: 5 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+function spawnPickups() {
+  pickups = (PICKUP_SPOTS[scene] || []).map((s, i) => ({ id: i + 1, ...s, code: genCode(s.kind), foundBy: null }));
+}
+const pkState = () => ({ on: pickupsOn, list: pickups.map(u => ({ id: u.id, kind: u.kind, x: u.x, y: u.y, z: u.z, taken: !!u.foundBy })) });
 
 /* ---- name filter: slurs and hate terms are refused; casual profanity is
        not our problem. Kept in sync with the copy in brownstone.html. ---- */
@@ -272,6 +287,38 @@ function onMessage(conn, m) {
         broadcast({ t: 'marquee', text: marqueeText }, conn);
       }
       break;
+    case 'pickups': // corpo toggles the merch drops
+      if (p && p.role === 'corpo') {
+        pickupsOn = !!m.on;
+        if (pickupsOn && pickups.length === 0) spawnPickups();
+        broadcast({ t: 'pickupstate', ...pkState() });
+      }
+      break;
+    case 'pickuprespawn': // corpo re-rolls fresh, unfound codes
+      if (p && p.role === 'corpo') {
+        spawnPickups();
+        broadcast({ t: 'pickupstate', ...pkState() });
+        console.log('pickups respawned by ' + p.name);
+      }
+      break;
+    case 'pickupcodes': // corpo-only reveal
+      if (p && p.role === 'corpo')
+        conn.send({ t: 'pickupcodes', list: pickups.map(u => ({ kind: u.kind, code: u.code, foundBy: u.foundBy })) });
+      break;
+    case 'pickup': { // first human to reach it wins — exactly one
+      if (!p || p.role !== 'human' || !p.alive || !pickupsOn) break;
+      const u = pickups.find(q => q.id === +m.id);
+      if (!u || u.foundBy) break;
+      const dd = (p.x - u.x) ** 2 + (p.y + 2 - u.y) ** 2 + (p.z - u.z) ** 2;
+      if (dd > 36) break;                                  // must actually be standing there
+      u.foundBy = p.name;
+      conn.send({ t: 'pickupcode', kind: u.kind, code: u.code });
+      broadcast({ t: 'pickupstate', ...pkState() });
+      marqueeText = `${p.name} found a free ${u.kind} code!`;
+      broadcast({ t: 'marquee', text: marqueeText });
+      console.log(`pickup: ${p.name} -> ${u.kind} ${u.code}`);
+      break;
+    }
     case 'boom': // corpo-only ability
       if (p && p.role === 'corpo') {
         const b = [Math.round(+m.x || 0), Math.round(+m.y || 0), Math.round(+m.z || 0)];
@@ -314,6 +361,9 @@ function onMessage(conn, m) {
       if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
+        pickups = [];
+        if (pickupsOn) spawnPickups();
+        broadcast({ t: 'pickupstate', ...pkState() });
         console.log(`scene -> ${scene} by ${p.name}`);
         broadcast({ t: 'scene', scene });
       }

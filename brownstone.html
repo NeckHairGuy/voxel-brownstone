@@ -266,6 +266,16 @@ if (new URLSearchParams(location.search).has('catalog'))
   }
   /* touch FPV crowds the bottom edge — the ? explainer yields to the button tips */
   body.touchfpv #tip-help{display:none;}
+#pkbox { margin-top: 8px; border-top: 1px solid rgba(255,255,255,.15); padding-top: 8px; display: none; }
+#pkbox label { display: block; margin: 3px 0; }
+#pkbox button { margin: 4px 0; }
+#pkcodes { font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; user-select: text; }
+#codecard { position: fixed; left: 50%; top: 38%; transform: translate(-50%,-50%); z-index: 60;
+  background: rgba(12,14,20,.94); border: 2px solid #ffd724; border-radius: 10px;
+  padding: 18px 26px; text-align: center; cursor: pointer; display: none; }
+#codecard .cc-title { font-family: 'Press Start 2P', monospace; font-size: 12px; color: #ffd724; margin-bottom: 12px; }
+#codecard .cc-code { font-family: 'Press Start 2P', monospace; font-size: 22px; color: #fff; letter-spacing: 2px; }
+#codecard .cc-sub { margin-top: 12px; font-size: 11px; color: #9aa0a6; }
 </style>
 </head>
 <body>
@@ -384,7 +394,18 @@ if (new URLSearchParams(location.search).has('catalog'))
         corpo — orbit view, tap voxels to explode, tap a human to lay them off (1 seat)</div>
     </div>
     <ul id="mp-list"></ul>
+    <div id="pkbox">
+      <label><input id="pkon" type="checkbox"> merch pickups</label>
+      <button id="pkrespawn">respawn pickups</button>
+      <label><input id="pkreveal" type="checkbox"> reveal codes</label>
+      <div id="pkcodes" style="display:none"></div>
+    </div>
   </div>
+</div>
+<div id="codecard">
+  <div class="cc-title"></div>
+  <div class="cc-code"></div>
+  <div class="cc-sub">one use &middot; screenshot it &middot; tap to close</div>
 </div>
 <div id="laidoff">
   <div class="lo-title">LAID OFF</div>
@@ -6595,7 +6616,7 @@ function buildSeattle(long = false) {
     }
     // promenade rail on the coping (open where the wharf continues south)
     for (let x = -74; x <= 132; x++) {
-      if (x >= 15 && x <= 66) continue;
+      if (x >= 98) continue;
       if (x % 2 === 0) V(x, 3, 14, SEA.iron, { j: 0.03 });
       V(x, 4, 14, SEA.iron, { j: 0.03 });
     }
@@ -6641,37 +6662,37 @@ function buildSeattle(long = false) {
       }
       noteTop(x, z, Math.max(groundAt(x, z) || 2, h));
     }
-    /* ---- L3: the working wharf (x 15..66, z 15..60) ---- */
-    for (let x = 15; x <= 66; x++) for (let z = 15; z <= 60; z++) {
+    /* ---- L3: the working wharf (x 98..132, z 15..60) — off the STARBUX end ---- */
+    for (let x = 98; x <= 132; x++) for (let z = 15; z <= 60; z++) {
       fillB(x, -2, z, x, 1, z, SEA.granite, { j: 0.06 });
       V(x, 2, z, ((x % 8 === 0) || (z % 8 === 0)) ? SEA.walkJt : SEA.prom, { j: 0.07 });
       noteTop(x, z, 2);
     }
-    for (let x = 15; x <= 66; x += 3) {                                // pile heads along the faces
+    for (let x = 98; x <= 132; x += 3) {                               // pile heads along the faces
       V(x, 2, 60, 0x3a3228, { j: 0.06 });
       fillB(x, -2, 61, x, 1, 61, 0x3a3228, { j: 0.06 });
     }
     for (let z = 17; z <= 59; z += 3) {
-      fillB(66, -2, z, 66, 1, z, 0x3a3228, { j: 0.06 });
-      if (z >= 23) fillB(15, -2, z, 15, 1, z, 0x3a3228, { j: 0.06 });
+      fillB(132, -2, z, 132, 1, z, 0x3a3228, { j: 0.06 });
+      if (z >= 23) fillB(98, -2, z, 98, 1, z, 0x3a3228, { j: 0.06 });
     }
     // kick rails + bollards on the open faces
-    for (let z = 16; z <= 59; z++) if (z % 2 === 0) V(66, 3, z, SEA.iron, { j: 0.03 });
-    for (let x = 16; x <= 65; x++) if (x % 2 === 0) V(x, 3, 60, SEA.iron, { j: 0.03 });
-    for (const [bx, bz] of [[18, 58], [30, 59], [46, 59], [62, 58], [65, 30], [65, 46]]) {
+    for (let z = 16; z <= 59; z++) if (z % 2 === 0) V(132, 3, z, SEA.iron, { j: 0.03 });
+    for (let x = 99; x <= 131; x++) if (x % 2 === 0) V(x, 3, 60, SEA.iron, { j: 0.03 });
+    for (const [bx, bz] of [[101, 58], [113, 59], [125, 59], [131, 30], [131, 46]]) {
       fillB(bx, 3, bz, bx, 4, bz, 0x2a2d30, { j: 0.02 });
       V(bx, 5, bz, 0x3a3e42, { j: 0.02 });
     }
     // crane rail lanes + lane stencils
-    for (let x = 17; x <= 64; x++) {
+    for (let x = 100; x <= 130; x++) {
       V(x, 2, 44, 0x53555c, { j: 0.03 }); V(x, 2, 52, 0x53555c, { j: 0.03 });
     }
-    for (let x = 20; x <= 60; x += 10) fillB(x, 2, 24, x + 4, 2, 24, 0xe8c020, { j: 0.06 });
+    for (let x = 102; x <= 122; x += 10) fillB(x, 2, 24, x + 4, 2, 24, 0xe8c020, { j: 0.06 });
     // SEATTLE-WHARF-ANCHOR
 
     /* ---- L4: transplanted landmarks ---- */
     needleAt(-89, -8, 19, true);                                       // Space Needle among the west houses
-    ferryAt(20, 0, 4, true);                                           // MV LAYOFF berthed west of the wharf
+    ferryAt(103, 0, 4, true);                                          // MV LAYOFF berthed off the VINYL block
 
     /* ---- L5: street kit v1 (lamps, signal, parked EVs) ---- */
     for (const lx of [-58, -34, -8, 26, 58, 86, 125]) crook(lx, -5, 0, 1);
@@ -6692,7 +6713,7 @@ function buildSeattle(long = false) {
           else { fillB(px, g + 1, 12, px + 1, g + 1, 12, 0x8fd820, { j: 0.05 }); V(px + 2, g + 1, 12, 0x2a2a2c, { j: 0.03 }); }
         }
       } }
-    gull(-20, 3, 9); gull(40, 3, 62); pigeon(28, 3, 7); pigeon(29, 3, 5);
+    gull(-20, 3, 9); gull(110, 3, 62); pigeon(24, 3, 7); pigeon(25, 3, 5);
     /* ============ L6: THE CITY ROW ============ */
     /* ==== R1: west craftsman (x -72..-60, z -20..-8) ==== */
     {
@@ -7040,11 +7061,42 @@ function buildSeattle(long = false) {
         if (x >= 36 && x <= 39 && z >= -11 && z <= -9) continue;        // stair headroom
         V(x, 9, z, S.steelDk, { j: 0.03 });
       }
+      /* maintenance route to the crown of the big ball: start on the solid
+         plinth rings at the back apron, then steel treads spiral the NE
+         shoulder — every step is an honest +1 (verified against A, B and C) */
+      const HELIX = [
+        [43, 5, -28], [44, 5, -28],
+        [43, 6, -29], [44, 6, -29],
+        [44, 7, -30], [45, 7, -30],
+        [45, 8, -30], [46, 8, -30],
+        [46, 9, -30], [47, 9, -30],
+        [47, 10, -29], [48, 10, -29],
+        [49, 11, -28], [50, 11, -28],
+        [50, 12, -27], [51, 12, -27],
+        [51, 13, -26], [52, 13, -26],
+        [52, 14, -25], [53, 14, -25],
+        [53, 15, -24], [53, 15, -23],
+        [53, 16, -22], [54, 16, -22],
+        [54, 17, -21], [54, 17, -20],
+        [54, 18, -19], [53, 18, -18],
+        [53, 19, -17], [53, 19, -16],
+        [52, 20, -15], [52, 20, -14],
+        [51, 21, -13], [50, 21, -13],
+        [49, 22, -12], [48, 22, -12],
+        [46, 23, -13], [47, 23, -13],
+        [45, 24, -14], [45, 24, -15],
+      ];
+      // from there the solid mod-7 frame diagonal (45,-16)->(44,-17)->(43,-18)
+      // walks level to the crown's center — the glass in between is the hazard
+      for (const [hx, hy, hz] of HELIX) {
+        V(hx, hy, hz, S.steelDk, { j: 0.03 });
+        clearB(hx, hy + 1, hz, hx, hy + 4, hz);                        // headroom through stray lattice struts
+      }
       fillB(30, 10, -6, 56, 10, -6, S.steelDk, { j: 0.03 });            // parapet lip
       fillB(33, 11, -6, 33, 18, -6, S.steelDk, { j: 0.03 });            // roof-sign posts
       fillB(53, 11, -6, 53, 18, -6, S.steelDk, { j: 0.03 });
-      sign('JEFFS', 34, 15, -5, 1, S.cyan, 2);
-      sign('BALLS', 34, 11, -5, 1, S.cyan, 2);
+      sign('JEFFS', 34, 15, -5, 1, 0xff9900, 2);
+      sign('BALLS', 34, 11, -5, 1, 0xff9900, 2);
       // reception + greenery inside the pavilion
       fillB(32, 3, -9, 34, 4, -9, S.quartz, { j: 0.04 });
       V(33, 5, -9, 0xc9a227, { t: 2, j: 0 });
@@ -7488,8 +7540,8 @@ function buildSeattle(long = false) {
           for (const [sy, sz] of [[27, 50], [28, 54], [29, 58], [30, 62]]) V(cx + 4, sy, sz, R.steel, { j: 0.02 });
         }
       };
-      crane(26, false);
-      crane(44, true);
+      crane(100, false);
+      crane(118, true);
       bperson(37, 3, 47, 0xe8c020, 0x2a3038);                           // spotter in hi-vis
       bperson(29, 3, 55, 0x4a6a8a, 0x23262c);
     }
@@ -7500,29 +7552,29 @@ function buildSeattle(long = false) {
         fillB(x0, y0, z0, x0 + 2, y0 + 2, z0 + len - 1, c, { j: 0.07 });
         fillB(x0, y0, z0 + len - 1, x0 + 2, y0 + 2, z0 + len - 1, Y.door, { j: 0.05 });
       };
-      box(36, 28, 3, 7, Y.rust); box(40, 28, 3, 7, Y.blue);
-      box(36, 36, 3, 7, Y.green); box(40, 36, 3, 7, Y.tan);
-      box(37, 30, 6, 7, Y.blue); box(39, 37, 6, 7, Y.rust);
-      box(38, 33, 9, 7, Y.green);
+      box(109, 28, 3, 7, Y.rust); box(113, 28, 3, 7, Y.blue);
+      box(109, 36, 3, 7, Y.green); box(113, 36, 3, 7, Y.tan);
+      box(110, 30, 6, 7, Y.blue); box(112, 37, 6, 7, Y.rust);
+      box(111, 33, 9, 7, Y.green);
       // gatehouse at the wharf mouth
-      fillB(17, 3, 16, 20, 7, 18, 0xe8e0cc, { j: 0.05 });
-      clearB(18, 3, 16, 19, 6, 16);
-      fillB(18, 3, 16, 19, 6, 16, 0x9fc6da, { t: 1, j: 0.02 }); markDoor(18, 3, 16, 19, 6, 16);
-      clearB(18, 3, 17, 19, 5, 17);                                    // hollow booth
-      V(19, 3, 17, 0x6e5036, { j: 0.04 }); V(19, 4, 18, 0x40c8e0, { t: 2, j: 0 });
-      fillB(16, 7, 15, 21, 7, 19, 0x244438, { j: 0.04 });
-      V(21, 3, 17, 0x2a2d30, { j: 0.02 });                              // barrier post, arm raised
-      for (let y = 4; y <= 8; y++) V(21, y, 17, (y % 2 === 0) ? 0xe8d020 : 0x2a2a2c, { j: 0.02 });
-      bperson(18, 3, 17, 0x2e5444, 0x2a3038);
+      fillB(99, 3, 16, 102, 7, 18, 0xe8e0cc, { j: 0.05 });
+      clearB(100, 3, 16, 101, 6, 16);
+      fillB(100, 3, 16, 101, 6, 16, 0x9fc6da, { t: 1, j: 0.02 }); markDoor(100, 3, 16, 101, 6, 16);
+      clearB(100, 3, 17, 101, 5, 17);                                  // hollow booth
+      V(101, 3, 17, 0x6e5036, { j: 0.04 }); V(101, 4, 18, 0x40c8e0, { t: 2, j: 0 });
+      fillB(98, 7, 15, 103, 7, 19, 0x244438, { j: 0.04 });
+      V(103, 3, 17, 0x2a2d30, { j: 0.02 });                             // barrier post, arm raised
+      for (let y = 4; y <= 8; y++) V(103, y, 17, (y % 2 === 0) ? 0xe8d020 : 0x2a2a2c, { j: 0.02 });
+      bperson(100, 3, 17, 0x2e5444, 0x2a3038);
       // forklift, barrels, rope coil
-      fillB(56, 3, 30, 58, 4, 32, 0xe08a20, { j: 0.05 });
-      V(58, 3, 33, 0x2a2a2c, { j: 0 }); V(56, 3, 29, 0x2a2a2c, { j: 0 });
-      fillB(59, 3, 30, 59, 4, 31, 0x53555c, { j: 0.03 });
-      for (const [bx, bz] of [[62, 22], [63, 23], [62, 24]]) { V(bx, 3, bz, 0x30608a, { j: 0.05 }); V(bx, 4, bz, 0x30608a, { j: 0.05 }); }
-      V(24, 3, 34, 0x8a6a48, { j: 0.06 }); V(24, 4, 34, 0x8a6a48, { j: 0.06 });
-      gull(41, 12, 36); gull(66, 6, 30); pigeon(19, 8, 17);
+      fillB(122, 3, 30, 124, 4, 32, 0xe08a20, { j: 0.05 });
+      V(124, 3, 33, 0x2a2a2c, { j: 0 }); V(122, 3, 29, 0x2a2a2c, { j: 0 });
+      fillB(125, 3, 30, 125, 4, 31, 0x53555c, { j: 0.03 });
+      for (const [bx, bz] of [[128, 22], [129, 23], [128, 24]]) { V(bx, 3, bz, 0x30608a, { j: 0.05 }); V(bx, 4, bz, 0x30608a, { j: 0.05 }); }
+      V(104, 3, 34, 0x8a6a48, { j: 0.06 }); V(104, 4, 34, 0x8a6a48, { j: 0.06 });
+      gull(114, 12, 36); gull(131, 6, 30); pigeon(101, 8, 17);
       // mooring dolphins seaward of the crane line
-      for (const [dx2, dz2] of [[24, 70], [60, 68]]) {
+      for (const [dx2, dz2] of [[104, 70], [128, 68]]) {
         fillB(dx2, -2, dz2, dx2 + 1, 3, dz2 + 1, 0x3a3228, { j: 0.07 });
         V(dx2, 4, dz2, 0x2a2d30, { j: 0.03 });
       }
@@ -8645,6 +8697,8 @@ function wsConnect() {
     net.online = false; net.role = null; net.id = 0; net.alive = false;
     document.body.classList.remove('mq-edit');
     marqueeEl.readOnly = true;
+    pkBoxEl.style.display = 'none';
+    codeCard.style.display = 'none';
     for (const r of remotes.values()) scene.remove(r.group);
     remotes.clear();
     mpJoinEl.style.display = 'none';
@@ -8698,6 +8752,7 @@ function handleNet(m) {
       setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
       if (m.marquee !== undefined) marqueeEl.value = m.marquee;
+      if (m.pk) handleNet({ t: 'pickupstate', ...m.pk });
       // the host link claims (or reclaims) the corpo seat automatically
       if (HOST_KEY && !AUDIENCE && !net.role) doJoin('corpo');
       break;
@@ -8724,6 +8779,7 @@ function handleNet(m) {
         sendTime();   // the corpo's clock becomes everyone's clock
         document.body.classList.add('mq-edit');
         marqueeEl.readOnly = false;
+        pkBoxEl.style.display = 'block';
       } else {
         mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
@@ -8741,6 +8797,27 @@ function handleNet(m) {
       mpStatus.textContent = m.text;
       audMsg(m.text);
       break;
+    case 'pickupstate':
+      pkOn = !!m.on;
+      pkList = m.list || [];
+      pkOnEl.checked = pkOn;
+      pkSync();
+      if (pkRevealEl.checked && net.role === 'corpo') nsend({ t: 'pickupcodes' });
+      break;
+    case 'pickupcode':
+      codeCard.querySelector('.cc-title').textContent = 'FREE ' + (m.kind === 'tshirt' ? 'TSHIRT' : 'STICKER') + ' CODE';
+      codeCard.querySelector('.cc-code').textContent = m.code;
+      codeCard.style.display = 'block';
+      break;
+    case 'pickupcodes': {
+      pkCodesEl.textContent = '';
+      for (const u of m.list || []) {
+        const d = document.createElement('div');
+        d.textContent = `${u.kind}: ${u.code}${u.foundBy ? ' \u2014 ' + u.foundBy : ''}`;
+        pkCodesEl.appendChild(d);
+      }
+      break;
+    }
     case 'marquee':
       if (document.activeElement !== marqueeEl) marqueeEl.value = m.text || '';
       break;
@@ -8907,6 +8984,72 @@ function applyTimeLock() {
   timeSlider.disabled = follower;
   playChk.disabled = follower;
 }
+
+/* ---- merch pickups: glowing rotating drops, first player to touch wins ---- */
+const pkGroup = new THREE.Group();
+scene.add(pkGroup);
+const pkMeshes = new Map();
+let pkList = [], pkOn = false, pkSpin = 0;
+function pkBuild(u) {
+  const g = new THREE.Group();
+  if (u.kind === 'tshirt') {
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.25), m);
+    const arms = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 0.25), m);
+    arms.position.y = 0.35;
+    const logo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: 0xd82818 }));
+    g.add(torso, arms, logo);
+  } else {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.16, 8), new THREE.MeshBasicMaterial({ color: 0x35e0e8 }));
+    disc.rotation.x = Math.PI / 2;
+    const star = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: 0xffd724 }));
+    star.rotation.z = Math.PI / 4;
+    g.add(disc, star);
+  }
+  const halo = new THREE.PointLight(u.kind === 'tshirt' ? 0xffe8b0 : 0x66f0ff, 60, 10);
+  g.add(halo);
+  g.position.set(u.x, u.y, u.z);
+  return g;
+}
+function pkSync() {
+  for (const [id, m] of pkMeshes) { pkGroup.remove(m); pkMeshes.delete(id); }
+  if (!pkOn) return;
+  for (const u of pkList) {
+    if (u.taken) continue;
+    const m = pkBuild(u);
+    pkMeshes.set(u.id, m);
+    pkGroup.add(m);
+  }
+}
+function stepPickups(dt) {
+  if (!pkMeshes.size) return;
+  pkSpin += dt;
+  for (const [id, m] of pkMeshes) {
+    m.rotation.y = pkSpin * 2.2;
+    const u = pkList.find(q => q.id === id);
+    if (u) m.position.y = u.y + Math.sin(pkSpin * 2.5) * 0.3;
+  }
+  if (net.online && net.role === 'human' && net.alive && player.active) {
+    for (const u of pkList) {
+      if (u.taken) continue;
+      const dx = player.x - u.x, dy = player.y + 2 - u.y, dz = player.z - u.z;
+      if (dx * dx + dy * dy + dz * dz < 2.6) nsend({ t: 'pickup', id: u.id });
+    }
+  }
+}
+const pkBoxEl = document.getElementById('pkbox');
+const pkOnEl = document.getElementById('pkon');
+const pkRespawnEl = document.getElementById('pkrespawn');
+const pkRevealEl = document.getElementById('pkreveal');
+const pkCodesEl = document.getElementById('pkcodes');
+pkOnEl.addEventListener('change', () => nsend({ t: 'pickups', on: pkOnEl.checked }));
+pkRespawnEl.addEventListener('click', () => { nsend({ t: 'pickuprespawn' }); if (pkRevealEl.checked) nsend({ t: 'pickupcodes' }); });
+pkRevealEl.addEventListener('change', () => {
+  pkCodesEl.style.display = pkRevealEl.checked ? 'block' : 'none';
+  if (pkRevealEl.checked) nsend({ t: 'pickupcodes' });
+});
+const codeCard = document.getElementById('codecard');
+codeCard.addEventListener('click', () => codeCard.style.display = 'none');
 
 let posTimer = 0;
 function stepNet(dt) {
@@ -9216,16 +9359,16 @@ const seattleLights = [
 const seattleLongLights = [
   roomLight(-45, 58, -19, 140, 0xcfe8ff, 30),   // needle halo
   roomLight(-45, 7, -12, 90, 0xffd9a0, 12),     // needle lobby spill
-  roomLight(5, 8, 49, 100, 0xffd9a0, 16),       // ferry headhouse
-  roomLight(-6, 15, 46, 110, 0xfff4e0, 18),     // ferry cabin ribbon
-  roomLight(-5, 7, 48, 80, 0xffd9a0, 14),       // car-deck spill
-  roomLight(-5, 28, 43, 80, 0xffa028, 10),      // ferry stack beacon
+  roomLight(88, 8, 49, 100, 0xffd9a0, 16),      // ferry headhouse
+  roomLight(77, 15, 46, 110, 0xfff4e0, 18),     // ferry cabin ribbon
+  roomLight(78, 7, 48, 80, 0xffd9a0, 14),       // car-deck spill
+  roomLight(78, 28, 43, 80, 0xffa028, 10),      // ferry stack beacon
   roomLight(42, 13, 11, 120, 0xff4060, 20),     // PUBLIC MARKET neon wash
   roomLight(43, 14, -18, 130, 0xaef0d0, 22),    // spheres canopy heart
   roomLight(108, 7, -12, 110, 0xffd9a0, 16),    // STARBUX glow
   roomLight(8, 6, -10, 90, 0xffd9a0, 12),       // Ivy Court lobby
   roomLight(74, 6, -12, 90, 0x9a6ac8, 12),      // VINYL violet spill
-  roomLight(30, 18, 48, 90, 0xeaf2ff, 16),      // crane work lights
+  roomLight(113, 18, 48, 90, 0xeaf2ff, 16),     // crane work lights
   roomLight(-66, 6, -14, 60, 0xff8c2a, 10),     // craftsman hearth
 ];
 interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights, ...seattleLights, ...seattleLongLights);
@@ -9240,7 +9383,7 @@ for (const l of seattleLongLights) l.visible = false;
 const rainGroup = new THREE.Group();
 rainGroup.visible = false;
 scene.add(rainGroup);
-const RAIN_N = 2000, RAIN_TOP = 52, RAIN_BOT = 1;
+const RAIN_N = 2000, RAIN_TOP = 88, RAIN_BOT = 1;
 const rainGeo = new THREE.BufferGeometry();
 const rainPos = new Float32Array(RAIN_N * 3);
 const rainSpd = new Float32Array(RAIN_N);
@@ -9778,7 +9921,7 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'interbay',   name: 'The Interbay 5-over-1',   scene: 'seattlelong', box: [66, 96, -34, -2],   walls: true },
   { id: 'starbuxx',   name: 'STARBUX No. 1',           scene: 'seattlelong', box: [94, 124, -26, 2],   walls: true },
   { id: 'marketarch', name: 'Public Market Arch',      scene: 'seattlelong', box: [24, 60, 2, 16],     walls: false },
-  { id: 'coralcrane', name: 'The Coral Cranes',        scene: 'seattlelong', box: [20, 62, 24, 78],    walls: false },
+  { id: 'coralcrane', name: 'The Coral Cranes',        scene: 'seattlelong', box: [96, 132, 24, 78],   walls: false },
   { id: 'porchhouse', name: 'The Porch House',         scene: 'seattlelong', box: [-74, -56, -24, -4], walls: true },
   { id: 'glasscorner', name: 'The Glass Corner',       scene: 'seattlelong', box: [-22, -4, -20, -2],  walls: true },
 ];
@@ -9923,6 +10066,7 @@ renderer.setAnimationLoop(() => {
   stepSpot(dt);
   stepPit();
   stepRain(dt);
+  stepPickups(dt);
   stepElev(dt);
 
   if (playBox.checked) {
