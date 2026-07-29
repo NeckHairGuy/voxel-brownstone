@@ -301,6 +301,7 @@ if (new URLSearchParams(location.search).has('catalog'))
     <div class="help">isometric — flat angled city view</div>
     <div class="row">
       <label><input id="spot" type="checkbox" checked> corpo night spotlight</label>
+      <label><input id="pmodel" type="checkbox"> detailed player figures</label>
     </div>
     <div class="help">spotlight — the corpo's searchlight after dark</div>
     <div class="row">
@@ -6675,7 +6676,7 @@ function buildSeattle(long = false) {
     /* ---- L5: street kit v1 (lamps, signal, parked EVs) ---- */
     for (const lx of [-58, -34, -8, 26, 58, 86, 125]) crook(lx, -5, 0, 1);
     for (const lx of [-64, -40, -14, 10, 74, 102, 126]) acorn(lx, 12);
-    for (const [sx, sz] of [[-30, 6], [36, 6], [90, 6], [122, 6]]) benchS(sx, sz, true);
+    for (const [sx, sz] of [[-30, 6], [16, 6], [90, 6], [122, 6]]) benchS(sx, sz, true);
     // traffic signal at the market crosswalk (bulbs follow via applySceneEnv)
     fillB(22, 3, -4, 22, 12, -4, SEA.iron, { j: 0.03 });
     fillB(22, 13, -4, 22, 15, -4, 0x1f2226, { j: 0.02 });
@@ -7040,7 +7041,10 @@ function buildSeattle(long = false) {
         V(x, 9, z, S.steelDk, { j: 0.03 });
       }
       fillB(30, 10, -6, 56, 10, -6, S.steelDk, { j: 0.03 });            // parapet lip
-      sign('NIMBUS', 31, 11, -5, 1, S.cyan, 2);
+      fillB(33, 11, -6, 33, 18, -6, S.steelDk, { j: 0.03 });            // roof-sign posts
+      fillB(53, 11, -6, 53, 18, -6, S.steelDk, { j: 0.03 });
+      sign('JEFFS', 34, 15, -5, 1, S.cyan, 2);
+      sign('BALLS', 34, 11, -5, 1, S.cyan, 2);
       // reception + greenery inside the pavilion
       fillB(32, 3, -9, 34, 4, -9, S.quartz, { j: 0.04 });
       V(33, 5, -9, 0xc9a227, { t: 2, j: 0 });
@@ -7400,34 +7404,32 @@ function buildSeattle(long = false) {
         post: 0x6e5036, canA: 0x2e5444, canB: 0xe8e0cc, canC: 0xc03028,
         table: 0x8a6038, crate: 0x8a6a3c, ice: 0xeef4f6, fish: 0xd86a50,
       };
-      // produce stall x32..36
-      for (const [px, pz] of [[32, 5], [36, 5], [32, 7], [36, 7]]) fillB(px, 3, pz, px, 5, pz, T.post, { j: 0.04 });
-      for (let x = 31; x <= 37; x++) fillB(x, 6, 5, x, 6, 7, (x % 2 === 0) ? T.canA : T.canB, { j: 0.05 });
-      fillB(32, 3, 6, 36, 3, 6, T.table, { j: 0.05 });
-      for (let x = 32; x <= 36; x++) V(x, 4, 6, [0xe08a20, 0xc03028, 0x2e5444, 0xe8d05a, 0x5a3a72][x - 32], { j: 0.1 });
-      fillB(33, 3, 5, 34, 3, 5, T.crate, { j: 0.08 }); V(33, 4, 5, 0xe08a20, { j: 0.1 });
-      bperson(34, 3, 8, 0x6a5a4a, 0x2a3038);
-      // fish stall x40..44 — mid-toss salmon
-      for (const [px, pz] of [[40, 5], [44, 5], [40, 7], [44, 7]]) fillB(px, 3, pz, px, 5, pz, T.post, { j: 0.04 });
-      for (let x = 39; x <= 45; x++) fillB(x, 6, 5, x, 6, 7, (x % 2 === 0) ? T.canC : T.canB, { j: 0.05 });
-      fillB(40, 3, 6, 44, 3, 6, T.ice, { j: 0.04 });
-      for (const fx of [40, 42, 44]) V(fx, 4, 6, T.fish, { j: 0.06 });
-      V(42, 6, 8, T.fish, { j: 0 });                                   // the fish, airborne
-      bperson(41, 3, 8, 0xe8c020, 0x2a3038); bperson(43, 3, 9, 0x30608a, 0x3a3e46);
-      gull(45, 7, 6);
-      // second stall row south of the arch — the market spills toward the water
-      for (const [sx, cA] of [[33, 0xe8c020], [45, 0x9a6ac8]]) {
-        for (const [px, pz] of [[sx, 10], [sx + 4, 10], [sx, 12], [sx + 4, 12]]) fillB(px, 3, pz, px, 5, pz, T.post, { j: 0.04 });
-        for (let x = sx - 1; x <= sx + 5; x++) fillB(x, 6, 10, x, 6, 12, (x % 2 === 0) ? cA : T.canB, { j: 0.05 });
-        fillB(sx, 3, 11, sx + 4, 3, 11, T.table, { j: 0.05 });
-      }
-      for (let x = 33; x <= 37; x++) V(x, 4, 11, [0xd8a020, 0xb06a3c, 0xe8d05a, 0xb06a3c, 0x8a5a2a][x - 33], { j: 0.08 });   // bakery
-      for (let x = 45; x <= 49; x++) V(x, 4, 11, [0x9a6ac8, 0x7ad0c8, 0xd85050, 0xe8a8c8, 0x30608a][x - 45], { j: 0.1 });    // crafts
-      // flower cart x48..51
-      fillB(48, 3, 5, 51, 4, 6, 0x2e5444, { j: 0.05 });
-      V(48, 3, 7, 0x2a2a2c, { j: 0 }); V(51, 3, 7, 0x2a2a2c, { j: 0 });
-      for (let x = 48; x <= 51; x++) V(x, 5, 5 + (x % 2), [0xe8a8c8, 0xe8d05a, 0xd85050, 0x9a6ac8][x - 48], { j: 0.12 });
-      bperson(50, 3, 8, 0xd08ab8, 0x23262c);
+      // two grand high-stalls bracing the arch legs (aisle stays open beneath the sign)
+      const stall = (x0, gable, goods) => {
+        for (const px of [x0, x0 + 5, x0 + 10]) for (const pz of [5, 9])
+          fillB(px, 3, pz, px, 6, pz, T.post, { j: 0.04 });
+        for (let x = x0 - 1; x <= x0 + 11; x++) {                       // gabled striped canopy
+          fillB(x, 7, 5, x, 7, 6, (x % 2 === 0) ? gable : T.canB, { j: 0.05 });
+          V(x, 8, 7, (x % 2 === 0) ? gable : T.canB, { j: 0.05 });      // ridge
+          fillB(x, 7, 8, x, 7, 9, (x % 2 === 0) ? gable : T.canB, { j: 0.05 });
+          if (x % 2 === 0) V(x, 6, 4, gable, { j: 0.05 });              // scalloped brow
+        }
+        fillB(x0, 3, 8, x0 + 10, 3, 8, T.table, { j: 0.05 });           // front counter
+        fillB(x0, 3, 6, x0 + 10, 4, 6, T.table, { j: 0.05 });           // raised back tier
+        for (let x = x0; x <= x0 + 10; x++) {
+          V(x, 4, 8, goods[((x % goods.length) + goods.length) % goods.length], { j: 0.1 });
+          V(x, 5, 6, goods[(((x + 2) % goods.length) + goods.length) % goods.length], { j: 0.1 });
+        }
+        fillB(x0 + 1, 3, 4, x0 + 2, 3, 4, T.crate, { j: 0.08 });        // crates out front
+        V(x0 + 1, 4, 4, goods[0], { j: 0.1 });
+        fillB(x0 + 8, 3, 4, x0 + 9, 4, 4, T.crate, { j: 0.08 });
+        for (let x = x0 + 1; x <= x0 + 9; x += 4) V(x, 6, 7, 0xffa028, { t: 3, j: 0 });   // hanging bulbs
+      };
+      stall(30, T.canA, [0xe08a20, 0xc03028, 0x6ab04a, 0xe8d05a, 0x5a3a72, 0xe8a8c8]);   // produce + flowers
+      stall(58, T.canC, [0xd86a50, 0xeef4f6, 0xc86a50, 0xd86a50, 0xf4f8fa, 0xe07840]);   // fish market
+      V(63, 6, 9, T.fish, { j: 0 });                                    // the famous throw, mid-air
+      for (let y = 3; y <= 5; y++) fillB(71, y, 5, 72, y, 6, (y % 2 === 0) ? 0x2a2d30 : 0x53555c, { j: 0.04 });   // crab pots
+      fillB(70, 3, 4, 70, 4, 4, 0x1d3a2e, { j: 0.03 }); V(70, 4, 5, 0xe8d05a, { j: 0 });  // chalkboard
     }
     /* ==== W3: the coral cranes ==== */
     {
@@ -8139,18 +8141,74 @@ const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
 // the figure: a stack of four bright-red voxels (visible to shadows
 // and when looking down; its own head is backface-culled from inside)
 const playerGroup = new THREE.Group();
-{
-  const mat = new THREE.MeshLambertMaterial({ color: 0xff2424 });
-  const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
-  for (let i = 0; i < 4; i++) {
-    const cube = new THREE.Mesh(geo, mat);
-    cube.position.y = i + 0.5;
-    cube.castShadow = true;
-    playerGroup.add(cube);
+const figDetail = { on: localStorage.getItem('vb-pmodel') === '1' };
+let selfColor = 0xff2424;
+/* one builder, two silhouettes — children are always [legs, torso, arms, head]
+   so the crouch/FPV visibility toggles keep working on both */
+function buildFigureInto(group, color, pid) {
+  for (const c of [...group.children]) { if (!c.isSprite) group.remove(c); }
+  const mats = { shirt: new THREE.MeshLambertMaterial({ color }) };
+  const tag = m => { if (pid != null) m.userData.pid = pid; m.castShadow = true; return m; };
+  if (!figDetail.on) {
+    const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+    for (let i = 0; i < 4; i++) {
+      const cube = tag(new THREE.Mesh(geo, mats.shirt));
+      cube.position.y = i + 0.5;
+      group.add(cube);
+    }
+    group.userData.mats = mats;
+    group.userData.head = null;
+    return;
   }
-  playerGroup.visible = false;
-  scene.add(playerGroup);
+  const dark = new THREE.Color(color).multiplyScalar(0.42).getHex();
+  const pants = new THREE.MeshLambertMaterial({ color: dark });
+  const skin = new THREE.MeshLambertMaterial({ color: 0xe8b088 });
+  const hairM = new THREE.MeshLambertMaterial({ color: 0x3a2a1c });
+  const eyeM = new THREE.MeshLambertMaterial({ color: 0x17171a });
+  const legs = new THREE.Group();
+  for (const sx of [-0.26, 0.26]) {
+    const leg = tag(new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.9, 0.5), pants));
+    leg.position.set(sx, 0.95, 0);
+    legs.add(leg);
+  }
+  const torso = tag(new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.5, 0.62), mats.shirt));
+  torso.position.y = 2.65;
+  const arms = new THREE.Group();
+  for (const sx of [-0.72, 0.72]) {
+    const arm = tag(new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.4, 0.45), mats.shirt));
+    arm.position.set(sx, 2.6, 0);
+    arms.add(arm);
+    const hand = tag(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.4), skin));
+    hand.position.set(sx, 1.78, 0);
+    arms.add(hand);
+  }
+  const head = new THREE.Group();
+  const skull = tag(new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.82, 0.82), skin));
+  const hair = tag(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.9), hairM));
+  hair.position.y = 0.42;
+  head.add(skull, hair);
+  for (const sx of [-0.2, 0.2]) {
+    const eye = tag(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.06), eyeM));
+    eye.position.set(sx, 0.06, -0.43);
+    head.add(eye);
+  }
+  head.position.y = 3.85;
+  group.add(legs, torso, arms, head);
+  group.userData.mats = mats;
+  group.userData.head = head;
 }
+buildFigureInto(playerGroup, selfColor, null);
+playerGroup.visible = false;
+scene.add(playerGroup);
+const pmodelBox = document.getElementById('pmodel');
+pmodelBox.checked = figDetail.on;
+pmodelBox.addEventListener('change', () => {
+  figDetail.on = pmodelBox.checked;
+  localStorage.setItem('vb-pmodel', figDetail.on ? '1' : '0');
+  buildFigureInto(playerGroup, selfColor, null);
+  for (const [id, r] of remotes) { scene.remove(r.group); remotes.delete(id); }
+  updateRoster(lastRoster);
+});
 
 function playerSolid(x, y, z) {
   if (y <= -2) return true;
@@ -8517,6 +8575,7 @@ let diedAtLocal = 0;
 // audience mode — the QR-code URL (path ends in /join, or ?audience):
 // both menus stay hidden for good; a centered card offers name + join-as-human
 const AUDIENCE = /(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience');
+const HOST_KEY = new URLSearchParams(location.search).get('corpo') || '';
 const audJoinBtn = document.getElementById('aud-join');
 const audNameEl = document.getElementById('aud-name');
 const audStatusEl = document.getElementById('aud-status');
@@ -8639,6 +8698,8 @@ function handleNet(m) {
       setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
       if (m.marquee !== undefined) marqueeEl.value = m.marquee;
+      // the host link claims (or reclaims) the corpo seat automatically
+      if (HOST_KEY && !AUDIENCE && !net.role) doJoin('corpo');
       break;
     case 'time':
       if (net.role !== 'corpo') {
@@ -8666,7 +8727,8 @@ function handleNet(m) {
       } else {
         mpStatus.textContent = 'you are HUMAN — every second alive pays 1 pt';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = 0;
-        playerGroup.children[0].material.color.set(m.color);
+        selfColor = m.color;
+        playerGroup.userData.mats.shirt.color.set(m.color);
         if (!player.active) enterFPV();   // pointer lock was requested by the join click
       }
       break;
@@ -8726,15 +8788,7 @@ function handleNet(m) {
 
 function makeRemote(p) {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: p.color });
-  const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
-  for (let i = 0; i < 4; i++) {
-    const cube = new THREE.Mesh(geo, mat);
-    cube.position.y = i + 0.5;
-    cube.castShadow = true;
-    cube.userData.pid = p.id;
-    group.add(cube);
-  }
+  buildFigureInto(group, p.color, p.id);
   // floating name tag
   const cnv = document.createElement('canvas');
   cnv.width = 256; cnv.height = 64;
@@ -8770,7 +8824,7 @@ function updateRoster(list) {
   }
   for (const [id, r] of remotes) if (!seen.has(id)) { scene.remove(r.group); remotes.delete(id); }
   // seat availability
-  joinCorpoBtn.disabled = list.some(p => p.role === 'corpo');
+  joinCorpoBtn.disabled = !HOST_KEY && list.some(p => p.role === 'corpo');
   const humansFull = list.filter(p => p.role === 'human').length >= 4;
   joinHumanBtn.disabled = humansFull;
   if (AUDIENCE && !net.role) {
@@ -8864,7 +8918,24 @@ function stepNet(dt) {
     dy = ((dy + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     r.yaw += dy * k;
     r.group.position.set(r.x, r.y, r.z);
-    r.group.rotation.y = r.yaw;
+    const head = r.group.userData.head;
+    if (head) {
+      // detailed figure: the body faces travel, the head owns the look
+      const mdx = r.tx - r.x, mdz = r.tz - r.z;
+      if (r.byaw === undefined) r.byaw = r.yaw;
+      if (mdx * mdx + mdz * mdz > 0.02) {
+        const want = Math.atan2(-mdx, -mdz);
+        let bd = ((want - r.byaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        r.byaw += bd * Math.min(1, dt * 8);
+      }
+      let hd = ((r.yaw - r.byaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      if (Math.abs(hd) > 1.15) {           // past the neck limit the body follows the head
+        r.byaw += hd > 0 ? hd - 1.15 : hd + 1.15;
+        hd = hd > 0 ? 1.15 : -1.15;
+      }
+      r.group.rotation.y = r.byaw;
+      head.rotation.y = hd;
+    } else r.group.rotation.y = r.yaw;
   }
   if (net.online && net.role === 'human' && net.alive && player.active) {
     posTimer += dt;
