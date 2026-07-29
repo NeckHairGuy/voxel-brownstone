@@ -6616,7 +6616,7 @@ function buildSeattle(long = false) {
     }
     // promenade rail on the coping (open where the wharf continues south)
     for (let x = -74; x <= 132; x++) {
-      if (x >= 98) continue;
+      if (x >= 82 && x <= 116) continue;
       if (x % 2 === 0) V(x, 3, 14, SEA.iron, { j: 0.03 });
       V(x, 4, 14, SEA.iron, { j: 0.03 });
     }
@@ -6662,37 +6662,37 @@ function buildSeattle(long = false) {
       }
       noteTop(x, z, Math.max(groundAt(x, z) || 2, h));
     }
-    /* ---- L3: the working wharf (x 98..132, z 15..60) — off the STARBUX end ---- */
-    for (let x = 98; x <= 132; x++) for (let z = 15; z <= 60; z++) {
+    /* ---- L3: the working wharf (x 82..116, z 15..60) — fronting the Interbay ---- */
+    for (let x = 82; x <= 116; x++) for (let z = 15; z <= 60; z++) {
       fillB(x, -2, z, x, 1, z, SEA.granite, { j: 0.06 });
       V(x, 2, z, ((x % 8 === 0) || (z % 8 === 0)) ? SEA.walkJt : SEA.prom, { j: 0.07 });
       noteTop(x, z, 2);
     }
-    for (let x = 98; x <= 132; x += 3) {                               // pile heads along the faces
+    for (let x = 82; x <= 116; x += 3) {                               // pile heads along the faces
       V(x, 2, 60, 0x3a3228, { j: 0.06 });
       fillB(x, -2, 61, x, 1, 61, 0x3a3228, { j: 0.06 });
     }
     for (let z = 17; z <= 59; z += 3) {
-      fillB(132, -2, z, 132, 1, z, 0x3a3228, { j: 0.06 });
-      if (z >= 23) fillB(98, -2, z, 98, 1, z, 0x3a3228, { j: 0.06 });
+      fillB(116, -2, z, 116, 1, z, 0x3a3228, { j: 0.06 });
+      if (z >= 23) fillB(82, -2, z, 82, 1, z, 0x3a3228, { j: 0.06 });
     }
     // kick rails + bollards on the open faces
-    for (let z = 16; z <= 59; z++) if (z % 2 === 0) V(132, 3, z, SEA.iron, { j: 0.03 });
-    for (let x = 99; x <= 131; x++) if (x % 2 === 0) V(x, 3, 60, SEA.iron, { j: 0.03 });
-    for (const [bx, bz] of [[101, 58], [113, 59], [125, 59], [131, 30], [131, 46]]) {
+    for (let z = 16; z <= 59; z++) if (z % 2 === 0) V(116, 3, z, SEA.iron, { j: 0.03 });
+    for (let x = 83; x <= 115; x++) if (x % 2 === 0) V(x, 3, 60, SEA.iron, { j: 0.03 });
+    for (const [bx, bz] of [[85, 58], [97, 59], [109, 59], [115, 30], [115, 46]]) {
       fillB(bx, 3, bz, bx, 4, bz, 0x2a2d30, { j: 0.02 });
       V(bx, 5, bz, 0x3a3e42, { j: 0.02 });
     }
     // crane rail lanes + lane stencils
-    for (let x = 100; x <= 130; x++) {
+    for (let x = 84; x <= 114; x++) {
       V(x, 2, 44, 0x53555c, { j: 0.03 }); V(x, 2, 52, 0x53555c, { j: 0.03 });
     }
-    for (let x = 102; x <= 122; x += 10) fillB(x, 2, 24, x + 4, 2, 24, 0xe8c020, { j: 0.06 });
+    for (let x = 86; x <= 106; x += 10) fillB(x, 2, 24, x + 4, 2, 24, 0xe8c020, { j: 0.06 });
     // SEATTLE-WHARF-ANCHOR
 
     /* ---- L4: transplanted landmarks ---- */
     needleAt(-89, -8, 19, true);                                       // Space Needle among the west houses
-    ferryAt(103, 0, 4, true);                                          // MV LAYOFF berthed off the VINYL block
+    ferryAt(87, 0, 4, true);                                           // MV LAYOFF: terminal right off the VINYL block
 
     /* ---- L5: street kit v1 (lamps, signal, parked EVs) ---- */
     for (const lx of [-58, -34, -8, 26, 58, 86, 125]) crook(lx, -5, 0, 1);
@@ -6713,7 +6713,7 @@ function buildSeattle(long = false) {
           else { fillB(px, g + 1, 12, px + 1, g + 1, 12, 0x8fd820, { j: 0.05 }); V(px + 2, g + 1, 12, 0x2a2a2c, { j: 0.03 }); }
         }
       } }
-    gull(-20, 3, 9); gull(110, 3, 62); pigeon(24, 3, 7); pigeon(25, 3, 5);
+    gull(-20, 3, 9); gull(94, 3, 62); pigeon(24, 3, 7); pigeon(25, 3, 5);
     /* ============ L6: THE CITY ROW ============ */
     /* ==== R1: west craftsman (x -72..-60, z -20..-8) ==== */
     {
@@ -7426,29 +7426,29 @@ function buildSeattle(long = false) {
         steel: 0x2e5444, cream: 0xe8e0cc, creamDk: 0xdcd4be, neon: 0xff2020,
         neonDim: 0xff4060, iron: 0x2a2d30, face: 0xf2e8c8,
       };
-      for (const gx of [28, 55]) {                                     // lattice legs
+      for (const gx of [71, 98]) {                                     // lattice legs
         for (let y = 3; y <= 12; y++) for (let x = gx; x <= gx + 1; x++) for (let z = 8; z <= 9; z++)
           if (y % 3 === 0 || (x + z + y) % 2 === 0) V(x, y, z, G.steel, { j: 0.03 });
         fillB(gx, 3, 8, gx + 1, 4, 9, G.steel, { j: 0.03 });           // solid feet
       }
-      fillB(28, 13, 8, 56, 15, 9, G.cream, { j: 0.04 });               // main beam
-      fillB(38, 16, 8, 46, 16, 9, G.creamDk, { j: 0.04 });             // center crest
-      sign('PUBLIC', 31, 13, 10, 1, G.neon, 2);
-      fillB(30, 8, 8, 54, 12, 9, G.cream, { j: 0.04 });                // hung MARKET board
-      sign('MARKET', 31, 9, 10, 1, G.neon, 2);
-      for (let x = 30; x <= 54; x += 4) V(x, 12, 10, 0xffa028, { t: 3, j: 0 });   // marquee bulbs
+      fillB(71, 13, 8, 99, 15, 9, G.cream, { j: 0.04 });               // main beam
+      fillB(81, 16, 8, 89, 16, 9, G.creamDk, { j: 0.04 });             // center crest
+      sign('PUBLIC', 74, 13, 10, 1, G.neon, 2);
+      fillB(73, 8, 8, 97, 12, 9, G.cream, { j: 0.04 });                // hung MARKET board
+      sign('MARKET', 74, 9, 10, 1, G.neon, 2);
+      for (let x = 73; x <= 97; x += 4) V(x, 12, 10, 0xffa028, { t: 3, j: 0 });   // marquee bulbs
       // the clock, crowning the beam
       for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) {
         const dd = dx * dx + dy * dy;
-        const px = 42 + dx, py = 20 + dy;
+        const px = 85 + dx, py = 20 + dy;
         if (dd > 16) continue;
         if (dd > 9) V(px, py, 9, G.neonDim, { t: 2, j: 0 });           // neon ring
         else V(px, py, 9, G.face, { j: 0.02 });
       }
-      fillB(42, 20, 9, 42, 22, 9, G.iron, { j: 0 });                   // minute hand: high noon
-      V(41, 19, 9, G.iron, { j: 0 }); V(40, 18, 9, G.iron, { j: 0 });  // hour hand: seven-ish
-      V(42, 17, 9, G.iron, { j: 0 });
-      V(42, 25, 9, G.neon, { t: 2, j: 0 });                            // beacon
+      fillB(85, 20, 9, 85, 22, 9, G.iron, { j: 0 });                   // minute hand: high noon
+      V(84, 19, 9, G.iron, { j: 0 }); V(83, 18, 9, G.iron, { j: 0 });  // hour hand: seven-ish
+      V(85, 17, 9, G.iron, { j: 0 });
+      V(85, 25, 9, G.neon, { t: 2, j: 0 });                            // beacon
     }
     /* ==== W2: market stalls against the street edge ==== */
     {
@@ -7540,8 +7540,8 @@ function buildSeattle(long = false) {
           for (const [sy, sz] of [[27, 50], [28, 54], [29, 58], [30, 62]]) V(cx + 4, sy, sz, R.steel, { j: 0.02 });
         }
       };
-      crane(100, false);
-      crane(118, true);
+      crane(84, false);
+      crane(102, true);
       bperson(37, 3, 47, 0xe8c020, 0x2a3038);                           // spotter in hi-vis
       bperson(29, 3, 55, 0x4a6a8a, 0x23262c);
     }
@@ -7552,29 +7552,29 @@ function buildSeattle(long = false) {
         fillB(x0, y0, z0, x0 + 2, y0 + 2, z0 + len - 1, c, { j: 0.07 });
         fillB(x0, y0, z0 + len - 1, x0 + 2, y0 + 2, z0 + len - 1, Y.door, { j: 0.05 });
       };
-      box(109, 28, 3, 7, Y.rust); box(113, 28, 3, 7, Y.blue);
-      box(109, 36, 3, 7, Y.green); box(113, 36, 3, 7, Y.tan);
-      box(110, 30, 6, 7, Y.blue); box(112, 37, 6, 7, Y.rust);
-      box(111, 33, 9, 7, Y.green);
+      box(93, 28, 3, 7, Y.rust); box(97, 28, 3, 7, Y.blue);
+      box(93, 36, 3, 7, Y.green); box(97, 36, 3, 7, Y.tan);
+      box(94, 30, 6, 7, Y.blue); box(96, 37, 6, 7, Y.rust);
+      box(95, 33, 9, 7, Y.green);
       // gatehouse at the wharf mouth
-      fillB(99, 3, 16, 102, 7, 18, 0xe8e0cc, { j: 0.05 });
-      clearB(100, 3, 16, 101, 6, 16);
-      fillB(100, 3, 16, 101, 6, 16, 0x9fc6da, { t: 1, j: 0.02 }); markDoor(100, 3, 16, 101, 6, 16);
-      clearB(100, 3, 17, 101, 5, 17);                                  // hollow booth
-      V(101, 3, 17, 0x6e5036, { j: 0.04 }); V(101, 4, 18, 0x40c8e0, { t: 2, j: 0 });
-      fillB(98, 7, 15, 103, 7, 19, 0x244438, { j: 0.04 });
-      V(103, 3, 17, 0x2a2d30, { j: 0.02 });                             // barrier post, arm raised
-      for (let y = 4; y <= 8; y++) V(103, y, 17, (y % 2 === 0) ? 0xe8d020 : 0x2a2a2c, { j: 0.02 });
-      bperson(100, 3, 17, 0x2e5444, 0x2a3038);
+      fillB(83, 3, 16, 86, 7, 18, 0xe8e0cc, { j: 0.05 });
+      clearB(84, 3, 16, 85, 6, 16);
+      fillB(84, 3, 16, 85, 6, 16, 0x9fc6da, { t: 1, j: 0.02 }); markDoor(84, 3, 16, 85, 6, 16);
+      clearB(84, 3, 17, 85, 5, 17);                                    // hollow booth
+      V(85, 3, 17, 0x6e5036, { j: 0.04 }); V(85, 4, 18, 0x40c8e0, { t: 2, j: 0 });
+      fillB(82, 7, 15, 87, 7, 19, 0x244438, { j: 0.04 });
+      V(87, 3, 17, 0x2a2d30, { j: 0.02 });                              // barrier post, arm raised
+      for (let y = 4; y <= 8; y++) V(87, y, 17, (y % 2 === 0) ? 0xe8d020 : 0x2a2a2c, { j: 0.02 });
+      bperson(84, 3, 17, 0x2e5444, 0x2a3038);
       // forklift, barrels, rope coil
-      fillB(122, 3, 30, 124, 4, 32, 0xe08a20, { j: 0.05 });
-      V(124, 3, 33, 0x2a2a2c, { j: 0 }); V(122, 3, 29, 0x2a2a2c, { j: 0 });
-      fillB(125, 3, 30, 125, 4, 31, 0x53555c, { j: 0.03 });
-      for (const [bx, bz] of [[128, 22], [129, 23], [128, 24]]) { V(bx, 3, bz, 0x30608a, { j: 0.05 }); V(bx, 4, bz, 0x30608a, { j: 0.05 }); }
-      V(104, 3, 34, 0x8a6a48, { j: 0.06 }); V(104, 4, 34, 0x8a6a48, { j: 0.06 });
-      gull(114, 12, 36); gull(131, 6, 30); pigeon(101, 8, 17);
+      fillB(106, 3, 30, 108, 4, 32, 0xe08a20, { j: 0.05 });
+      V(108, 3, 33, 0x2a2a2c, { j: 0 }); V(106, 3, 29, 0x2a2a2c, { j: 0 });
+      fillB(109, 3, 30, 109, 4, 31, 0x53555c, { j: 0.03 });
+      for (const [bx, bz] of [[112, 22], [113, 23], [112, 24]]) { V(bx, 3, bz, 0x30608a, { j: 0.05 }); V(bx, 4, bz, 0x30608a, { j: 0.05 }); }
+      V(88, 3, 34, 0x8a6a48, { j: 0.06 }); V(88, 4, 34, 0x8a6a48, { j: 0.06 });
+      gull(98, 12, 36); gull(115, 6, 30); pigeon(85, 8, 17);
       // mooring dolphins seaward of the crane line
-      for (const [dx2, dz2] of [[104, 70], [128, 68]]) {
+      for (const [dx2, dz2] of [[88, 70], [112, 68]]) {
         fillB(dx2, -2, dz2, dx2 + 1, 3, dz2 + 1, 0x3a3228, { j: 0.07 });
         V(dx2, 4, dz2, 0x2a2d30, { j: 0.03 });
       }
@@ -8628,6 +8628,7 @@ let diedAtLocal = 0;
 // both menus stay hidden for good; a centered card offers name + join-as-human
 const AUDIENCE = /(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience');
 const HOST_KEY = new URLSearchParams(location.search).get('corpo') || '';
+let hostStandDown = false;   // set when another host tab reclaims the seat — no auto-rejoin fights
 const audJoinBtn = document.getElementById('aud-join');
 const audNameEl = document.getElementById('aud-name');
 const audStatusEl = document.getElementById('aud-status');
@@ -8754,7 +8755,7 @@ function handleNet(m) {
       if (m.marquee !== undefined) marqueeEl.value = m.marquee;
       if (m.pk) handleNet({ t: 'pickupstate', ...m.pk });
       // the host link claims (or reclaims) the corpo seat automatically
-      if (HOST_KEY && !AUDIENCE && !net.role) doJoin('corpo');
+      if (HOST_KEY && !AUDIENCE && !net.role && !hostStandDown) doJoin('corpo');
       break;
     case 'time':
       if (net.role !== 'corpo') {
@@ -8787,6 +8788,10 @@ function handleNet(m) {
         playerGroup.userData.mats.shirt.color.set(m.color);
         if (!player.active) enterFPV();   // pointer lock was requested by the join click
       }
+      break;
+    case 'evicted':
+      hostStandDown = true;
+      mpStatus.textContent = 'another host tab took the corpo seat — click join as corpo to take it back';
       break;
     case 'denied':
       mpStatus.textContent = 'denied: ' + m.reason;
@@ -8943,6 +8948,7 @@ function localLayoff() {
 
 function doJoin(want) {
   if (AUDIENCE && want === 'corpo') return;   // audience URL: humans only
+  if (want === 'corpo') hostStandDown = false;   // a deliberate click always contests the seat
   const name = (mpNameEl.value || '').trim() || 'player';
   if (nameOffensive(name)) {
     mpStatus.textContent = "that name won't fly — pick another";
@@ -9372,16 +9378,16 @@ const seattleLights = [
 const seattleLongLights = [
   roomLight(-45, 58, -19, 140, 0xcfe8ff, 30),   // needle halo
   roomLight(-45, 7, -12, 90, 0xffd9a0, 12),     // needle lobby spill
-  roomLight(88, 8, 49, 100, 0xffd9a0, 16),      // ferry headhouse
-  roomLight(77, 15, 46, 110, 0xfff4e0, 18),     // ferry cabin ribbon
-  roomLight(78, 7, 48, 80, 0xffd9a0, 14),       // car-deck spill
-  roomLight(78, 28, 43, 80, 0xffa028, 10),      // ferry stack beacon
-  roomLight(42, 13, 11, 120, 0xff4060, 20),     // PUBLIC MARKET neon wash
+  roomLight(72, 8, 49, 100, 0xffd9a0, 16),      // ferry headhouse
+  roomLight(61, 15, 46, 110, 0xfff4e0, 18),     // ferry cabin ribbon
+  roomLight(62, 7, 48, 80, 0xffd9a0, 14),       // car-deck spill
+  roomLight(62, 28, 43, 80, 0xffa028, 10),      // ferry stack beacon
+  roomLight(85, 13, 11, 120, 0xff4060, 20),     // PUBLIC MARKET neon wash
   roomLight(43, 14, -18, 130, 0xaef0d0, 22),    // spheres canopy heart
   roomLight(108, 7, -12, 110, 0xffd9a0, 16),    // STARBUX glow
   roomLight(8, 6, -10, 90, 0xffd9a0, 12),       // Ivy Court lobby
   roomLight(74, 6, -12, 90, 0x9a6ac8, 12),      // VINYL violet spill
-  roomLight(113, 18, 48, 90, 0xeaf2ff, 16),     // crane work lights
+  roomLight(97, 18, 48, 90, 0xeaf2ff, 16),      // crane work lights
   roomLight(-66, 6, -14, 60, 0xff8c2a, 10),     // craftsman hearth
 ];
 interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights, ...seattleLights, ...seattleLongLights);
@@ -9933,8 +9939,8 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'spheresxl',  name: 'NIMBUS Spheres XL',       scene: 'seattlelong', box: [20, 68, -34, -4],   walls: false },
   { id: 'interbay',   name: 'The Interbay 5-over-1',   scene: 'seattlelong', box: [66, 96, -34, -2],   walls: true },
   { id: 'starbuxx',   name: 'STARBUX No. 1',           scene: 'seattlelong', box: [94, 124, -26, 2],   walls: true },
-  { id: 'marketarch', name: 'Public Market Arch',      scene: 'seattlelong', box: [24, 60, 2, 16],     walls: false },
-  { id: 'coralcrane', name: 'The Coral Cranes',        scene: 'seattlelong', box: [96, 132, 24, 78],   walls: false },
+  { id: 'marketarch', name: 'Public Market Arch',      scene: 'seattlelong', box: [67, 103, 2, 16],    walls: false },
+  { id: 'coralcrane', name: 'The Coral Cranes',        scene: 'seattlelong', box: [80, 116, 24, 78],   walls: false },
   { id: 'porchhouse', name: 'The Porch House',         scene: 'seattlelong', box: [-74, -56, -24, -4], walls: true },
   { id: 'glasscorner', name: 'The Glass Corner',       scene: 'seattlelong', box: [-22, -4, -20, -2],  walls: true },
 ];

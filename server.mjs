@@ -145,7 +145,7 @@ const SPAWNS = {
   seattle: [[-12.5, 3, 60.5], [-2.5, 3, 10.5], [45.5, 11, 14.5], [17.5, 3, -13.5],
             [56.5, 11, -28.5], [78.5, 17, 6.5], [46.5, 11, 54.5], [78.5, 17, -30.5]],
   seattlelong: [[-45.5, 3, -10.5], [8.5, 3, -4.5], [30.5, 3, 11.5], [44.5, 3, -11.5],
-                [80.5, 3, -4.5], [106.5, 3, -4.5], [110.5, 3, 30.5], [96.5, 3, 50.5]],
+                [80.5, 3, -4.5], [106.5, 3, -4.5], [94.5, 3, 30.5], [80.5, 3, 50.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -162,7 +162,7 @@ const PICKUP_SPOTS = {
   seattlelong: [
     { kind: 'sticker', x: -39.5, y: 58.5, z: -19.5 },   // Space Needle open-air deck
     { kind: 'sticker', x: 43.5, y: 26.5, z: -18.5 },    // crown of the big sphere
-    { kind: 'tshirt', x: 77.5, y: 13.5, z: 46.5 },      // ferry cabin, second deck
+    { kind: 'tshirt', x: 61.5, y: 13.5, z: 46.5 },      // ferry cabin, second deck
   ],
 };
 const genCode = kind => (kind === 'tshirt' ? 'TEE-' : 'STKR-') +
@@ -238,9 +238,10 @@ function onMessage(conn, m) {
           // the host link always wins: evict whoever holds the seat (ghost tabs included)
           for (const q of [...players.values()]) if (q.role === 'corpo') {
             console.log(`corpo seat reclaimed by host key — evicting ${q.name}`);
+            q.conn.send({ t: 'evicted' });
             q.conn.send({ t: 'msg', text: 'the host reclaimed the corpo seat' });
             dropConn(q.conn);
-            q.conn.socket.destroy();
+            q.conn.socket.end();   // flush the eviction notice, then close
           }
         }
         role = 'corpo';
