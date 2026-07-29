@@ -4358,16 +4358,16 @@ function buildSeattle() {
   // Highland Path on Tier C (x 76..79)
   for (let z = -54; z <= -11; z++) V(77, 16, z, SEA.cobble, { j: 0.08 });
   acorn(79, -50); acorn(79, -34); acorn(79, -18);
-  fir(76, -54, 14); fir(78, -44, 16); fir(76, -22, 13); fir(78, -12, 15);
+  fir(76, -54, 14); fir(78, -44, 16); fir(78, -12, 15);
   // Tier C south wall-top firs
-  fir(84, 26, 13); fir(90, 27, 14); fir(88, 24, 12);
+  fir(90, 27, 14);
   // bluff-base firs on the planted strip
   fir(22, -40, 12); fir(21, -34, 10); fir(23, -28, 11);
   // waterfront acorn lamps + upland crooks
-  for (let z = -54; z <= 72; z += 12) acorn(-4, z);
-  for (let z = -14; z <= 70; z += 14) crook(48, z, 1, 0);
-  for (let z = -7; z <= 63; z += 14) crook(61, z, -1, 0);
-  for (let x = 16; x <= 94; x += 13) if (x < 43 || x > 66) crook(x, 38, 0, 1);
+  for (let z = -54; z <= 72; z += 18) acorn(-4, z);
+  for (let z = -14; z <= 70; z += 20) crook(48, z, 1, 0);
+  for (let z = -7; z <= 63; z += 20) crook(61, z, -1, 0);
+  for (let x = 16; x <= 94; x += 20) if (x < 43 || x > 66) crook(x, 38, 0, 1);
   // Lighthouse islet in the north bay: striped tower, lamp always on
   {
     fillB(-31, -2, 68, -28, 0, 71, SEA.granite, { j: 0.1 });
@@ -5423,9 +5423,9 @@ function buildSeattle() {
       headlight: 0xf6f1cf, tail: 0xd82020,
     };
     /* ---- 1: twin-beam guideway, straight x52..56 from END stub to buffer ---- */
-    for (let z = -44; z <= 34; z++) {
-      const joint = [26, 18, 10, 2, -6, -14].includes(z);
-      const haunch = z >= -19 && z <= -2;                              // Pike flyover
+    for (let z = -44; z <= 74; z++) {
+      const joint = [26, 18, 10, 2, -6, -14, 34, 58, 66].includes(z);
+      const haunch = (z >= -19 && z <= -2) || (z >= 39 && z <= 52);    // Pike + Madison flyovers
       for (const [bx0, bx1] of [[52, 53], [55, 56]]) {
         fillB(bx0, 18, z, bx1, 18, z, joint ? R.joint : R.beam, { j: 0.03 });
         fillB(bx0, 19, z, bx1, 19, z, joint ? R.joint : R.rail, { j: 0.02 });
@@ -5435,20 +5435,18 @@ function buildSeattle() {
     for (const [bx0, bx1] of [[52, 53], [55, 56]]) {                    // haunch taper steps
       fillB(bx0, 17, -20, bx1, 17, -20, R.beam, { j: 0.03 });
       fillB(bx0, 17, -1, bx1, 17, -1, R.beam, { j: 0.03 });
+      fillB(bx0, 17, 38, bx1, 17, 38, R.beam, { j: 0.03 });
+      fillB(bx0, 17, 53, bx1, 17, 53, R.beam, { j: 0.03 });
     }
     // T-pylons (shaft to y15, stepped capital under the beams)
     for (const [px, pz, base] of [[53, 30, 10], [53, 20, 10], [53, 10, 10], [53, 0, 10],
-                                  [53, -22, 11], [53, -31, 11], [53, -41, 11]]) {
+                                  [53, -22, 11], [53, -31, 11], [53, -41, 11],
+                                  [53, 35, 10], [53, 56, 11], [53, 62, 11], [53, 70, 11]]) {
       fillB(px, base, pz, px + 1, 15, pz + 1, R.pier, { j: 0.03 });
       fillB(px - 1, 16, pz, px + 2, 16, pz + 1, R.pier, { j: 0.03 });
       fillB(px - 2, 17, pz, px + 3, 17, pz + 1, R.pier, { j: 0.03 });
     }
-    // END stub buffer (south, faces the 5th & Madison signal)
-    fillB(52, 18, 33, 56, 21, 34, R.fascia, { j: 0.05 });
-    for (let x = 52; x <= 56; x++) for (let y = 18; y <= 21; y++)
-      V(x, y, 33, ((x + y) % 2 === 0) ? R.yellow : R.iron, { j: 0.04 });
-    V(53, 22, 34, R.sigRed, { t: 2, j: 0 }); V(55, 22, 34, R.sigRed, { t: 2, j: 0 });
-    sign('END', 48, 19, 35, 1, R.sigRed, 2);
+    // (the line runs off the south map edge — it goes somewhere we don't)
     // north buffer at the terminal
     fillB(52, 18, -45, 56, 21, -44, R.fascia, { j: 0.05 });
     for (let x = 52; x <= 56; x++) for (let y = 18; y <= 21; y++)
@@ -5493,8 +5491,8 @@ function buildSeattle() {
       V(px, 14, 27, R.lampWarm, { t: 3, j: 0 });
     }
     // canopy
-    for (let x = 43; x <= 65; x++) for (let z = 6; z <= 26; z++) {
-      const edge = x === 43 || x === 65 || z === 6 || z === 26;
+    for (let x = 45; x <= 65; x++) for (let z = 6; z <= 26; z++) {
+      const edge = x === 45 || x === 65 || z === 6 || z === 26;
       const sky = x >= 52 && x <= 56 && z >= 8 && z <= 24;
       V(x, 28, z, edge ? R.steel : sky ? R.cGlass : (z % 3 === 0) ? R.canopyRib : R.canopy,
         sky ? { t: 1, j: 0.02 } : { j: 0.04 });
@@ -5523,7 +5521,7 @@ function buildSeattle() {
     bperson(46, 20, 9, 0x6a5a4a, 0x2a3038); bperson(47, 20, 20, 0x4a6a8a, 0x3a3e46);
     bperson(61, 20, 12, 0x8a5a6a, 0x23262c); V(61, 23, 11, 0x9fd8ff, { t: 2, j: 0 });
     bperson(47, 20, 15, 0x8a8a7a, 0x2a3038); V(47, 23, 14, 0xa86a32, { j: 0.05 }); V(47, 24, 14, 0x3f5c30, { j: 0.1 });
-    pigeon(43, 29, 6); pigeon(62, 20, 9);
+    pigeon(45, 29, 6); pigeon(62, 20, 9);
     /* ---- 3: the berthed red Alweg (walk aboard) ---- */
     {
       const z0 = 3, z1 = 26;
@@ -6451,8 +6449,8 @@ function buildSeattle() {
       fillB(x, g + 13, z + dz, x, g + 13, z + dz * 3, K.frame, { j: 0.02 });
       V(x, g + 12, z + dz * 3, K.led, { t: 3, j: 0 });
     };
-    for (const cx of [30, 44, 72, 86, 96]) cobra(cx, 57, -1);
-    for (const cx of [23, 37, 82, 93]) cobra(cx, 34, 1);
+    for (const cx of [30, 72, 96]) cobra(cx, 57, -1);
+    for (const cx of [23, 82]) cobra(cx, 34, 1);
     // bushes + hedge
     for (const [bx, bz] of [[44, 6], [61, 26], [44, 62], [61, 48], [44, -18], [67, 4]]) {
       const g = groundAt(bx, bz); if (g === undefined) continue;
@@ -6460,7 +6458,7 @@ function buildSeattle() {
       if (h3(bx, 1, bz) < 0.3) V(bx, g + 3, bz, 0xd86a8a, { j: 0.1 });
     }
     // street tree pits on Madison south walk + Tier B strip trees
-    for (const [tx, tz] of [[30, 54], [72, 54], [92, 54]]) {
+    for (const [tx, tz] of [[30, 54], [92, 54]]) {
       const g = groundAt(tx + 1, tz + 1); if (g === undefined) continue;
       fillB(tx, g, tz, tx + 3, g, tz + 3, K.soil, { j: 0.11 });
       for (let x = tx - 1; x <= tx + 4; x++) for (let z = tz - 1; z <= tz + 4; z++) {
@@ -6488,6 +6486,33 @@ function buildSeattle() {
     bperson(77, 17, -36, 0x58c05a, 0x2a3038);
   }
   // SEATTLE-FILL-ANCHOR
+  /* ============ FACADE RETROFIT: windows on the map-edge faces ============ */
+  {
+    const r = mulberry(7171);
+    const wglass = (x0, y0, z0, x1, y1, z1) => {
+      const lit = r() < 0.6;
+      clearB(x0, y0, z0, x1, y1, z1);
+      fillB(x0, y0, z0, x1, y1, z1, lit ? 0xffd9a0 : 0x9fc6da, lit ? { t: 3, j: 0.02 } : { t: 1, j: 0.02 });
+    };
+    // NIMBUS tower east wall (was blank toward the mountains)
+    for (const wy of [20, 28, 36]) for (const [z0, z1] of [[-6, -4], [0, 2], [6, 8]])
+      wglass(97, wy, z0, 97, wy + 3, z1);
+    // OK COFFEE east flank + rear
+    for (const wy of [20, 28, 36]) for (const [z0, z1] of [[60, 62], [65, 67]])
+      wglass(95, wy, z0, 95, wy + 3, z1);
+    for (const wy of [20, 28, 36]) wglass(89, wy, 70, 91, wy + 3, 70);
+    // Belltown Flats rear + east-flank ground pair
+    for (const wy of [21, 29]) for (const [x0, x1] of [[72, 74], [81, 83]])
+      wglass(x0, wy, 72, x1, wy + 2, 72);
+    wglass(85, 12, 63, 85, 14, 65);
+    // craftsman bungalow east wall
+    wglass(92, 18, -31, 92, 20, -29); wglass(92, 18, -26, 92, 20, -24);
+    // modern box east: upper ribbon + ground punch
+    wglass(93, 27, -47, 93, 29, -43);
+    wglass(93, 19, -45, 93, 20, -44);
+    // car wash rear: frosted glass-block band
+    fillB(31, 14, 72, 39, 16, 72, 0xcfe0e4, { t: 1, j: 0.03 });
+  }
   // SEATTLE-LIFE-ANCHOR
 }
 }
