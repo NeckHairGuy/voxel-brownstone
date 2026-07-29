@@ -49,7 +49,20 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   Brooklyn block (brownstone, deli, construction lot) plus the church,
   burying ground, DUNKS, a sunken T stop, and a triple-decker carrying the
   VOXGO sign, all lining one side of a widened street with a walk-through
-  Green Line trolley parked on fresh rails
+  Green Line trolley parked on fresh rails; and **Seattle** — the biggest
+  map: the city climbs three tiers from Elliott Bay (seawall, boardwalk,
+  a Madison St that steps up the bluff) to a fir-clad Cascade backdrop
+  with a snow-capped mini Rainier. A working **Space Needle elevator**
+  carries players 48 voxels up the mast to the observation ring, gold
+  cone and open-air deck; Pike Place Market straddles the bluff with a
+  Down Under arcade, gum-wall alley and the stacked PUBLIC/MARKET neon;
+  the ferry MV LAYOFF is berthed at a terminal whose departures gantry
+  reads LAYOFF / LATE; the NIMBUS glass spheres hold an indoor forest
+  with a catwalk (and a CORPO gate that says WOW on the way out); a twin
+  Alweg monorail runs from an END stub through Westlake to the Needle;
+  plus the Pink Elephant Car Wash (walk the brush tunnel), Belltown
+  walk-up with a dead-E RENT sign, OK COFFEE under a SOLD blade, two
+  furnished homes, a busless bus stop, lime scooters, teslas, and rain
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 - **The Catalogue** (`?catalog`, or the "building catalogue" button in the

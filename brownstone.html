@@ -291,6 +291,7 @@ if (new URLSearchParams(location.search).has('catalog'))
       <option value="techlong">scene: Tech Brooklyn Long</option>
       <option value="boston">scene: Boston</option>
       <option value="bostonlong">scene: Boston Long</option>
+      <option value="seattle">scene: Seattle</option>
     </select>
     <div class="help">scene — swap the map (switches it for everyone online)</div>
     <div class="row">
@@ -682,7 +683,8 @@ function markDoor(x0, y0, z0, x1, y1, z1) {
   };
   const FONT = {
     A: ['.#.', '###', '#.#'], B: ['##.', '###', '##.'], C: ['###', '#..', '###'],
-    D: ['##.', '#.#', '##.'], E: ['###', '##.', '###'], G: ['####', '#...', '#.##'],
+    D: ['##.', '#.#', '##.'], E: ['###', '##.', '###'], F: ['###', '##.', '#..'],
+    G: ['####', '#...', '#.##'],
     H: ['#.#', '###', '#.#'], I: ['#', '#', '#'], J: ['..#', '..#', '##.'],
     K: ['#.#', '##.', '#.#'], L: ['#..', '#..', '###'], M: ['##.##', '#.#.#', '#...#'],
     N: ['#..#', '##.#', '#.##'], O: ['###', '#.#', '###'], P: ['##.', '##.', '#..'],
@@ -1021,7 +1023,7 @@ function bostonSouthRow(dx, people = true) {
   }
 }
 
-if (sceneId !== 'boston') {   // ---- the Brooklyn base underlies every scene but Boston ----
+if (sceneId !== 'boston' && sceneId !== 'seattle') {   // ---- the Brooklyn base underlies every scene but the standalone maps ----
 // earth base
 fillB(X0, -2, -56, X1, -1, 54, 0x4a3a2a, { j: 0.05 });
 // default grass everywhere on top
@@ -2208,6 +2210,7 @@ if (sceneId === 'tech') buildTech();
 if (sceneId === 'techlong') buildTechLong();
 if (sceneId === 'boston') buildBoston();
 if (sceneId === 'bostonlong') buildBostonLong();
+if (sceneId === 'seattle') buildSeattle();
 
 /* ============================================================
    15H. BOSTON LONG — the Brooklyn block plus the Boston landmarks
@@ -4015,8 +4018,2482 @@ function buildBoston() {
   }
   markDoor(10, 29, -13, 12, 31, -13);                              // rowhouse roof bulkhead
 }   // end buildBoston
+
+/* ============================================================
+   15I. SEATTLE — remake. Elliott Bay on the west; the city climbs
+   in three tiers (waterfront y2, midtown y10, uplands y16) to a
+   layered Cascade backdrop. Roads: Alaskan Way + 5th Ave (N-S),
+   Pike St + Madison St (E-W, Madison climbs the bluff). Three
+   grand stairs link the tiers. World x -34..110, z -56..74.
+   ============================================================ */
+function buildSeattle() {
+  const SEA = {
+    water: 0x2e6e8e, seabed: 0x2a3038, granite: 0x6a6e72, coping: 0x6f7b84,
+    prom: 0xb2aca0, till: 0x6e5a44, boardform: 0x8e887c, ivy: 0x3f5c30,
+    grass: 0x4f7a2e, earth: 0x4a3a2a, asphalt: 0x3a3a3e, dash: 0xd8d8d2,
+    walk: 0x9a9a94, walkJt: 0x8e8e88, cobble: 0x8a7a62, step: 0xa8a49a,
+    rock1: 0x7a7d82, rock2: 0x8d9096, scree: 0x6a6258, snow: 0xeef2f4,
+    firTrunk: 0x4a3524, fir1: 0x2e4a2c, fir2: 0x3a5c34, fir3: 0x243c22,
+    iron: 0x3a3a3e, lampWarm: 0xffe8b8,
+  };
+  // terrain surface bookkeeping so props can sit on real ground
+  const topAt = new Map();
+  const noteTop = (x, z, y) => topAt.set(x + '|' + z, y);
+  const groundAt = (x, z) => topAt.get(x + '|' + z);
+
+  /* ---- Douglas fir: 1x1 trunk, ragged tiered branch discs ---- */
+  function fir(x, z, h) {
+    const base = groundAt(x, z);
+    if (base === undefined) return;
+    for (let y = base + 1; y <= base + h; y++) V(x, y, z, SEA.firTrunk, { j: 0.06 });
+    const greens = [SEA.fir1, SEA.fir2, SEA.fir3];
+    let rad = 3;
+    for (let dy = Math.floor(h * 0.35); dy <= h; dy += 2) {
+      const r = Math.max(1, Math.round(rad * (1 - (dy / h) * 0.7)));
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+        if (Math.abs(dx) + Math.abs(dz) > r + (h3(x + dx, base + dy, z + dz) < 0.4 ? 0 : 1)) continue;
+        if (dx === 0 && dz === 0) continue;
+        V(x + dx, base + dy, z + dz, greens[Math.floor(h3(x + dx, dy, z + dz) * 3)], { j: 0.14 });
+      }
+    }
+    V(x, base + h + 1, z, SEA.fir3, { j: 0.1 });
+    if (base + h + 1 > 22) V(x, base + h + 2, z, 0xdfe6e6, { j: 0.05 });   // snow-dust tip
+  }
+  /* ---- street furniture ---- */
+  function acorn(x, z) {          // waterfront acorn lamp
+    const b = groundAt(x, z); if (b === undefined) return;
+    fillB(x, b + 1, z, x, b + 6, z, SEA.iron, { j: 0.03 });
+    V(x, b + 7, z, SEA.lampWarm, { t: 3, j: 0 });
+  }
+  function crook(x, z, dx, dz) {  // bishop's-crook street light, arm toward road
+    const b = groundAt(x, z); if (b === undefined) return;
+    fillB(x, b + 1, z, x, b + 8, z, SEA.iron, { j: 0.03 });
+    fillB(x + dx, b + 8, z + dz, x + dx * 2, b + 8, z + dz * 2, SEA.iron, { j: 0.03 });
+    V(x + dx * 2, b + 7, z + dz * 2, SEA.lampWarm, { t: 3, j: 0 });
+  }
+  function gaslampS(x, z) {       // short stair lamp
+    const b = groundAt(x, z); if (b === undefined) return;
+    fillB(x, b + 1, z, x, b + 4, z, SEA.iron, { j: 0.03 });
+    V(x, b + 5, z, SEA.lampWarm, { t: 3, j: 0 });
+  }
+  function benchS(x, z, alongX) {
+    const b = groundAt(x, z); if (b === undefined) return;
+    if (alongX) { fillB(x, b + 1, z, x + 2, b + 1, z, BB.wood, { j: 0.06 }); fillB(x, b + 2, z + 1, x + 2, b + 2, z + 1, BB.wood, { j: 0.06 }); }
+    else { fillB(x, b + 1, z, x, b + 1, z + 2, BB.wood, { j: 0.06 }); fillB(x + 1, b + 2, z, x + 1, b + 2, z + 2, BB.wood, { j: 0.06 }); }
+  }
+  /* ---- tesla: 11 long x 6 wide, low glass canopy, either axis.
+     (u0,v0) = low corner along (length, width); base = ground surface y ---- */
+  function teslaS(u0, v0, base, hex, alongZ) {
+    const P2 = alongZ ? (u, v) => [v0 + v, u0 + u] : (u, v) => [u0 + u, v0 + v];
+    const box = (ua, ya, va, ub, yb, vb, c, o) => {
+      const [xa, za] = P2(ua, va), [xb, zb] = P2(ub, vb);
+      fillB(xa, base + ya, za, xb, base + yb, zb, c, o);
+    };
+    for (const wu of [2, 8]) for (const wv of [0, 5]) {
+      box(wu, 1, wv, wu + 1, 2, wv, 0x141416, { j: 0.03 });
+      box(wu, 2, wv, wu + 1, 2, wv, 0x3a3a3e, { j: 0.03 });
+    }
+    box(0, 2, 0, 10, 2, 5, 0x1c1c1e, { j: 0.03 });                  // chassis shadow
+    box(0, 3, 0, 10, 4, 5, hex, { j: 0.04 });                       // low body
+    box(2, 5, 1, 8, 5, 4, P.glass, { t: 1, j: 0.02 });              // canopy glass ring
+    box(3, 6, 1, 7, 6, 4, hex, { j: 0.04 });                        // roof spine
+    box(4, 6, 2, 6, 6, 3, P.glass, { t: 1, j: 0.02 });              // glass roof
+    box(10, 4, 1, 10, 4, 4, 0xf6f1cf, { t: 2, j: 0 });              // light bars
+    box(0, 4, 1, 0, 4, 4, 0xc03028, { t: 2, j: 0 });
+    box(10, 3, 2, 10, 3, 3, 0xcccccc, { j: 0 });                    // badge
+  }
+
+  /* ============ 1. GROUND: bay, seawall, three tiers ============ */
+  // Elliott Bay: seabed y-2, two glass water courses y-1..0
+  for (let x = -34; x <= -8; x++) for (let z = -56; z <= 74; z++) {
+    V(x, -2, z, SEA.seabed, { j: 0.08 });
+    V(x, -1, z, SEA.water, { t: 1, j: 0.03 });
+    V(x, 0, z, h3(x, 9, z) < 0.06 ? 0x63a4bd : SEA.water, { t: 1, j: 0.03 });
+    noteTop(x, z, -2);
+  }
+  // seawall x -7..-6: granite mass, bluestone coping, iron rail on the edge
+  for (let z = -56; z <= 74; z++) {
+    fillB(-7, -2, z, -6, 1, z, SEA.granite, { j: 0.05 });
+    fillB(-7, 2, z, -6, 2, z, SEA.coping, { j: 0.04 });
+    noteTop(-7, z, 2); noteTop(-6, z, 2);
+  }
+  for (let z = -56; z <= 74; z++) {
+    const gap = (z >= -52 && z <= -46) || (z >= 58 && z <= 62) || (z >= 44 && z <= 48);
+    if (gap) continue;
+    if (z % 2 === 0) V(-6, 3, z, SEA.iron, { j: 0.03 });
+    V(-6, 4, z, SEA.iron, { j: 0.03 });
+  }
+  // riprap step-outs (swimmer rescue): y0 then y1 shelves against the wall
+  for (const [za, zb] of [[-52, -46], [58, 62]]) {
+    fillB(-9, -2, za, -8, 0, zb, SEA.granite, { j: 0.09 });
+    for (let z = za; z <= zb; z++) { noteTop(-8, z, 0); noteTop(-9, z, 0); }
+    fillB(-7, -2, za, -7, 1, zb, SEA.granite, { j: 0.09 });
+    for (let z = za; z <= zb; z++) noteTop(-7, z, 1);
+  }
+  // TIER A waterfront x -5..23: earth to y1, concrete surface y2
+  for (let x = -5; x <= 23; x++) for (let z = -56; z <= 74; z++) {
+    fillB(x, -2, z, x, 1, z, SEA.earth, { j: 0.05 });
+    V(x, 2, z, SEA.prom, { j: 0.08 });
+    noteTop(x, z, 2);
+  }
+  // planted strip against the bluff x 21..23
+  for (let x = 21; x <= 23; x++) for (let z = -56; z <= 74; z++)
+    V(x, 2, z, h3(x, 4, z) < 0.5 ? SEA.grass : 0x476e2a, { j: 0.13 });
+  // bluff wall x 24..26: battered till + boardform panels + ivy
+  for (let x = 24; x <= 26; x++) {
+    const top = x === 24 ? 5 : x === 25 ? 8 : 10;
+    for (let z = -56; z <= 74; z++) {
+      for (let y = 2; y <= top; y++) {
+        const board = (y % 4 === 1) && h3(x, y, z) < 0.6;
+        V(x, y, z, h3(x, y * 7, z) < 0.12 ? SEA.ivy : board ? SEA.boardform : SEA.till, { j: 0.1 });
+      }
+      fillB(x, -2, z, x, 1, z, SEA.earth, { j: 0.05 });
+      noteTop(x, z, top);
+    }
+  }
+  // TIER B midtown y10: x 27..71 all z, plus x 72..98 south of the campus
+  for (let x = 27; x <= 71; x++) for (let z = -56; z <= 74; z++) {
+    fillB(x, -2, z, x, 9, z, SEA.earth, { j: 0.05 });
+    V(x, 10, z, SEA.grass, { j: 0.13 });
+    noteTop(x, z, 10);
+  }
+  for (let x = 72; x <= 98; x++) for (let z = 32; z <= 74; z++) {
+    fillB(x, -2, z, x, 9, z, SEA.earth, { j: 0.05 });
+    V(x, 10, z, SEA.grass, { j: 0.13 });
+    noteTop(x, z, 10);
+  }
+  // Slope 2 planted embankment x 72..75 (north of Madison)
+  for (let x = 72; x <= 75; x++) {
+    const top = [12, 13, 15, 16][x - 72];
+    for (let z = -56; z <= 29; z++) {
+      fillB(x, -2, z, x, top - 1, z, SEA.earth, { j: 0.05 });
+      V(x, top, z, h3(x, 3, z) < 0.2 ? SEA.ivy : SEA.grass, { j: 0.14 });
+      noteTop(x, z, top);
+    }
+  }
+  // TIER C uplands y16: x 76..98, z -56..29
+  for (let x = 76; x <= 98; x++) for (let z = -56; z <= 29; z++) {
+    fillB(x, -2, z, x, 15, z, SEA.earth, { j: 0.05 });
+    V(x, 16, z, SEA.grass, { j: 0.13 });
+    noteTop(x, z, 16);
+  }
+  // Tier C south retaining wall z 30..31 with a faded ghost sign
+  for (let x = 72; x <= 98; x++) for (let z = 30; z <= 31; z++) {
+    for (let y = 10; y <= 16; y++)
+      V(x, y, z, (y % 4 === 1) ? SEA.boardform : 0x9a9182, { j: 0.09 });
+    noteTop(x, z, 16);
+  }
+  fillB(76, 11, 32, 91, 15, 32, 0x9a9182, { j: 0.06 });        // plaster patch (proud face)
+  sign('JAVA', 77, 12, 32, 1, 0x7a5a44, 0);                    // the old roaster's ghost
+
+  /* ============ 2. MOUNTAIN BACKDROP (east + corner wraps) ============ */
+  {
+    const summits = [[-48, 33], [-8, 31], [20, 30], [44, 34], [64, 32]];
+    const crest = z => {
+      if (z <= summits[0][0]) return summits[0][1];
+      for (let i = 0; i < summits.length - 1; i++) {
+        const [z0, h0] = summits[i], [z1, h1] = summits[i + 1];
+        if (z <= z1) return h0 + (h1 - h0) * (z - z0) / (z1 - z0);
+      }
+      return summits[summits.length - 1][1];
+    };
+    for (let x = 94; x <= 110; x++) for (let z = -56; z <= 74; z++) {
+      // depth factor: 0 at the apron edge, 1 at the map edge
+      let t = (x - 98) / 10;
+      if (z <= -42) t = Math.max(t, (x - 92) / 12);            // NE wrap
+      if (z >= 67) t = Math.max(t, (x - 94) / 12);             // SE wrap
+      if (t <= 0) continue;
+      t = Math.min(1, t);
+      const noise = (h3(x, 77, z) - 0.5) * 4;
+      const base = z <= 29 && x <= 98 ? 16 : 10;
+      const h = Math.round(base + (crest(z) - base) * (0.45 + 0.55 * t) + noise * t);
+      if (h <= base) continue;
+      for (let y = base - 2; y <= h; y++) {
+        const c = y > 31 ? SEA.snow
+          : y > 24 ? (h3(x, y, z) < 0.15 ? SEA.scree : x > 104 ? SEA.rock2 : SEA.rock1)
+          : (h3(x, y * 3, z) < 0.5 ? SEA.fir1 : h3(x, y, z * 3) < 0.5 ? SEA.fir2 : SEA.fir3);
+        V(x, y, z, c, { j: y > 31 ? 0.03 : 0.1 });
+      }
+      noteTop(x, z, h);
+    }
+    // scattered climbable firs on the lower flanks
+    const r = mulberry(4207);
+    for (let i = 0; i < 40; i++) {
+      const x = 95 + Math.floor(r() * 8), z = -52 + Math.floor(r() * 122);
+      const g = groundAt(x, z);
+      if (g !== undefined && g > 11 && g < 24) fir(x, z, 12 + Math.floor(r() * 6));
+    }
+  }
+
+  /* ============ 3. ROADS ============ */
+  // Alaskan Way (N-S): roadbed y1, x 2..13
+  for (let x = 2; x <= 13; x++) for (let z = -56; z <= 74; z++) {
+    clearB(x, 2, z, x, 9, z);
+    V(x, 1, z, SEA.asphalt, { j: 0.05 });
+    noteTop(x, z, 1);
+  }
+  for (let z = -54; z <= 72; z += 4) V(7, 1, z, SEA.dash, { j: 0.04 });
+  // raised-table crossing in front of the Hillclimb
+  for (let x = 2; x <= 13; x++) for (let z = -19; z <= -8; z++) { V(x, 2, z, SEA.prom, { j: 0.06 }); noteTop(x, z, 2); }
+  for (let z = -18; z <= -9; z += 2) { V(3, 2, z, SEA.dash, { j: 0.05 }); V(12, 2, z, SEA.dash, { j: 0.05 }); }
+  // mid-block ferry zebra z 44..48
+  for (let z = 44; z <= 48; z += 2) for (let x = 2; x <= 13; x++) V(x, 1, z, SEA.dash, { j: 0.07 });
+  // 5th Ave (N-S): roadbed y9, x 49..60, z -19..72
+  for (let x = 49; x <= 60; x++) for (let z = -19; z <= 74; z++) {
+    clearB(x, 10, z, x, 15, z);
+    V(x, 9, z, SEA.asphalt, { j: 0.05 });
+    noteTop(x, z, 9);
+  }
+  for (let z = -17; z <= 71; z += 4) V(54, 9, z, SEA.dash, { j: 0.04 });
+  // Pike St (E-W): roadbed y9, z -19..-8, x 49..66
+  for (let x = 49; x <= 66; x++) for (let z = -19; z <= -8; z++) {
+    clearB(x, 10, z, x, 15, z);
+    V(x, 9, z, SEA.asphalt, { j: 0.05 });
+    noteTop(x, z, 9);
+  }
+  for (let x = 62; x <= 66; x += 4) V(x, 9, -14, SEA.dash, { j: 0.04 });
+  // Madison St (E-W): climbs the bluff west->east
+  const madY = x => x <= 15 ? 1 : x >= 37 ? 9 : 1 + Math.ceil((x - 15) / 3);
+  for (let x = 14; x <= 97; x++) {
+    const rb = madY(x);
+    for (let z = 40; z <= 51; z++) {
+      clearB(x, rb + 1, z, x, 15, z);
+      V(x, rb, z, SEA.asphalt, { j: 0.05 });
+      noteTop(x, z, rb);
+    }
+    for (let z = 33; z <= 39; z++) {                       // north sidewalk ramps alongside
+      clearB(x, rb + 2, z, x, 15, z);
+      V(x, rb + 1, z, SEA.walk, { j: 0.09 });
+      noteTop(x, z, rb + 1);
+    }
+    for (let z = 52; z <= 58; z++) {
+      clearB(x, rb + 2, z, x, 15, z);
+      V(x, rb + 1, z, SEA.walk, { j: 0.09 });
+      noteTop(x, z, rb + 1);
+    }
+    if (x % 4 === 0) V(x, rb, 45, SEA.dash, { j: 0.04 });
+  }
+  // Madison dead-ends east at a viewpoint bulb
+  fillB(96, 10, 40, 97, 10, 51, SEA.walk, { j: 0.08 });
+  for (let z = 41; z <= 50; z += 2) V(98, 11, z, SEA.iron, { j: 0.03 });
+  // sidewalks: 5th Ave + Pike St (repaint tier surface)
+  for (let z = -25; z <= 74; z++) for (const x of [43, 44, 45, 46, 47, 48, 61, 62, 63, 64, 65, 66]) {
+    const g = groundAt(x, z);
+    if (g === 10) V(x, 10, z, (x + z) % 6 === 0 ? SEA.walkJt : SEA.walk, { j: 0.07 });
+  }
+  for (let x = 27; x <= 66; x++) for (const z of [-25, -24, -23, -22, -21, -20, -7, -6, -5, -4, -3, -2, -1]) {
+    const g = groundAt(x, z);
+    if (g === 10) V(x, 10, z, (x + z) % 6 === 0 ? SEA.walkJt : SEA.walk, { j: 0.07 });
+  }
+  // Market Plaza cobbles x 27..48, z -19..-1
+  for (let x = 27; x <= 48; x++) for (let z = -19; z <= -1; z++) {
+    V(x, 10, z, (x + z) % 2 === 0 ? SEA.cobble : 0x7e6e56, { j: 0.08 });
+  }
+  // crosswalks at 5th&Madison and 5th&Pike
+  for (const cz of [[37, 38], [53, 54]]) for (let x = 49; x <= 60; x += 2) { V(x, 9, cz[0], SEA.dash, { j: 0.07 }); V(x, 9, cz[1], SEA.dash, { j: 0.07 }); }
+  for (const cx of [[46, 47], [62, 63]]) for (let z = 40; z <= 51; z += 2) { V(cx[0], 9, z, SEA.dash, { j: 0.07 }); V(cx[1], 9, z, SEA.dash, { j: 0.07 }); }
+  for (let x = 49; x <= 60; x += 2) { V(x, 9, -6, SEA.dash, { j: 0.07 }); V(x, 9, -5, SEA.dash, { j: 0.07 }); }
+  for (let z = -19; z <= -8; z += 2) { V(62, 9, z, SEA.dash, { j: 0.07 }); V(63, 9, z, SEA.dash, { j: 0.07 }); }
+  // traffic signals: live head at 5th&Madison, static twin at 5th&Pike
+  fillB(48, 11, 39, 48, 12, 39, 0x24262a, { j: 0.04 });
+  V(48, 16, 39, 0x24262a, { j: 0.04 });
+  fillB(48, 13, 38, 48, 15, 38, 0x1a1c20, { j: 0.03 });
+  fillB(61, 11, -7, 61, 15, -7, 0x24262a, { j: 0.04 });
+  V(61, 14, -6, 0x8a1414, { j: 0 }); V(61, 13, -6, 0x0e2410, { j: 0 });
+
+  /* ============ 4. GRAND STAIRS ============ */
+  // Pike Hillclimb: Tier A sidewalk (y2) up to Market Plaza (y10), 12 wide
+  {
+    const tops = { 17: 2, 18: 3, 19: 4, 20: 5, 21: 5, 22: 6, 23: 7, 24: 8, 25: 8, 26: 9 };
+    for (let x = 17; x <= 26; x++) for (let z = -19; z <= -8; z++) {
+      clearB(x, tops[x] + 1, z, x, 12, z);
+      fillB(x, 2, z, x, tops[x], z, SEA.step, { j: 0.06 });
+      noteTop(x, z, tops[x]);
+    }
+    for (let x = 17; x <= 26; x++) {                        // edge parapets on the outer treads
+      V(x, tops[x] + 1, -19, SEA.boardform, { j: 0.07 });
+      V(x, tops[x] + 1, -8, SEA.boardform, { j: 0.07 });
+      if (x % 3 === 2) { V(x, tops[x] + 1, -13, SEA.iron, { j: 0.03 }); V(x, tops[x] + 2, -13, SEA.iron, { j: 0.03 }); }
+    }
+    gaslampS(17, -20); gaslampS(26, -20); gaslampS(17, -7); gaslampS(26, -7);
+  }
+  // Spheres Steps: Tier B (y10) up to Tier C (y16), continuing Pike's axis
+  {
+    const tops = { 67: 10, 68: 11, 69: 12, 70: 12, 71: 13, 72: 13, 73: 14, 74: 15, 75: 15 };
+    for (let x = 67; x <= 75; x++) for (let z = -19; z <= -8; z++) {
+      clearB(x, tops[x] + 1, z, x, 18, z);
+      fillB(x, 10, z, x, tops[x], z, SEA.step, { j: 0.06 });
+      noteTop(x, z, tops[x]);
+    }
+    for (let x = 67; x <= 75; x++) {
+      V(x, tops[x] + 1, -19, SEA.boardform, { j: 0.07 });
+      V(x, tops[x] + 1, -8, SEA.boardform, { j: 0.07 });
+    }
+    gaslampS(67, -20); gaslampS(75, -7);
+  }
+  // Terry Steps: Madison north sidewalk (y10) up to Tier C (y16), x 92..97
+  {
+    const tops = { 33: 10, 32: 11, 31: 12, 30: 12, 29: 13, 28: 14, 27: 15, 26: 16 };
+    for (let z = 33; z >= 26; z--) for (let x = 92; x <= 97; x++) {
+      clearB(x, tops[z] + 1, z, x, 18, z);
+      fillB(x, 10, z, x, tops[z], z, SEA.step, { j: 0.06 });
+      noteTop(x, z, tops[z]);
+    }
+    for (let z = 33; z >= 26; z--) {
+      V(92, tops[z] + 1, z, SEA.boardform, { j: 0.07 });
+      V(97, tops[z] + 1, z, SEA.boardform, { j: 0.07 });
+    }
+    gaslampS(91, 34); gaslampS(98, 25);
+  }
+
+  /* ============ 5. WALKS, LAMPS, TERRAIN PLANTING ============ */
+  // Rim Walk above the bluff (x 27..33): rail, benches, firs
+  for (let z = -54; z <= -20; z++) {
+    V(28, 10, z, SEA.cobble, { j: 0.08 });
+    if (z % 2 === 0) V(27, 11, z, SEA.iron, { j: 0.03 });
+    V(27, 12, z, SEA.iron, { j: 0.03 });
+  }
+  benchS(30, -30, false); benchS(30, -44, false);
+  fir(31, -52, 13); fir(32, -38, 15); fir(30, -24, 12);
+  // Highland Path on Tier C (x 76..79)
+  for (let z = -54; z <= -11; z++) V(77, 16, z, SEA.cobble, { j: 0.08 });
+  acorn(79, -50); acorn(79, -34); acorn(79, -18);
+  fir(76, -54, 14); fir(78, -44, 16); fir(76, -22, 13); fir(78, -12, 15);
+  // Tier C south wall-top firs
+  fir(84, 26, 13); fir(90, 27, 14); fir(88, 24, 12);
+  // bluff-base firs on the planted strip
+  fir(22, -40, 12); fir(21, -34, 10); fir(23, -28, 11);
+  // waterfront acorn lamps + upland crooks
+  for (let z = -54; z <= 72; z += 12) acorn(-4, z);
+  for (let z = -14; z <= 70; z += 14) crook(48, z, 1, 0);
+  for (let z = -7; z <= 63; z += 14) crook(61, z, -1, 0);
+  for (let x = 16; x <= 94; x += 13) if (x < 43 || x > 66) crook(x, 38, 0, 1);
+  // Lighthouse islet in the north bay: striped tower, lamp always on
+  {
+    fillB(-31, -2, 68, -28, 0, 71, SEA.granite, { j: 0.1 });
+    fillB(-30, 1, 69, -29, 1, 70, SEA.granite, { j: 0.08 });
+    for (let y = 2; y <= 9; y++)
+      fillB(-30, y, 69, -29, y, 70, (y % 2 === 0) ? 0xc23434 : 0xeceae4, { j: 0.03 });
+    fillB(-30, 10, 69, -29, 10, 70, 0x2a2c30, { j: 0.03 });
+    V(-30, 11, 69, 0xfff2c0, { t: 2, j: 0 }); V(-29, 11, 70, 0xfff2c0, { t: 2, j: 0 });
+    fillB(-30, 12, 69, -29, 12, 70, 0x2a2c30, { j: 0.03 });
+    gull(-31, 1, 68);
+  }
+  function gull(x, y, z) {
+    V(x, y, z, 0xd8dce0, { j: 0.04 }); V(x, y + 1, z, 0xf0f4f6, { j: 0.03 });
+    V(x + 1, y + 1, z, 0xe08820, { j: 0 });
+  }
+  gull(-6, 5, 20); gull(-6, 5, -30);
+
+  /* ============ FERRY TERMINAL + MV LAYOFF ============ */
+  {
+    const F = {
+      hullWhite: 0xe8ecea, wsfGreen: 0x2e6e4e, antifoul: 0x263832, deckSteel: 0x4a4e52,
+      sunDeck: 0x3e6e58, lino: 0x8a9088, seat: 0x3a6a52, seatBk: 0x2e523f,
+      glass: 0x9fc6da, cabinGlow: 0xb8d4de, cream: 0xe8e0cc, creamAlt: 0xdcd4be,
+      trim: 0x2e5444, roof: 0x244438, roofSeam: 0x1e3a30, board: 0x1d3a2e,
+      cream2: 0xf2e8c8, amber: 0xffb838, timberA: 0x8a7a66, timberB: 0x7c6e5c,
+      pile: 0x3a3228, fender: 0x33302a, fenderW: 0x554c40, ironDk: 0x2a2d30,
+      rope: 0x2a2a2c, steel: 0x3a4048,
+    };
+    /* ---- SEC 1: pier, apron, shore link ---- */
+    for (const px of [-17, -13, -9]) for (let pz = 32; pz <= 64; pz += 4)
+      fillB(px, -2, pz, px, 1, pz, F.pile, { j: 0.06 });
+    for (const px of [-30, -26, -22, -19]) for (const pz of [63, 66])
+      fillB(px, -2, pz, px, 1, pz, F.pile, { j: 0.06 });
+    for (let x = -17; x <= -8; x++) for (let z = 32; z <= 66; z++) {
+      V(x, 2, z, ((z + (x >> 2)) % 2 === 0) ? F.timberA : F.timberB, { j: 0.07 });
+      noteTop(x, z, 2);
+    }
+    for (let x = -30; x <= -18; x++) for (let z = 63; z <= 66; z++) {
+      V(x, 2, z, ((z + (x >> 2)) % 2 === 0) ? F.timberA : F.timberB, { j: 0.07 });
+      noteTop(x, z, 2);
+    }
+    fillB(-27, 3, 63, -24, 3, 64, F.deckSteel, { j: 0.05 });          // ramp tongue
+    for (let x = -7; x <= -6; x++) for (let z = 44; z <= 48; z++)
+      V(x, 2, z, ((z + x) % 2 === 0) ? F.timberA : F.timberB, { j: 0.07 });
+    // fender wale: SEALS the hull/pier slot (the one lethal pit)
+    fillB(-18, 1, 26, -18, 2, 62, F.fender, { j: 0.06 });
+    fillB(-18, 3, 26, -18, 3, 62, F.fenderW, { j: 0.06 });
+    for (const fz of [27, 33, 39, 51, 57]) {
+      fillB(-18, 1, fz, -18, 5, fz, F.fender, { j: 0.06 });
+      V(-18, 6, fz, 0x6e6254, { j: 0.05 });
+    }
+    clearB(-18, 3, 43, -18, 6, 46);                                   // boarding plate: wale drops flush
+    // pier rails (gaps: float plank, boarding plate, tower zone)
+    for (let x = -17; x <= -8; x++) {
+      if (x >= -11 && x <= -10) continue;
+      if (x % 3 === 0) V(x, 3, 32, F.ironDk, { j: 0.02 });
+      V(x, 4, 32, F.ironDk, { j: 0.02 });
+    }
+    for (let z = 32; z <= 52; z++) {
+      if ((z >= 43 && z <= 46) || z >= 53) continue;
+      if (z % 3 === 0) V(-17, 3, z, F.ironDk, { j: 0.02 });
+      V(-17, 4, z, F.ironDk, { j: 0.02 });
+    }
+    for (let x = -17; x <= -8; x++) { if (x % 3 === 0) V(x, 3, 66, F.ironDk, { j: 0.02 }); V(x, 4, 66, F.ironDk, { j: 0.02 }); }
+    for (let z = 63; z <= 65; z++) { V(-30, 3, z, F.ironDk, { j: 0.02 }); }
+    for (let x = -29; x <= -19; x += 2) V(x, 3, 66, F.ironDk, { j: 0.02 });
+    for (const [bx, bz] of [[-17, 34], [-17, 42], [-17, 50], [-17, 64], [-30, 64]]) {
+      fillB(bx, 3, bz, bx, 4, bz, F.ironDk, { j: 0.02 });
+      V(bx, 5, bz, 0x3a3e42, { j: 0.02 });
+    }
+    for (const lz of [38, 58]) {
+      fillB(-8, 3, lz, -8, 7, lz, F.trim, { j: 0.04 });
+      V(-8, 8, lz, 0xffd9a0, { t: 3, j: 0 });
+    }
+    // cargo corner: pallets, crates, hand truck, sea-rations
+    {
+      const r = mulberry(66);
+      for (const [px, pz, hh] of [[-12, 61, 2], [-10, 61, 3], [-12, 64, 2]]) {
+        fillB(px, 3, pz, px + 1, 3, pz + 1, 0x9a7a4a, { j: 0.08 });
+        for (let s = 1; s < hh; s++) if (r() < 0.7)
+          fillB(px, 3 + s, pz, px + 1, 3 + s, pz + 1, [0xb08850, 0x9a7440, 0x86653a][Math.floor(r() * 3)], { j: 0.1 });
+      }
+      fillB(-9, 3, 64, -8, 4, 65, 0x9a4030, { j: 0.12 });
+      V(-14, 3, 62, 0xe07020, { j: 0.03 }); V(-14, 4, 62, 0xe07020, { j: 0.03 });
+      V(-15, 3, 65, 0x8a7a5c, { j: 0.08 });
+      V(-13, 3, 66, 0xe0c040, { j: 0.05 }); gull(-13, 3, 65);
+    }
+    // tollbooth with permanently-raised barrier (no road ever comes)
+    fillB(-20, 3, 63, -18, 7, 65, F.cream, { j: 0.05 });
+    clearB(-19, 3, 64, -19, 6, 64);
+    fillB(-20, 5, 63, -18, 6, 63, F.glass, { t: 1, j: 0.02 });
+    fillB(-21, 8, 62, -17, 8, 66, F.roof, { j: 0.04 });
+    bperson(-19, 3, 64, F.trim, 0x2a3038);
+    for (let y = 5; y <= 10; y++) V(-21, y, 63, (y % 2 === 0) ? 0xe8d020 : 0x2a2a2c, { j: 0.02 });
+
+    /* ---- SEC 2: fishing float (also the swimmer's ladder) ---- */
+    for (let x = -13; x <= -9; x++) for (let z = 26; z <= 30; z++)
+      V(x, 1, z, 0x8a6a48, { j: 0.08 });
+    for (const [fx, fz] of [[-13, 26], [-9, 26], [-13, 30], [-9, 30]])
+      V(fx, 0, fz, 0x4a5560, { j: 0.05 });
+    fillB(-14, 0, 27, -14, 0, 29, 0x8a6a48, { j: 0.08 });             // swimmer step ledge
+    fillB(-11, 1, 31, -10, 1, 31, 0x8a6a48, { j: 0.08 });             // access plank
+    bperson(-11, 1, 28, 0xe8c020, 0x3a3e46);
+    V(-10, 4, 27, 0x4a3524, { j: 0.05 }); V(-9, 5, 26, 0x4a3524, { j: 0.05 });
+    V(-9, 3, 25, F.rope, { j: 0 }); V(-9, 1, 25, 0xc03028, { t: 2, j: 0 });
+    V(-12, 2, 27, 0x8a4030, { j: 0.05 }); V(-13, 2, 29, 0x2a6ac0, { j: 0.04 });
+    V(-10, 2, 30, 0xa8b8c0, { j: 0.04 });
+    gull(-12, 2, 26); gull(-9, 2, 29);
+
+    /* ---- SEC 3: headhouse shell ---- */
+    for (let y = 3; y <= 10; y++) {
+      const c = (y === 3) ? F.trim : (y % 3 === 0) ? F.creamAlt : F.cream;
+      fillB(-17, y, 36, -17, y, 52, c, { j: 0.05 });
+      fillB(-8, y, 36, -8, y, 52, c, { j: 0.05 });
+      fillB(-16, y, 36, -9, y, 36, c, { j: 0.05 });
+      fillB(-16, y, 52, -9, y, 52, c, { j: 0.05 });
+    }
+    for (const cx of [-17, -8]) for (const cz of [36, 52])
+      fillB(cx, 3, cz, cx, 10, cz, F.trim, { j: 0.04 });
+    // stepped gable roof, cream triangles on the end faces
+    const roofRow = (y, xa, xb) => {
+      for (let z = 35; z <= 53; z++) {
+        const c = (z === 36 || z === 52) ? F.cream : (z % 3 === 0) ? F.roofSeam : F.roof;
+        V(xa, y, z, c, { j: 0.04 }); V(xb, y, z, c, { j: 0.04 });
+      }
+    };
+    for (let z = 35; z <= 53; z++) { V(-18, 10, z, F.roof, { j: 0.04 }); V(-7, 10, z, F.roof, { j: 0.04 }); }
+    roofRow(11, -16, -9); roofRow(12, -15, -10); roofRow(13, -14, -11);
+    for (let z = 35; z <= 53; z++) fillB(-13, 14, z, -12, 14, z, (z % 3 === 0) ? F.roofSeam : F.roof, { j: 0.04 });
+    for (const gz of [36, 52]) {                                       // round gable vents
+      fillB(-13, 12, gz, -12, 12, gz, F.glass, { t: 1, j: 0.02 });
+      V(-14, 12, gz, F.trim, { j: 0.04 }); V(-11, 12, gz, F.trim, { j: 0.04 });
+    }
+    // doors: east (shore), west (boarding), south
+    const hhDoor = (x0, y0, z0, x1, y1, z1, lampX, lampZ) => {
+      clearB(x0, y0, z0, x1, y1, z1);
+      fillB(x0, y0, z0, x1, y1 - 1, z1, F.trim, { j: 0.04 });
+      markDoor(x0, y0, z0, x1, y1, z1);
+      fillB(x0, y1, z0, x1, y1, z1, F.glass, { t: 1, j: 0.02 });      // transom
+      V(lampX, 8, lampZ, 0xffd9a0, { t: 3, j: 0 });
+    };
+    hhDoor(-8, 3, 43, -8, 6, 44, -7, 43);
+    hhDoor(-17, 3, 43, -17, 6, 44, -18, 43);
+    hhDoor(-11, 3, 52, -10, 6, 52, -10, 53);
+    // windows with sash + sills, both long walls
+    for (const wx of [-17, -8]) for (const wz of [39, 47]) {
+      fillB(wx, 5, wz, wx, 7, wz + 1, F.glass, { t: 1, j: 0.02 });
+      V(wx, 6, wz, 0x2b2724, { j: 0 }); V(wx, 6, wz + 1, 0x2b2724, { j: 0 });
+      const proud = wx === -17 ? -18 : -7;
+      fillB(proud, 4, wz - 1, proud, 4, wz + 2, F.trim, { j: 0.04 });
+    }
+    // life ring on the east wall
+    V(-7, 6, 46, 0xe05a20, { j: 0 }); V(-7, 7, 46, 0xf0f0e8, { j: 0 }); V(-7, 6, 47, 0xf0f0e8, { j: 0 }); V(-7, 7, 47, 0xe05a20, { j: 0 });
+    // clock cupola
+    fillB(-14, 13, 42, -11, 19, 45, F.cream, { j: 0.04 });
+    for (const [cx, cz] of [[-14, 42], [-11, 42], [-14, 45], [-11, 45]])
+      fillB(cx, 13, cz, cx, 19, cz, F.trim, { j: 0.04 });
+    for (const [fz, pz] of [[42, 41], [45, 46]]) {
+      fillB(-14, 16, pz, -12, 18, pz, 0xf2efe8, { t: 3, j: 0 });
+      V(-13, 17, pz, 0x141414, { t: 0, j: 0 }); V(-13, 18, pz, 0x141414, { t: 0, j: 0 }); V(-12, 17, pz, 0x141414, { t: 0, j: 0 });
+    }
+    fillB(-15, 20, 41, -10, 20, 46, F.roof, { j: 0.04 });
+    fillB(-13, 21, 43, -12, 21, 44, F.roof, { j: 0.04 });
+    V(-13, 22, 43, F.trim, { j: 0.04 }); V(-13, 23, 43, 0xc9a227, { t: 2, j: 0 });
+    gull(-12, 22, 44);
+
+    /* ---- SEC 4: headhouse interior ---- */
+    for (const bz of [38, 42, 46, 50]) fillB(-16, 10, bz, -9, 10, bz, 0x6a4a2c, { j: 0.06 });
+    // ticket booth
+    fillB(-16, 3, 39, -14, 4, 39, 0x4a3220, { j: 0.05 });
+    fillB(-16, 5, 39, -14, 5, 39, 0x9a6a3a, { j: 0.05 });
+    fillB(-16, 6, 39, -14, 7, 39, P.glass, { t: 1, j: 0.02 });
+    V(-15, 6, 39, 0, { t: 1, j: 0 });
+    V(-14, 6, 40, 0xffd9a0, { t: 3, j: 0 });
+    bperson(-15, 3, 38, F.trim, 0x2a3038);
+    { const r = mulberry(41);
+      for (let x = -16; x <= -14; x++) for (let y = 6; y <= 8; y++)
+        if (r() < 0.7) V(x, y, 37, [0xf2e8c8, 0xd8d0b8, 0xc8b898][Math.floor(r() * 3)], { j: 0.04 }); }
+    // glitching departures panel (all dashes, no departures)
+    fillB(-13, 6, 37, -9, 9, 37, 0x17181c, { j: 0.02 });
+    { const r = mulberry(88);
+      for (let x = -13; x <= -9; x++) for (const y of [7, 8])
+        if (r() < 0.55) V(x, y, 37, F.amber, { t: 3, j: 0 }); }
+    // benches + the sleeping commuter
+    for (const bx of [-15, -10]) {
+      fillB(bx, 4, 45, bx, 4, 49, 0x8a6038, { j: 0.06 });
+      fillB(bx + (bx === -15 ? -1 : 1), 5, 45, bx + (bx === -15 ? -1 : 1), 6, 49, 0x8a6038, { j: 0.06 });
+      V(bx, 3, 45, F.ironDk, { j: 0.02 }); V(bx, 3, 49, F.ironDk, { j: 0.02 });
+    }
+    fillB(-10, 5, 45, -10, 5, 46, 0x3a3e46, { j: 0.04 });             // pants
+    fillB(-10, 5, 47, -10, 5, 48, 0x5a6e8a, { j: 0.04 });             // shirt
+    V(-10, 5, 49, 0xd9a47e, { j: 0.03 });                              // head
+    V(-11, 3, 47, 0x4a3220, { j: 0.04 }); V(-11, 3, 45, 0x2a2018, { j: 0.03 });
+    bperson(-15, 5, 47, 0x6a5a4a, 0x3a3e46);                           // reader on row A
+    V(-14, 8, 47, 0xd8d4c8, { j: 0.02 });
+    // vending, stove, wall clutter, fern, indoor gull
+    fillB(-16, 3, 51, -15, 7, 51, 0x8a2430, { j: 0.04 });
+    fillB(-13, 3, 51, -12, 7, 51, 0x2a4f8a, { j: 0.04 });
+    for (const vx of [-16, -13]) { fillB(vx, 4, 50, vx, 6, 50, 0xd8ecff, { t: 3, j: 0 }); V(vx + 1, 3, 50, 0x17181c, { j: 0 }); }
+    V(-10, 3, 39, 0x2a2a2c, { j: 0.02 }); fillB(-10, 4, 39, -10, 5, 39, 0x2a2a2c, { j: 0.02 });
+    V(-10, 4, 40, 0xffa028, { t: 2, j: 0 });
+    fillB(-10, 6, 39, -10, 13, 39, 0x3a3e42, { j: 0.02 });
+    fillB(-9, 6, 42, -9, 7, 43, 0x2a4f8a, { j: 0.03 }); V(-9, 6, 42, 0xc9a227, { j: 0 });
+    { const r = mulberry(29);
+      for (let z = 40; z <= 42; z++) for (const y of [6, 7])
+        if (r() < 0.7) V(-16, y, z, [0xf2e8c8, 0xd8d0b8][Math.floor(r() * 2)], { j: 0.04 }); }
+    V(-16, 5, 44, 0xb04a3a, { j: 0 });
+    V(-9, 3, 37, 0x8a4030, { j: 0.05 }); fillB(-9, 4, 37, -9, 5, 37, 0x3f5c30, { j: 0.15 });
+    gull(-12, 3, 50); V(-11, 3, 50, 0xe0c040, { j: 0 });
+    for (const pz of [40, 44, 48]) { V(-13, 9, pz, F.ironDk, { j: 0 }); V(-13, 8, pz, 0xffd9a0, { t: 3, j: 0 }); }
+
+    /* ---- SEC 5: the sign gantry (LAYOFF / LATE over the water) ---- */
+    for (const [tx0, tz0] of [[-17, 33], [-10, 33]]) {
+      for (let y = 3; y <= 23; y++) {
+        const collar = y % 3 === 0;
+        for (let x = tx0; x <= tx0 + 1; x++) for (let z = tz0; z <= tz0 + 1; z++) {
+          if (collar || (x + z + y) % 2 === 0) V(x, y, z, F.steel, { j: 0.03 });
+        }
+      }
+    }
+    fillB(-29, 24, 34, -6, 32, 34, F.board, { j: 0.03 });
+    fillB(-29, 24, 34, -6, 24, 34, F.roof, { j: 0.03 });
+    fillB(-29, 32, 34, -6, 32, 34, F.roof, { j: 0.03 });
+    sign('LAYOFF', -29, 29, 33, 1, F.cream2, 3);
+    sign('LATE', -25, 25, 33, 1, F.amber, 3);
+    sign('FERRY', -26, 29, 35, 1, F.cream2, 3);
+    sign('LATE', -25, 25, 35, 1, F.amber, 3);
+    gull(-20, 33, 34); gull(-9, 33, 34);
+
+    /* ---- SEC 6: gangway stair tower + covered bridge ---- */
+    fillB(-18, 11, 53, -13, 11, 62, F.timberA, { j: 0.06 });          // tower top floor
+    for (const [px, pz] of [[-18, 53], [-18, 62], [-13, 53], [-13, 62]])
+      fillB(px, 3, pz, px, 16, pz, F.trim, { j: 0.04 });
+    for (const py of [4, 5]) {
+      for (let z = 53; z <= 62; z += 3) V(-13, py, z, F.ironDk, { j: 0.02 });
+      for (let x = -17; x <= -14; x += 3) V(x, py, 62, F.ironDk, { j: 0.02 });
+    }
+    fillB(-18, 17, 53, -13, 17, 62, F.roof, { j: 0.04 });
+    V(-15, 16, 57, 0xffd9a0, { t: 3, j: 0 });
+    bstair(2, 11, -17, 54, 1);
+    fillB(-17, 3, 59, -14, 6, 60, F.trim, { j: 0.05 });               // seal under the landing (deli-well law)
+    for (let z = 58; z <= 61; z++) V(-17, 12, z, F.ironDk, { j: 0.02 });   // catwalk rail over the well
+    // covered bridge to the cabin door
+    for (const bz of [53, 56]) fillB(-18, 12, bz, -18, 13, bz, F.ironDk, { j: 0.02 });
+    fillB(-19, 16, 53, -17, 16, 56, F.roof, { j: 0.04 });
+
+    /* ---- SEC 7: MV LAYOFF hull + car deck ---- */
+    const maskW = z => {
+      if (z < 21 || z > 62) return null;
+      const d = Math.min(z - 21, 62 - z);
+      if (d >= 5) return [-32, -19];
+      return [[-27, -24], [-28, -23], [-29, -22], [-30, -21], [-31, -20]][d];
+    };
+    const inHull = (x, z) => { const m = maskW(z); return !!m && x >= m[0] && x <= m[1]; };
+    for (let z = 21; z <= 62; z++) {
+      const m = maskW(z); if (!m) continue;
+      for (let x = m[0]; x <= m[1]; x++) {
+        const edge = !inHull(x - 1, z) || !inHull(x + 1, z) || !inHull(x, z - 1) || !inHull(x, z + 1);
+        V(x, 0, z, F.antifoul, { j: 0.04 });
+        fillB(x, 1, z, x, 2, z, edge ? F.hullWhite : 0x3a3e42, { j: 0.03 });
+        V(x, 3, z, edge ? F.wsfGreen : F.deckSteel, { j: edge ? 0.03 : 0.04 });
+        if (!edge) noteTop(x, z, 3);
+      }
+    }
+    for (let z = 27; z <= 55; z += 4) V(-26, 3, z, 0xd8d8d2, { j: 0.04 });
+    // car deck side walls with vents + east boarding door
+    for (let z = 26; z <= 57; z++) for (const wx of [-32, -19]) {
+      const vent = (wx === -32 && [29, 37, 45, 53].some(a => z >= a && z <= a + 3))
+                || (wx === -19 && [29, 37].some(a => z >= a && z <= a + 3));
+      for (let y = 4; y <= 10; y++) {
+        if (vent && y >= 6 && y <= 8) continue;
+        if (wx === -19 && z >= 44 && z <= 46 && y <= 7) continue;
+        V(wx, y, z, F.hullWhite, { j: 0.03 });
+      }
+    }
+    markDoor(-19, 4, 44, -19, 7, 46);
+    V(-18, 8, 45, 0xffd9a0, { t: 3, j: 0 });
+    // bulwarks on the tapered ends; chain across the bow tip
+    for (let z = 21; z <= 62; z++) {
+      const m = maskW(z); if (!m) continue;
+      const d = Math.min(z - 21, 62 - z);
+      if (d >= 5) continue;
+      for (let x = m[0]; x <= m[1]; x++) {
+        const rim = x === m[0] || x === m[1] || z === 21 || z === 62 || !inHull(x, z - 1) || !inHull(x, z + 1);
+        if (!rim) continue;
+        if (z >= 61 && x >= -27 && x <= -24) continue;               // stern ramp path
+        if (z === 21 && x >= -26 && x <= -25) continue;              // bow tip: chain instead
+        fillB(x, 4, z, x, 5, z, F.hullWhite, { j: 0.03 });
+      }
+    }
+    for (const sx of [-27, -24]) fillB(sx, 4, 21, sx, 5, 21, 0x8a8a8e, { j: 0.02 });
+    fillB(-26, 5, 21, -25, 5, 21, F.rope, { j: 0 });
+    // cars aboard + cones + deckhand
+    teslaS(30, -25, 3, 0xe8e8ea, true);
+    teslaS(44, -31, 3, 0xb03028, true);
+    V(-24, 4, 29, 0xe06a20, { j: 0 }); V(-30, 4, 55, 0xe06a20, { j: 0 });
+    bperson(-21, 4, 48, 0xe07020, 0x3a3e46);
+    for (const [px, pz] of [[-31, 25], [-20, 25], [-31, 58], [-20, 58]])
+      fillB(px, 6, pz, px, 10, pz, F.hullWhite, { j: 0.03 });
+    for (const lz of [30, 38, 46, 54]) V(-26, 10, lz, 0xffd9a0, { t: 3, j: 0 });
+
+    /* ---- SEC 8: cabin deck ---- */
+    for (let z = 25; z <= 58; z++) {
+      const w = (z === 25 || z === 58) ? [-31, -20] : [-32, -19];
+      fillB(w[0], 11, z, w[1], 11, z, F.hullWhite, { j: 0.03 });
+    }
+    for (let z = 26; z <= 57; z++) for (const wx of [-32, -19]) cabinWall(wx, z);
+    for (let x = -31; x <= -20; x++) { cabinWall(x, 26); cabinWall(x, 57); }
+    function cabinWall(x, z) {
+      if (x === -19 && z >= 54 && z <= 55) {                          // gangway doorway (open)
+        fillB(x, 16, z, x, 17, z, F.hullWhite, { j: 0.03 });
+        V(x, 18, z, F.wsfGreen, { j: 0.03 });
+        return;
+      }
+      fillB(x, 12, z, x, 13, z, F.hullWhite, { j: 0.03 });
+      for (let y = 14; y <= 16; y++)
+        V(x, y, z, ((x + z) % 4 === 0) ? F.hullWhite : F.cabinGlow, ((x + z) % 4 === 0) ? { j: 0.03 } : { t: 3, j: 0.02 });
+      V(x, 17, z, F.hullWhite, { j: 0.03 });
+      V(x, 18, z, F.wsfGreen, { j: 0.03 });
+    }
+    // interior: lino, seats, snack bar, booths, stories
+    for (let x = -31; x <= -20; x++) for (let z = 27; z <= 56; z++)
+      V(x, 11, z, (x === -26 || x === -25) ? 0x6e746e : F.lino, { j: 0.04 });
+    for (const sz of [35, 38, 41, 44, 47]) for (const [x0, x1] of [[-31, -29], [-22, -20]]) {
+      fillB(x0, 12, sz, x1, 12, sz, F.seat, { j: 0.04 });
+      fillB(x0, 13, sz + 1, x1, 13, sz + 1, F.seatBk, { j: 0.04 });
+    }
+    for (const sz of [38, 44]) { V(-29, 12, sz - 1, 0xe07020, { j: 0 }); V(-22, 12, sz - 1, 0xe07020, { j: 0 }); }
+    fillB(-29, 12, 49, -24, 13, 49, 0x5a6e5a, { j: 0.04 });
+    fillB(-29, 14, 49, -24, 14, 49, 0x9a6a3a, { j: 0.05 });
+    fillB(-29, 15, 50, -28, 16, 50, 0x2a2a2e, { j: 0.02 }); V(-29, 15, 49, 0xc9a227, { t: 2, j: 0 });
+    fillB(-26, 15, 49, -25, 15, 49, P.glass, { t: 1, j: 0.02 });
+    V(-26, 15, 50, 0xc8903c, { j: 0 }); V(-25, 15, 50, 0xe8c060, { j: 0 });
+    V(-24, 15, 50, 0xd9d4c8, { j: 0 });
+    { const r = mulberry(72);
+      for (let x = -29; x <= -26; x++) for (const y of [13, 14])
+        if (r() < 0.72) V(x, y, 51, [0xc03028, 0x2a6ac0, 0xe8c060][Math.floor(r() * 3)], { j: 0.08 }); }
+    bperson(-27, 12, 50, 0x2e5444, 0x2a3038);
+    // booths
+    fillB(-31, 14, 52, -30, 14, 53, 0x9a6a3a, { j: 0.05 });
+    fillB(-31, 12, 51, -30, 13, 51, F.seat, { j: 0.04 }); fillB(-31, 12, 54, -30, 13, 54, F.seat, { j: 0.04 });
+    fillB(-21, 14, 52, -20, 14, 52, 0x9a6a3a, { j: 0.05 });
+    fillB(-21, 12, 51, -20, 13, 51, F.seat, { j: 0.04 }); fillB(-21, 12, 53, -20, 13, 53, F.seat, { j: 0.04 });
+    // stories: sleeper, laptop, the fresh layoff, kid at the window
+    fillB(-31, 13, 41, -30, 13, 42, 0x3a3e46, { j: 0.04 }); V(-31, 13, 43, 0xd9a47e, { j: 0.03 });
+    bperson(-20, 14, 52, 0x4a5a6a, 0x2a3038); V(-20, 15, 51, 0x8fd8ff, { t: 3, j: 0 });
+    V(-22, 13, 47, 0x2a2a2e, { j: 0 }); V(-21, 13, 47, 0xffb0c8, { j: 0 }); V(-20, 13, 47, 0xff5a9e, { t: 2, j: 0 });
+    bperson(-30, 12, 29, 0xd85050, 0x2a3038);
+    for (let z = 29; z <= 53; z += 4) V(-26, 18, z, 0xfff4e0, { t: 3, j: 0 });
+    // ferry stairs
+    bstair(3, 11, -31, 27, 1);
+    for (let z = 27; z <= 33; z += 2) V(-27, 12, z, F.ironDk, { j: 0.02 });
+
+    /* ---- SEC 9: sun deck, wheelhouses, stacks ---- */
+    for (let z = 25; z <= 58; z++) {
+      const w = (z === 25 || z === 58) ? [-31, -20] : [-32, -19];
+      for (let x = w[0]; x <= w[1]; x++)
+        V(x, 19, z, (x === w[0] || x === w[1] || z === 25 || z === 58) ? F.hullWhite : F.sunDeck, { j: 0.04 });
+    }
+    bstair(11, 19, -23, 27, 1);                                       // carves its own hole in the fresh slab
+    // companionway hood over stair B
+    for (let z = 27; z <= 33; z++) for (const hx of [-23, -20]) fillB(hx, 20, z, hx, 23, z, F.hullWhite, { j: 0.03 });
+    for (let x = -22; x <= -21; x++) fillB(x, 20, 27, x, 23, 27, F.hullWhite, { j: 0.03 });
+    fillB(-23, 24, 27, -20, 24, 33, F.hullWhite, { j: 0.03 });
+    markDoor(-22, 20, 33, -21, 23, 33);
+    // perimeter rail
+    for (let z = 25; z <= 58; z++) {
+      const w = (z === 25 || z === 58) ? [-31, -20] : [-32, -19];
+      for (const rx of [w[0], w[1]]) { if (z % 3 === 0) V(rx, 20, z, F.hullWhite, { j: 0.03 }); V(rx, 21, z, 0xdadee0, { j: 0.02 }); }
+    }
+    for (let x = -31; x <= -20; x++) for (const rz of [25, 58]) { if (x % 3 === 0) V(x, 20, rz, F.hullWhite, { j: 0.03 }); V(x, 21, rz, 0xdadee0, { j: 0.02 }); }
+    // twin stacks with logo dots + beacon
+    for (const [za, zb] of [[38, 40], [43, 45]]) {
+      fillB(-26, 20, za, -25, 25, zb, F.hullWhite, { j: 0.03 });
+      fillB(-26, 26, za, -25, 26, zb, F.wsfGreen, { j: 0.03 });
+      fillB(-26, 27, za, -25, 27, zb, 0x3a3e42, { j: 0.03 });
+      V(-26, 23, za, F.wsfGreen, { t: 2, j: 0 }); V(-25, 23, zb, F.wsfGreen, { t: 2, j: 0 });
+    }
+    V(-26, 28, 39, 0xffa028, { t: 2, j: 0 });
+    // wheelhouses
+    for (const [za, zb, doorZ] of [[26, 29, 29], [54, 57, 54]]) {
+      fillB(-29, 20, za, -24, 21, zb, F.hullWhite, { j: 0.03 });
+      clearB(-28, 20, za + 1, -25, 21, zb - 1);
+      fillB(-29, 22, za, -24, 23, zb, F.glass, { t: 1, j: 0.02 });
+      for (const [cx, cz] of [[-29, za], [-24, za], [-29, zb], [-24, zb]]) fillB(cx, 22, cz, cx, 23, cz, F.hullWhite, { j: 0.03 });
+      fillB(-29, 24, za, -24, 24, zb, F.hullWhite, { j: 0.03 });
+      clearB(-27, 20, doorZ, -26, 23, doorZ);
+      const iz = za === 26 ? 27 : 56;
+      fillB(-28, 20, iz, -25, 20, iz, 0x2a2e33, { j: 0.02 });
+      V(-27, 21, iz, 0x30c860, { t: 2, j: 0 }); V(-26, 21, iz, 0xe04040, { t: 2, j: 0 });
+      V(-26, 22, iz, 0x6a4a2a, { j: 0 });
+      fillB(-27, 25, za + 1, -27, 30, za + 1, 0xd8dce0, { j: 0.02 });
+      fillB(-28, 30, za + 1, -26, 30, za + 1, 0x3a3e42, { j: 0.02 });
+      V(-27, 31, za + 1, za === 26 ? 0xfff4e0 : 0xc03028, { t: 2, j: 0 });
+      V(-26, 29, za + 1, F.wsfGreen, { j: 0 });
+    }
+    bperson(-28, 20, 27, 0x2e3e52, 0x2a3038);                          // the captain
+    V(-26, 21, 55, 0xe8e0cc, { j: 0 });                                // lone mug, south WH
+    // deck furniture + passengers + gulls
+    for (const bz of [33, 48]) {
+      fillB(-31, 20, bz, -31, 20, bz + 2, 0x8a6038, { j: 0.06 });
+      fillB(-20, 20, bz, -20, 20, bz + 2, 0x8a6038, { j: 0.06 });
+    }
+    bperson(-31, 20, 36, 0xd8b040, 0x2a3038); bperson(-31, 20, 45, 0x5a8ad0, 0x3a3e46);
+    gull(-27, 25, 28); gull(-26, 25, 56);
+
+    /* ---- SEC 10: mooring lines ---- */
+    for (const seg of [[-20, 5, 33], [-19, 4, 33], [-18, 4, 34], [-17, 5, 34]]) V(seg[0], seg[1], seg[2], F.rope, { j: 0 });
+    for (const seg of [[-21, 5, 59], [-20, 4, 60], [-19, 4, 61], [-19, 4, 62], [-18, 4, 63], [-17, 5, 64]]) V(seg[0], seg[1], seg[2], F.rope, { j: 0 });
+    for (const seg of [[-20, 5, 50], [-18, 4, 50], [-17, 5, 50]]) V(seg[0], seg[1], seg[2], F.rope, { j: 0 });
+  }
+  // SEATTLE-FERRY-ANCHOR
+  /* ============ PIKE PLACE MARKET ============ */
+  {
+    const M = {
+      brick: 0xb5885a, mortar: 0xa07648, granite: 0x50525a, green: 0x2e5444,
+      greenDk: 0x244438, band: 0x1d3a2e, cream: 0xe8e0cc, boardform: 0x8e887c,
+      duBrick: 0x8a5a44, duMortar: 0x7c4e3a, plankA: 0xa87848, plankB: 0x95673b,
+      mzA: 0x8a6038, mzB: 0x7a5430, tileA: 0xd8d0c0, tileB: 0x8a4a3a,
+      glass: 0x9fc6da, clere: 0xaed4e4, sash: 0x2b2724, ironG: 0x2e3b32,
+      felt: 0x6a6a66, curb: 0x8c8c90, coping: 0x6f7b84, steel: 0x3a4048,
+      back: 0x2a2a2e, plaster: 0xe6dcc8, neonRed: 0xff4060, neonPink: 0xff5a9e,
+      neonTeal: 0x7ad0c8, neonViolet: 0x9a6ac8, lampWarm: 0xffd9a0,
+      lampWhite: 0xfff4e0, letter: 0xf2e8c8, bulb: 0xffa028,
+      ice: 0xeef4f6, sPink: 0xd86a50, sDk: 0x9a5a42, fish: 0x9aa4ac,
+      counter: 0x9a6a3a, crate: 0x8a6a3c,
+    };
+    const GUM = [0xf28ab4, 0x7ad0c8, 0x9a6ac8, 0xe8d05a, 0xe0704a, 0x8ac86a, 0xf2b8d0, 0x6aa8e0];
+    const PRODUCE = [0xe08a20, 0xc03028, 0x6ab04a, 0xe8d05a, 0x5a3a72];
+    const duWall = (x0, y0, z0, x1, y1, z1) => {
+      for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
+        fillB(x0, y, z0, x1, y, z1, (y % 3 === 0) ? M.duMortar : M.duBrick, { j: 0.08 });
+    };
+    const arWall = (x0, y0, z0, x1, y1, z1) => {
+      for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
+        fillB(x0, y, z0, x1, y, z1, (y % 3 === 0) ? M.mortar : M.brick, { j: 0.07 });
+    };
+    /* ---- S0: carve the bluff + tier out of the footprint ---- */
+    clearB(21, 3, 0, 33, 16, 30);
+    clearB(34, 11, 0, 42, 16, 30);
+    /* ---- S1: Down Under shell (floor y2, clear y3..9) ---- */
+    for (let x = 21; x <= 33; x++) for (let z = 0; z <= 30; z++) {
+      V(x, 2, z, (x >= 22 && x <= 33) ? (((x + z) % 2 === 0) ? M.tileA : M.tileB) : M.duBrick, { j: 0.05 });
+      noteTop(x, z, 2);
+    }
+    duWall(34, 3, 0, 34, 9, 30);                                       // east retaining face
+    duWall(21, 3, 0, 21, 9, 30);                                       // west facade base (bays cut below)
+    duWall(22, 3, 0, 26, 9, 0);
+    duWall(22, 3, 30, 26, 9, 30);
+    duWall(27, 3, 30, 33, 9, 30);                                      // alley south wall
+    for (const pz of [9, 18, 25]) duWall(26, 3, pz, 33, 9, pz);        // nook partitions
+    duWall(29, 3, 2, 29, 9, 8);                                        // stair enclosure
+    for (const pz of [9, 18, 25]) fillB(26, 3, pz, 26, 9, pz, M.duBrick, { j: 0.06 });
+    // west facade x21: piers, bays, doors, sign band
+    fillB(21, 3, 0, 21, 3, 30, 0x3c3c40, { j: 0.04 });                 // water table
+    for (const [za, zb] of [[2, 7], [10, 14], [17, 21]]) {
+      clearB(21, 4, za, 21, 7, zb);
+      fillB(21, 5, za, 21, 7, zb, M.glass, { t: 1, j: 0.02 });
+      fillB(21, 3, za, 21, 4, zb, M.greenDk, { j: 0.04 });
+      fillB(21, 8, za, 21, 8, zb, M.glass, { t: 1, j: 0.02 });
+    }
+    clearB(21, 3, 4, 21, 6, 5); fillB(21, 3, 4, 21, 6, 5, M.greenDk, { j: 0.04 }); markDoor(21, 3, 4, 21, 6, 5);
+    clearB(21, 3, 11, 21, 6, 12); fillB(21, 3, 11, 21, 6, 12, M.greenDk, { j: 0.04 }); markDoor(21, 3, 11, 21, 6, 12);
+    for (const [ax, ay, az] of [[21, 6, 18], [21, 7, 19], [21, 6, 20], [21, 5, 19]])
+      V(ax, ay, az, M.neonPink, { t: 2, j: 0 });                        // broken wayfinding arrow
+    fillB(21, 9, 0, 21, 9, 30, M.band, { j: 0.03 });
+    { const r = mulberry(311);                                          // gum splat leaking outside
+      for (let z = 25; z <= 29; z++) for (let y = 5; y <= 8; y++)
+        if (r() < 0.45) V(20, y, z, GUM[Math.floor(r() * 8)], { j: 0.1 }); }
+    fillB(22, 5, 0, 24, 8, 0, M.glass, { t: 1, j: 0.02 });              // north barred window
+    for (let x = 22; x <= 24; x += 2) fillB(x, 5, -1, x, 8, -1, M.ironG, { j: 0.03 });
+    V(25, 8, -1, M.lampWarm, { t: 3, j: 0 });
+    /* ---- S2: Down Under interior ---- */
+    bstair(2, 10, 30, 2, 1);
+    for (let z = 2; z <= 8; z++) V(29, 11, z, M.ironG, { j: 0.03 });
+    for (let x = 30; x <= 33; x++) { V(x, 11, 1, M.ironG, { j: 0.03 }); V(x, 11, 9, M.ironG, { j: 0.03 }); }
+    V(34, 11, 7, M.ironG, { j: 0.03 }); V(34, 11, 8, M.ironG, { j: 0.03 });
+    fillB(30, 3, 7, 33, 6, 8, M.duBrick, { j: 0.06 });                  // seal under landing
+    // magic shop (nook A)
+    fillB(27, 3, 3, 27, 4, 6, M.counter, { j: 0.05 });
+    V(28, 5, 4, 0x2a2a2e, { j: 0 }); V(28, 6, 4, M.clere, { t: 1, j: 0.02 });
+    V(28, 5, 6, 0x1a1a1c, { j: 0 }); V(28, 6, 6, 0x1a1a1c, { j: 0 });
+    V(27, 5, 5, 0x2a2a2e, { j: 0 }); V(27, 5, 6, M.letter, { t: 3, j: 0 });
+    for (const [sy, sz] of [[5, 3], [7, 5], [6, 7]]) V(26, sy, sz, 0xe0d05a, { j: 0.05 });
+    bperson(28, 3, 5, 0x9a6ac8, 0x2a3038);
+    sign('HAT', 22, 7, 10, 1, M.neonViolet, 2);
+    // comics (nook B)
+    V(29, 3, 13, M.ironG, { j: 0.03 }); fillB(29, 4, 13, 29, 4, 13, M.ironG, { j: 0.03 });
+    for (const [cy, cc] of [[5, 0xc03028], [6, 0x30608a], [7, 0xe8d05a], [8, 0x6ab04a]]) V(29, cy, 13, cc, { j: 0.1 });
+    { const r = mulberry(612);
+      for (let z = 11; z <= 16; z++) for (const y of [4, 6, 8])
+        if (r() < 0.78) V(33, y, z, [0xc03028, 0x30608a, 0xe8d05a, 0x6ab04a, 0xe0704a][Math.floor(r() * 5)], { j: 0.12 }); }
+    fillB(27, 3, 15, 28, 3, 16, M.crate, { j: 0.08 });
+    V(27, 4, 15, 0xd8943a, { j: 0.05 }); V(27, 4, 16, 0xb87828, { j: 0.05 });   // market cat
+    bperson(31, 3, 15, 0x6ab04a, 0x2a3038);
+    sign('POW', 21, 7, 19, 1, 0xe8d05a, 3);
+    // dead-neon boneyard (nook C)
+    for (let i = 0; i < 5; i++) {
+      const ring = [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [1, 2], [0, 2], [0, 1]][i % 8];
+      V(33, 4 + ring[1], 20 + ring[0], i < 2 ? M.neonTeal : 0x3a5a58, i < 2 ? { t: 2, j: 0 } : { j: 0.03 });
+    }
+    V(33, 5, 23, M.neonPink, { t: 2, j: 0 }); V(33, 6, 24, M.neonPink, { t: 2, j: 0 });
+    V(32, 3, 21, M.counter, { j: 0.05 }); V(32, 4, 21, M.neonRed, { t: 2, j: 0 });
+    for (const z of [2, 6, 10, 14, 18, 22]) { V(23, 9, z, M.ironG, { j: 0 }); V(23, 8, z, M.lampWarm, { t: 3, j: 0 }); }
+    /* ---- S3: Post Alley + gum wall ---- */
+    clearB(22, 3, 25, 24, 7, 25);                                       // corridor-to-alley opening
+    clearB(21, 3, 26, 21, 7, 28);                                       // exterior arch (open)
+    fillB(21, 8, 26, 21, 8, 28, M.duBrick, { j: 0.06 });
+    for (let x = 22; x <= 33; x++) for (let z = 26; z <= 29; z++)
+      V(x, 2, z, ((x + z) % 2 === 0) ? SEA.cobble : 0x7e6e56, { j: 0.08 });
+    { const r = mulberry(777);
+      for (const [gz, face] of [[26, 25], [29, 30]]) {
+        for (let x = 22; x <= 33; x++) for (let y = 3; y <= 7; y++) {
+          const dens = x <= 27 ? 0.6 : 0.25;
+          if (r() < dens) {
+            V(x, y, gz, GUM[Math.floor(r() * 8)], { j: 0.1 });
+            if (r() < 0.2 && y > 3) V(x, y - 1, gz, GUM[Math.floor(r() * 8)], { j: 0.1 });
+          }
+        }
+      }
+      for (const fx of [24, 28, 31]) V(fx, 2, 27 + (fx % 2), GUM[Math.floor(r() * 8)], { j: 0.1 });
+    }
+    sign('GU', 22, 7, 29, 1, M.neonPink, 2);
+    sign('M', 30, 7, 29, 1, 0x6a2a44, 0);
+    V(28, 8, 26, M.lampWarm, { t: 3, j: 0 });
+    fillB(32, 3, 28, 33, 4, 29, 0x5e442e, { j: 0.06 }); V(32, 5, 28, 0x17171a, { j: 0 });
+    fillB(32, 3, 26, 33, 3, 27, M.crate, { j: 0.08 });
+    /* ---- S4: y10 slab, terrace, canopy, exterior stair ---- */
+    for (let x = 16; x <= 42; x++) for (let z = 0; z <= 30; z++) {
+      if (x >= 30 && x <= 33 && z >= 2 && z <= 8) continue;             // DU stairwell
+      if (x >= 18 && x <= 20 && z >= 22 && z <= 30) continue;           // exterior-stair void
+      const c = x <= 26 ? ((((x >> 1) + z) % 2 === 0) ? M.mzA : M.mzB)
+        : (((x + (z >> 2)) % 2 === 0) ? M.plankA : M.plankB);
+      V(x, 10, z, c, { j: 0.05 });
+      noteTop(x, z, 10);
+    }
+    for (const cz of [1, 8, 15, 22, 29]) fillB(16, 3, cz, 16, 9, cz, M.ironG, { j: 0.03 });
+    for (const cz of [4, 10, 16, 22, 28]) V(18, 8, cz, M.lampWarm, { t: 3, j: 0 });   // soffit lamps
+    // terrace rails (mandatory 8-drop edges)
+    for (let z = 0; z <= 21; z++) { if (z % 4 === 0) V(16, 11, z, M.ironG, { j: 0.03 }); V(16, 12, z, M.ironG, { j: 0.03 }); }
+    for (let z = 22; z <= 30; z++) { if (z % 4 === 0) V(17, 11, z, M.ironG, { j: 0.03 }); V(17, 12, z, M.ironG, { j: 0.03 }); }
+    for (let x = 16; x <= 26; x++) for (const rz of [0, 30]) {
+      if (x >= 18 && x <= 20 && rz === 30) continue;
+      if (x % 4 === 0) V(x, 11, rz, M.ironG, { j: 0.03 });
+      V(x, 12, rz, M.ironG, { j: 0.03 });
+    }
+    // exterior straight stair x18..20, z29 top y3 -> z22 top y10
+    for (let z = 29; z >= 22; z--) {
+      const t = 3 + (29 - z);
+      fillB(18, 3, z, 20, t, z, 0xb2aca0, { j: 0.06 });
+      for (let x = 18; x <= 20; x++) noteTop(x, z, t);
+      V(17, t + 1, z, M.ironG, { j: 0.03 });
+    }
+    // terrace furniture: benches, planters, umbrella tables, string lights
+    benchS(19, 6, false); benchS(19, 18, false);
+    { const r = mulberry(432);
+      for (const [px, pz] of [[17, 4], [25, 4], [17, 20], [25, 13]]) {
+        V(px, 11, pz, M.ironG, { j: 0.04 });
+        V(px, 12, pz, [0xd86a8a, 0xe0d05a, 0xd4523a][Math.floor(r() * 3)], { j: 0.1 });
+      } }
+    for (const [ux, uz] of [[21, 13], [23, 24]]) {
+      fillB(ux, 11, uz, ux, 13, uz, M.ironG, { j: 0.03 });
+      fillB(ux - 2, 14, uz - 2, ux + 2, 14, uz + 2, M.green, { j: 0.05 });
+      for (const [cx, cz] of [[ux - 2, uz - 2], [ux + 2, uz - 2], [ux - 2, uz + 2], [ux + 2, uz + 2]]) clearB(cx, 14, cz, cx, 14, cz);
+    }
+    for (const [px, pz] of [[17, 2], [17, 29], [25, 2], [25, 29]]) fillB(px, 11, pz, px, 15, pz, M.ironG, { j: 0.03 });
+    for (let x = 17; x <= 25; x++) {
+      const sag = 15 - Math.round(Math.sin((x - 17) / 8 * Math.PI) * 1.2);
+      for (const wz of [2, 29]) {
+        V(x, sag, wz, 0x2a2a2c, { j: 0 });
+        if (x % 3 === 1) V(x, sag - 1, wz, M.bulb, { t: 3, j: 0 });
+      }
+    }
+    gull(16, 13, 10);
+    bperson(20, 11, 18, 0xe07020, 0xf2eee4); V(19, 12, 17, 0x6a4a2c, { j: 0 });
+    /* ---- S5: main arcade shell ---- */
+    for (let y = 11; y <= 25; y++) {                                    // nave walls
+      const c = (y % 3 === 0) ? M.mortar : M.brick;
+      if (y <= 18) { fillB(27, y, 0, 27, y, 30, c, { j: 0.07 }); }      // west aisle wall
+      fillB(42, y, 0, 42, y, 30, c, { j: 0.07 });
+      fillB(28, y, 0, 41, y, 0, c, { j: 0.07 });
+      fillB(28, y, 30, 41, y, 30, c, { j: 0.07 });
+    }
+    fillB(27, 20, 0, 27, 21, 30, M.brick, { j: 0.07 });                 // aisle parapet
+    fillB(27, 21, 0, 27, 21, 30, M.coping, { j: 0.04 });
+    // granite base rows on the street faces
+    fillB(42, 11, 0, 42, 11, 30, M.granite, { j: 0.05 });
+    fillB(28, 11, 0, 41, 11, 0, M.granite, { j: 0.05 });
+    fillB(28, 11, 30, 41, 11, 30, M.granite, { j: 0.05 });
+    // clerestory monitor above the aisle roof
+    fillB(33, 19, 1, 33, 19, 29, M.steel, { j: 0.03 });
+    for (let z = 1; z <= 29; z++) for (let y = 20; y <= 24; y++)
+      V(33, y, z, (z % 3 === 0) ? M.steel : M.clere, (z % 3 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 });
+    fillB(33, 25, 1, 33, 25, 29, M.steel, { j: 0.03 });
+    for (const cz of [4, 8, 12, 16, 20, 24, 28]) fillB(33, 11, cz, 33, 18, cz, M.ironG, { j: 0.03 });
+    for (const cz of [4, 10, 16, 22, 28]) fillB(36, 11, cz, 36, 17, cz, M.ironG, { j: 0.03 });
+    // east facade: piers, bays, grand entry, awnings, mezz windows, cornice
+    for (const [pz0, pz1] of [[0, 1], [10, 11], [16, 17], [26, 27]])
+      for (let y = 12; y <= 17; y++) fillB(42, y, pz0, 42, y, pz1, M.greenDk, { j: 0.04 });
+    for (const [za, zb] of [[2, 9], [18, 25]]) {
+      fillB(42, 12, za, 42, 13, zb, M.greenDk, { j: 0.04 });
+      clearB(42, 14, za, 42, 16, zb);
+      fillB(42, 14, za, 42, 16, zb, M.glass, { t: 1, j: 0.02 });
+      fillB(42, 14, (za + zb) >> 1, 42, 16, (za + zb) >> 1, M.sash, { j: 0 });
+      fillB(42, 17, za, 42, 17, zb, M.glass, { t: 1, j: 0.02 });
+      V(43, 13, za + 2, M.lampWarm, { t: 3, j: 0 });
+    }
+    clearB(42, 11, 12, 42, 14, 15);
+    fillB(42, 11, 12, 42, 14, 15, 0x45291a, { j: 0.05 });
+    fillB(42, 11, 13, 42, 14, 13, 0x331d10, { j: 0.04 });
+    V(43, 12, 12, 0xc9a227, { t: 2, j: 0 }); V(43, 12, 15, 0xc9a227, { t: 2, j: 0 });
+    markDoor(42, 11, 12, 42, 14, 15);
+    fillB(42, 15, 12, 42, 16, 15, M.glass, { t: 1, j: 0.02 });
+    fillB(43, 17, 11, 43, 17, 16, M.greenDk, { j: 0.04 });              // entry hood
+    clearB(42, 11, 28, 42, 14, 29); fillB(42, 11, 28, 42, 13, 29, M.greenDk, { j: 0.04 }); markDoor(42, 11, 28, 42, 13, 29);
+    fillB(42, 18, 0, 42, 18, 30, M.band, { j: 0.03 });
+    for (const [za, zb] of [[2, 9]]) {                                  // stepped stripe awning (north bay only)
+      for (let z = za; z <= zb; z++) {
+        const stripe = (z % 4) < 2 ? M.green : M.cream;
+        V(43, 17, z, stripe, { j: 0.04 }); V(44, 16, z, stripe, { j: 0.04 });
+        V(45, 15, z, (z % 4) < 2 ? M.cream : M.green, { j: 0.04 });
+      }
+    }
+    for (const wz of [3, 12, 21]) {                                     // mezzanine windows
+      fillB(42, 19, wz, 42, 22, wz + 3, M.glass, { t: 1, j: 0.02 });
+      fillB(42, 21, wz, 42, 21, wz + 3, M.sash, { j: 0 });
+      fillB(42, 19, wz + 1, 42, 22, wz + 1, M.sash, { j: 0 });
+      fillB(43, 18, wz - 1, 43, 18, wz + 4, M.cream, { j: 0.04 });
+      fillB(43, 23, wz, 43, 23, wz + 3, M.greenDk, { j: 0.04 });
+    }
+    for (const wz of [3, 12, 21]) fillB(41, 19, wz, 41, 20, wz + 3, M.ironG, { j: 0.03 });
+    for (let z = 0; z <= 30; z += 2) V(43, 24, z, M.green, { j: 0.04 });   // dentils
+    fillB(43, 25, 0, 43, 26, 30, M.greenDk, { j: 0.04 });                  // fascia
+    fillB(41, 27, 0, 43, 27, 30, M.green, { j: 0.04 });                    // crown
+    // north facade: plaza doors + flanks (upper wall is the sign backing)
+    clearB(33, 11, 0, 36, 14, 0);
+    fillB(33, 11, 0, 36, 14, 0, 0x45291a, { j: 0.05 }); markDoor(33, 11, 0, 36, 14, 0);
+    fillB(33, 15, 0, 36, 16, 0, M.glass, { t: 1, j: 0.02 });
+    for (const wx of [29, 38]) {
+      fillB(wx, 12, 0, wx + 2, 15, 0, M.glass, { t: 1, j: 0.02 });
+      fillB(wx + 1, 12, 0, wx + 1, 15, 0, M.sash, { j: 0 });
+      fillB(wx - 1, 11, -1, wx + 3, 11, -1, M.cream, { j: 0.04 });
+    }
+    // south facade: door, windows, ghost sign, fire escape
+    clearB(34, 11, 30, 35, 14, 30);
+    fillB(34, 11, 30, 35, 13, 30, M.greenDk, { j: 0.04 }); markDoor(34, 11, 30, 35, 14, 30);
+    for (const wx of [29, 38]) {
+      fillB(wx, 12, 30, wx + 2, 15, 30, M.glass, { t: 1, j: 0.02 });
+      fillB(wx + 1, 12, 30, wx + 1, 15, 30, M.sash, { j: 0 });
+    }
+    fillB(28, 16, 31, 41, 24, 31, 0x9a9182, { j: 0.09 });
+    sign('FISH', 28, 19, 32, 1, 0x7a4a3c, 0);
+    fillB(37, 18, 31, 40, 18, 32, M.ironG, { j: 0.03 });
+    for (const fy of [19, 20]) { V(37, fy, 32, M.ironG, { j: 0.03 }); V(40, fy, 32, M.ironG, { j: 0.03 }); }
+    for (let i = 0; i < 5; i++) V(38, 17 - i, 32, M.ironG, { j: 0.03 });
+    // west wall terrace doors + windows
+    for (const dz of [8, 21]) {
+      clearB(27, 11, dz, 27, 14, dz + 1);
+      fillB(27, 11, dz, 27, 13, dz + 1, M.greenDk, { j: 0.04 }); markDoor(27, 11, dz, 27, 14, dz + 1);
+    }
+    for (const wz of [3, 14, 25]) {
+      fillB(27, 12, wz, 27, 15, wz + 2, M.glass, { t: 1, j: 0.02 });
+      fillB(27, 12, wz + 1, 27, 15, wz + 1, M.sash, { j: 0 });
+      fillB(26, 11, wz - 1, 26, 11, wz + 3, M.cream, { j: 0.04 });
+    }
+    /* ---- S6: arcade ground interior ---- */
+    for (let x = 28; x <= 41; x++) for (let z = 1; z <= 29; z++)
+      V(x, 10, z, ((x + (z >> 2)) % 2 === 0) ? M.plankA : M.plankB, { j: 0.05 });
+    // fish stall + the airborne salmon
+    fillB(28, 11, 6, 32, 12, 6, M.counter, { j: 0.05 });
+    fillB(33, 11, 1, 33, 12, 6, M.counter, { j: 0.05 });
+    fillB(28, 13, 6, 32, 13, 6, M.ice, { j: 0.03 });
+    fillB(33, 13, 2, 33, 13, 6, M.ice, { j: 0.03 });
+    { const r = mulberry(99);
+      for (const [fx, fz] of [[29, 6], [31, 6], [33, 3], [33, 5]]) {
+        V(fx, 14, fz, r() < 0.5 ? M.fish : M.sPink, { j: 0.04 });
+        V(fx === 33 ? fx : fx + 1, 14, fx === 33 ? fz + 1 : fz, r() < 0.5 ? M.fish : M.sDk, { j: 0.04 });
+      } }
+    V(30, 15, 6, M.cream, { j: 0 }); V(33, 15, 4, M.cream, { j: 0 });   // price flags
+    V(30, 14, 4, M.sPink, { j: 0 }); V(31, 14, 4, M.sDk, { j: 0 });     // the salmon, mid-air
+    bperson(29, 11, 2, 0xe07020, 0xf2eee4);
+    bperson(32, 11, 8, 0xe07020, 0x2a3038); V(33, 15, 8, 0xd9a47e, { j: 0 });
+    sign('FISH', 28, 16, 1, 1, M.letter, 3);
+    // produce stall
+    for (const [sx, sy] of [[28, 11], [29, 12]])
+      fillB(sx, sy, 8, sx, sy, 14, M.crate, { j: 0.08 });
+    { const r = mulberry(204);
+      for (let z = 8; z <= 14; z++) for (const [sx, sy] of [[28, 12], [29, 13]])
+        if (r() < 0.75) V(sx, sy, z, PRODUCE[Math.floor(r() * 5)], { j: 0.1 });
+      for (const [ox, oz] of [[31, 9], [31, 10], [32, 9], [31, 11]]) V(ox, 11, oz, 0xe08a20, { j: 0.08 });
+    }
+    for (let z = 8; z <= 14; z++) V(30, 15, z, (z % 4) < 2 ? M.green : M.cream, { j: 0.04 });
+    // flower stall
+    { const r = mulberry(515);
+      for (let z = 16; z <= 22; z++) for (const sx of [28, 29, 30]) {
+        if (r() < 0.9) {
+          V(sx, 11, z, M.ironG, { j: 0.03 });
+          V(sx, 12, z, 0x4a7a3a, { j: 0.1 });
+          V(sx, 13, z, [0xd86a8a, 0xe0d05a, 0xd4523a, 0x9a6ac8, 0xf2eee4][Math.floor(r() * 5)], { j: 0.1 });
+        }
+      } }
+    bperson(31, 11, 19, 0xd86a8a, 0x2a3038);
+    // jam stall
+    { const r = mulberry(626);
+      for (const sy of [12, 14, 16]) for (let z = 25, i = 0; z <= 28; z++, i++)
+        if (r() < 0.75) V(28, sy, z, [0xb03050, 0xe0a020, 0x7a4a8a][Math.floor(r() * 3)], { j: 0.06 }); }
+    fillB(29, 11, 24, 31, 12, 24, M.counter, { j: 0.05 });
+    V(30, 13, 24, 0x1a1a1c, { j: 0 }); V(31, 13, 24, 0xc9a227, { t: 2, j: 0 });
+    sign('JAM', 29, 14, 29, 1, M.letter, 3);
+    // east bays under the mezzanine
+    fillB(37, 11, 3, 40, 12, 3, M.counter, { j: 0.05 });
+    fillB(38, 13, 3, 40, 14, 3, P.glass, { t: 1, j: 0.02 });
+    V(38, 13, 4, 0xd8a860, { j: 0 }); V(39, 13, 4, 0xb5885a, { j: 0 }); V(40, 13, 4, 0xe8d05a, { j: 0 });
+    fillB(37, 13, 5, 37, 14, 5, 0x2a2a2e, { j: 0 });
+    fillB(41, 11, 7, 41, 15, 9, 0x2a2e33, { j: 0.03 });
+    fillB(41, 12, 8, 41, 14, 8, 0xd8ecff, { t: 2, j: 0 });
+    fillB(38, 10, 12, 40, 10, 13, 0x5a4a3a, { j: 0.05 });               // doormat
+    { const r = mulberry(841);
+      for (const sy of [12, 14, 16]) for (let z = 19; z <= 24; z++)
+        if (r() < 0.72) V(41, sy, z, [0xc06a20, 0x8a3030, 0x6a8a4a, 0xe0a020, 0xb03050, 0x5a3a72, 0x9a6a3a][Math.floor(r() * 7)], { j: 0.08 }); }
+    V(40, 12, 20, 0xc9a227, { t: 2, j: 0 }); V(40, 11, 20, 0x2a2a2e, { j: 0 });
+    for (const [bx, bz] of [[40, 22], [39, 23]]) { V(bx, 11, bz, 0xa8845c, { j: 0.06 }); V(bx, 12, bz, [0xc06a20, 0x8a3030][bx % 2], { j: 0.08 }); }
+    fillB(41, 12, 27, 41, 14, 29, 0x22261f, { j: 0.03 });
+    for (const [cy, cz] of [[13, 27], [13, 28], [12, 29], [14, 28]]) V(41, cy, cz, 0xf0efe8, { j: 0 });
+    // hanging lamp rows + shoppers + busker
+    for (const lx of [34, 36]) for (let z = 2; z <= 26; z += 4) { V(lx, 18, z, M.ironG, { j: 0 }); V(lx, 17, z, M.lampWarm, { t: 3, j: 0 }); }
+    for (let z = 2; z <= 26; z += 4) { V(30, 18, z, M.ironG, { j: 0 }); V(30, 17, z, M.lampWarm, { t: 3, j: 0 }); }
+    bperson(35, 11, 8, 0x6a5a4a, 0x2a3038); bperson(34, 11, 20, 0x4a6a8a, 0x3a3e46); bperson(38, 11, 17, 0x8a5a6a, 0x2a3038);
+    bperson(35, 11, -2, 0x8a3a3a, 0x23262c); V(36, 12, -2, 0x8a5a2a, { j: 0 }); V(36, 13, -2, 0x6a4a2c, { j: 0 });
+    /* ---- S7: mezzanine ---- */
+    for (let x = 36; x <= 41; x++) for (let z = 1; z <= 29; z++)
+      V(x, 18, z, (((x >> 1) + z) % 2 === 0) ? M.mzA : M.mzB, { j: 0.05 });
+    bstair(10, 18, 37, 23, 1);
+    fillB(37, 11, 28, 40, 14, 29, M.plaster, { j: 0.05 });              // seal under landing
+    for (let z = 1; z <= 29; z += 3) V(36, 19, z, M.ironG, { j: 0.03 });
+    for (let z = 1; z <= 29; z++) V(36, 20, z, M.ironG, { j: 0.03 });
+    for (let x = 37; x <= 40; x += 3) { V(x, 19, 22, M.ironG, { j: 0.03 }); V(x, 20, 22, M.ironG, { j: 0.03 }); }
+    { const r = mulberry(933);
+      for (const tz of [3, 8, 13, 18]) {
+        fillB(37, 20, tz, 39, 20, tz + 1, M.counter, { j: 0.05 });
+        for (const [lx, lz] of [[37, tz], [39, tz + 1]]) fillB(lx, 19, lz, lx, 19, lz, 0x4a3220, { j: 0.04 });
+        const kind = Math.floor(r() * 4);
+        if (kind === 0) for (let i = 0; i < 3; i++) V(37 + i, 21, tz, [0xd86a8a, 0xe0d05a, 0x7ad0c8][i], { j: 0.06 });
+        if (kind === 1) { V(38, 21, tz, 0xb06a3c, { j: 0.06 }); V(38, 22, tz, 0xb06a3c, { j: 0.06 }); }
+        if (kind === 2) for (let i = 0; i < 3; i++) V(37 + i, 21, tz + 1, [0xc03028, 0x30608a, 0xe8d05a][i], { j: 0.06 });
+        if (kind === 3) { V(37, 21, tz, M.cream, { j: 0.04 }); V(38, 21, tz, M.cream, { j: 0.04 }); V(38, 22, tz, 0xd4523a, { j: 0.08 }); }
+      } }
+    V(40, 21, 5, 0xc03028, { j: 0 }); V(40, 21, 6, 0xf2eee4, { j: 0 }); // the tiny sweater
+    bperson(40, 19, 10, 0x7a4a8a, 0x2a3038); bperson(40, 19, 16, 0x4a6a5a, 0x3a3e46);
+    for (let z = 4; z <= 28; z += 6) V(39, 25, z, M.lampWhite, { t: 3, j: 0 });
+    V(37, 19, 1, 0x8a4030, { j: 0.05 }); fillB(37, 20, 1, 37, 21, 1, 0x3f5c30, { j: 0.15 });
+    /* ---- S8: roofscape ---- */
+    for (let x = 27; x <= 32; x++) for (let z = 0; z <= 30; z++) V(x, 19, z, M.felt, { j: 0.06 });
+    for (const sz of [10, 19]) {
+      fillB(29, 19, sz, 31, 19, sz + 2, M.curb, { j: 0.03 });
+      fillB(30, 19, sz, 30, 19, sz + 2, M.clere, { t: 1, j: 0.02 });
+    }
+    for (const vz of [4, 16, 27]) { V(30, 20, vz, 0x808488, { j: 0.04 }); V(30, 21, vz, 0x808488, { j: 0.04 }); }
+    gull(28, 20, 24);
+    for (let x = 33; x <= 42; x++) for (let z = 0; z <= 30; z++) V(x, 26, z, M.felt, { j: 0.06 });
+    for (const sz of [5, 14, 23]) {
+      clearB(36, 26, sz, 39, 26, sz + 3);
+      fillB(36, 26, sz, 39, 26, sz + 3, M.clere, { t: 1, j: 0.02 });
+      for (const [cx, cz] of [[35, sz - 1], [40, sz - 1]]) fillB(cx, 26, cz, cx, 26, sz + 4, M.curb, { j: 0.03 });
+    }
+    for (const [vx, vz] of [[34, 6], [34, 20]]) fillB(vx, 27, vz, vx + 1, 28, vz + 1, M.curb, { j: 0.04 });
+    fillB(39, 27, 28, 41, 27, 29, 0xa8acb0, { j: 0.04 });
+    V(34, 27, 12, 0x808488, { j: 0.04 }); V(40, 27, 3, 0x808488, { j: 0.04 });
+    /* ---- S9: the PUBLIC MARKET billboard + clock ---- */
+    for (const [px0, pz0] of [[18, 0], [24, 0]]) {
+      fillB(px0, 11, pz0, px0 + 1, 18, pz0 + 1, M.steel, { j: 0.03 });
+      V(px0, 17, pz0 + 1, M.steel, { j: 0.03 });
+    }
+    for (let x = 17; x <= 26; x++) V(x, 18, 1, M.ironG, { j: 0.03 });   // catwalk
+    fillB(17, 19, 0, 42, 27, 0, M.back, { j: 0.03 });
+    sign('PUBLIC', 18, 20, -1, 1, M.neonRed, 2);
+    sign('MARKET', 17, 24, -1, 1, M.neonRed, 2);
+    for (let dy = 0; dy < 5; dy++) for (let dx = 0; dx < 5; dx++) {     // the clock
+      if ((dx === 0 || dx === 4) && (dy === 0 || dy === 4)) continue;
+      const face = dx >= 1 && dx <= 3 && dy >= 1 && dy <= 3;
+      V(19 + dx, 13 + dy, 0, face ? M.lampWhite : 0x1a1a1c, face ? { t: 3, j: 0 } : { j: 0 });
+    }
+    V(21, 16, -1, 0x141414, { j: 0 }); V(22, 15, -1, 0x141414, { j: 0 }); V(21, 15, -1, 0xc9a227, { t: 2, j: 0 });
+    gull(20, 28, 0);
+  }
+  // SEATTLE-MARKET-ANCHOR
+  /* ============ SPACE NEEDLE + NEEDLE PARK ============ */
+  {
+    const N = {
+      white: 0xe8ecea, shadow: 0xcfd4d6, rib: 0x9aa0a2, steel: 0x3a4048,
+      mast: 0xd8dce0, gold: 0xc9922e, goldDeep: 0xb0801e, glass: 0x9fc6da,
+      beacon: 0xff2020, strobe: 0xffffff, cyan: 0x35e0e8, workRed: 0xff3030,
+      lampWarm: 0xffd9a0, lampWhite: 0xfff4e0, terrazzo: 0xc9c2b4,
+      carpet: 0x2f4858, carpetTrim: 0xc9b07a, cobble: 0x8a7a62,
+      gravel: 0x9a917e, pad: 0xb2aca0, blue: 0x6f7b84,
+      bench: 0x8a6038, desk: 0x5a4a38, btop: 0x9a6a3a, case_: 0x4a3220,
+      kiosk: 0x8e887c, cartCream: 0xe8e0cc, cartRed: 0xc03028,
+      water: 0x7fb4d0, jet: 0xdff0f6,
+    };
+    const CX = 44, CZ = -38;
+    const d2 = (x, z) => (x - CX) * (x - CX) + (z - CZ) * (z - CZ);
+    /* ---- S1: site paving, terraces, paths ---- */
+    for (let x = 45; x <= 60; x++) for (let z = -30; z <= -26; z++) { V(x, 10, z, N.cobble, { j: 0.08 }); noteTop(x, z, 10); }
+    for (let x = 37; x <= 51; x++) for (let z = -45; z <= -31; z++) { V(x, 10, z, N.cobble, { j: 0.08 }); noteTop(x, z, 10); }
+    for (let x = 46; x <= 48; x++) for (let z = -31; z <= -26; z++) V(x, 10, z, N.gravel, { j: 0.1 });
+    for (let z = -36; z <= -34; z++) for (let x = 34; x <= 37; x++) V(x, 10, z, N.gravel, { j: 0.1 });
+    for (let x = 49; x <= 49; x++) for (let z = -47; z <= -46; z++) V(x, 10, z, N.gravel, { j: 0.1 });
+    { // loop ring path around the plinth
+      for (let x = 36; x <= 52; x++) { V(x, 10, -46, N.gravel, { j: 0.1 }); V(x, 10, -30, N.gravel, { j: 0.1 }); }
+      for (let z = -46; z <= -30; z++) { V(36, 10, z, N.gravel, { j: 0.1 }); V(52, 10, z, N.gravel, { j: 0.1 }); }
+    }
+    for (let x = 35; x <= 48; x++) for (let z = -54; z <= -49; z++) { V(x, 11, z, SEA.grass, { j: 0.13 }); noteTop(x, z, 11); }
+    for (let x = 35; x <= 40; x++) for (let z = -54; z <= -51; z++) { V(x, 12, z, SEA.grass, { j: 0.13 }); noteTop(x, z, 12); }
+    for (let x = 35; x <= 48; x++) V(x, 11, -49, N.blue, { j: 0.05 });
+    for (let x = 35; x <= 40; x++) V(x, 12, -51, N.blue, { j: 0.05 });
+    { const r = mulberry(2026);
+      for (let x = 34; x <= 67; x++) for (let z = -54; z <= -26; z++)
+        if (groundAt(x, z) !== undefined && r() < 0.02) V(x, groundAt(x, z) + 1, z, 0xe8e8d8, { j: 0.06 }); }
+    /* ---- S2: lobby drum ---- */
+    const drum = (x, z) => {
+      const onX = x === 37 || x === 51, onZ = z === -45 || z === -31;
+      if (!(onX || onZ)) return false;
+      const cornerCut = (Math.min(Math.abs(x - 37), Math.abs(x - 51)) + Math.min(Math.abs(z + 45), Math.abs(z + 31))) < 2;
+      return !cornerCut;
+    };
+    for (let x = 37; x <= 51; x++) for (let z = -45; z <= -31; z++) {
+      if (!drum(x, z)) continue;
+      fillB(x, 11, z, x, 12, z, N.white, { j: 0.04 });
+      for (let y = 13; y <= 16; y++)
+        V(x, y, z, ((x + z) % 3 === 0) ? N.steel : N.glass, ((x + z) % 3 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 });
+      V(x, 17, z, N.white, { j: 0.04 });
+    }
+    for (let x = 37; x <= 51; x++) for (let z = -45; z <= -31; z++) {
+      V(x, 18, z, 0x8e887c, { j: 0.05 });
+      if (drum(x, z)) V(x, 19, z, N.white, { j: 0.04 });
+    }
+    for (let x = 38; x <= 50; x++) for (let z = -44; z <= -32; z++)
+      V(x, 10, z, N.terrazzo, { j: 0.05 });
+    for (let a = 0; a < 24; a++) {
+      const th = a / 24 * Math.PI * 2;
+      V(CX + Math.round(Math.cos(th) * 5), 10, CZ + Math.round(Math.sin(th) * 5) + 0, N.blue, { j: 0.04 });
+    }
+    clearB(46, 11, -31, 49, 14, -31);
+    fillB(46, 11, -31, 49, 14, -31, N.glass, { t: 1, j: 0.02 }); markDoor(46, 11, -31, 49, 14, -31);
+    clearB(37, 11, -39, 37, 14, -38);
+    fillB(37, 11, -39, 37, 14, -38, N.glass, { t: 1, j: 0.02 }); markDoor(37, 11, -39, 37, 14, -38);
+    // lobby furnishing
+    fillB(48, 11, -33, 50, 12, -33, N.desk, { j: 0.05 });
+    fillB(48, 13, -33, 50, 13, -33, N.btop, { j: 0.05 });
+    bperson(49, 11, -32, 0x2e5444, 0x2a3038);
+    V(49, 16, -34, N.lampWarm, { t: 3, j: 0 });
+    { const r = mulberry(1962);
+      for (const gz of [-44, -42]) {
+        fillB(48, 11, gz, 50, 11, gz, N.case_, { j: 0.05 });
+        for (let x = 48; x <= 50; x++) for (const gy of [12, 13])
+          if (r() < 0.7) V(x, gy, gz, [0xd0d0d8, 0x8fd820, 0xc9a227, 0x8a3030, 0x30608a][Math.floor(r() * 5)], { j: 0.1 });
+      } }
+    V(48, 12, -41, N.white, { j: 0 }); V(48, 13, -41, N.gold, { t: 0, j: 0 });
+    V(50, 12, -41, N.white, { j: 0 }); V(50, 13, -41, N.gold, { t: 0, j: 0 });
+    V(49, 12, -43, 0xd8943a, { j: 0.05 }); V(49, 12, -42, 0xb87828, { j: 0.05 });
+    benchS(39, -43, true);
+    V(38, 11, -41, 0x8a4030, { j: 0.05 }); fillB(38, 12, -41, 38, 13, -41, SEA.evergreen, { j: 0.14 });
+    bperson(45, 11, -33, 0x6a5a8a, 0x2a3038); bperson(46, 11, -32, 0x8a6a4a, 0x3a3e46);
+    for (const [lx, lz] of [[40, -34], [48, -34], [40, -42], [48, -42]]) V(lx, 17, lz, N.lampWhite, { t: 3, j: 0 });
+    /* ---- S3: slim 5x5 core mast — the elevator rides inside it ---- */
+    for (let y = 11; y <= 54; y++) for (let x = 42; x <= 46; x++) for (let z = -40; z <= -36; z++) {
+      if (x >= 43 && x <= 45 && z >= -39 && z <= -37) continue;       // the car channel
+      const southGlass = z === -36 && x >= 43 && x <= 45 && y >= 15;
+      V(x, y, z, southGlass ? N.glass : N.white, southGlass ? { t: 1, j: 0.02 } : { j: 0.04 });
+    }
+    clearB(43, 11, -36, 45, 14, -36);                                 // ground boarding door
+    for (const ry of [22, 32, 42, 52]) {                              // steel collar rings
+      for (let x = 41; x <= 47; x++) { V(x, ry, -41, N.steel, { j: 0.03 }); V(x, ry, -35, N.steel, { j: 0.03 }); }
+      for (let z = -40; z <= -36; z++) { V(41, ry, z, N.steel, { j: 0.03 }); V(47, ry, z, N.steel, { j: 0.03 }); }
+    }
+    /* ---- S4: the three legs ---- */
+    const LEGS = [[-1, 0, 9], [0.29, -0.96, 10], [0.29, 0.96, 10]];
+    const BANDS = [[11, 13, 10], [14, 17, 9], [18, 20, 8], [21, 23, 7], [24, 26, 6], [27, 30, 5], [31, 49, 4]];
+    const STRUTS = [[50, 51, 5], [52, 53, 6], [54, 56, 7]];
+    for (const [ux, uz, dmax] of LEGS) {
+      for (const [y0, y1, dRaw] of BANDS) {
+        const d = Math.min(dRaw, dmax);
+        const lx = CX + Math.round(ux * d), lz = CZ + Math.round(uz * d);
+        const t = y0 <= 26 ? 1 : 0;
+        fillB(lx - t, y0, lz - t, lx + 1, y1, lz + 1, N.white, { j: 0.04 });
+      }
+      for (const [y0, y1, d] of STRUTS) {
+        const lx = CX + Math.round(ux * Math.min(d, dmax)), lz = CZ + Math.round(uz * Math.min(d, dmax));
+        fillB(lx, y0, lz, lx + 1, y1, lz + 1, N.white, { j: 0.04 });
+      }
+      const fx = CX + Math.round(ux * dmax), fz = CZ + Math.round(uz * dmax);
+      for (let x = fx - 1; x <= fx + 2; x++) for (let z = fz - 1; z <= fz + 2; z++) { V(x, 10, z, N.pad, { j: 0.08 }); noteTop(x, z, 10); }
+      V(fx, 11, fz - 1, 0x2a2a2c, { j: 0 }); V(fx + 1, 11, fz + 2, 0x2a2a2c, { j: 0 });
+    }
+    /* ---- S5: the UP neon over the lobby doors (car is a live mesh) ---- */
+    sign('UP', 45, 15, -30, 1, N.cyan, 2);
+    /* ---- S6: the saucer ---- */
+    for (let x = CX - 11; x <= CX + 11; x++) for (let z = CZ - 11; z <= CZ + 11; z++) {
+      const dd = d2(x, z);
+      if (dd <= 16) V(x, 55, z, N.shadow, { j: 0.04 });
+      if (dd <= 36) V(x, 56, z, N.shadow, { j: 0.04 });
+      if (dd <= 64) V(x, 57, z, N.shadow, { j: 0.04 });
+      if (dd <= 100) V(x, 58, z, N.white, { j: 0.04 });
+      if (dd > 49 && dd <= 100 && (x + z) % 4 === 0) V(x, 57, z, N.lampWarm, { t: 3, j: 0 });
+    }
+    for (let s = 0; s < 12; s++) {                                     // radial brim ribs
+      const th = s / 12 * Math.PI * 2;
+      for (let rr = 7; rr <= 10; rr++) {
+        const rx = CX + Math.round(Math.cos(th) * rr), rz = CZ + Math.round(Math.sin(th) * rr);
+        if (d2(rx, rz) <= 100) V(rx, 57, rz, N.rib, { j: 0.03 });
+      }
+    }
+    // observation level: parapet, leaning glass ring, ceiling
+    for (let x = CX - 11; x <= CX + 11; x++) for (let z = CZ - 11; z <= CZ + 11; z++) {
+      const dd = d2(x, z);
+      if (dd > 64 && dd <= 81) fillB(x, 59, z, x, 60, z, N.white, { j: 0.04 });
+      if (dd > 64 && dd <= 81) V(x, 61, z, ((x * 3 + z) % 5 === 0) ? N.steel : N.glass, ((x * 3 + z) % 5 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 });
+      if (dd > 81 && dd <= 100) { V(x, 62, z, ((x * 3 + z) % 5 === 0) ? N.steel : N.glass, ((x * 3 + z) % 5 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 }); V(x, 63, z, ((x * 3 + z) % 5 === 0) ? N.steel : N.glass, ((x * 3 + z) % 5 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 }); }
+      if (dd <= 100) V(x, 64, z, N.white, { j: 0.04 });
+    }
+    // obs interior: carpet ring, kiosk, furnishings
+    for (let x = CX - 9; x <= CX + 9; x++) for (let z = CZ - 9; z <= CZ + 9; z++) {
+      const dd = d2(x, z);
+      if (dd >= 25 && dd <= 64) V(x, 58, z, (dd >= 60) ? N.carpetTrim : N.carpet, { j: 0.04 });
+    }
+    for (let y = 59; y <= 63; y++) for (let x = 40; x <= 48; x++) for (let z = -42; z <= -34; z++) {
+      if (x > 40 && x < 48 && z > -42 && z < -34) continue;
+      V(x, y, z, N.kiosk, { j: 0.04 });
+    }
+    clearB(48, 59, -39, 48, 62, -38); markDoor(48, 59, -39, 48, 62, -38);
+    fillB(45, 59, -41, 47, 60, -41, 0x2a2a2e, { j: 0.03 });            // machine room flywheel
+    V(46, 61, -41, 0xffa028, { t: 2, j: 0 }); V(47, 61, -41, 0xc9a227, { t: 2, j: 0 });
+    fillB(49, 60, -37, 49, 61, -36, 0xc9a227, { j: 0.02 });            // framed art (E face)
+    V(49, 60, -37, 0x30608a, { j: 0 });
+    for (const [bx, bz] of [[CX, CZ - 7], [CX, CZ + 7], [CX - 7, CZ], [CX + 7, CZ]]) {
+      fillB(bx - 1, 59, bz, bx + 1, 59, bz, N.bench, { j: 0.05 });
+    }
+    for (const [tx, tz] of [[CX + 6, CZ - 5], [CX - 6, CZ + 5], [CX + 5, CZ + 6], [CX - 5, CZ - 6]]) {
+      V(tx, 59, tz, N.steel, { j: 0.03 }); V(tx, 60, tz, 0x2a2a2e, { j: 0 }); V(tx, 61, tz, 0xffa028, { t: 2, j: 0 });
+    }
+    bperson(CX + 4, 59, CZ - 6, 0xd8b040, 0x2a3038);
+    bperson(CX - 5, 59, CZ + 3, 0x5a8ad0, 0x3a3e46);
+    bperson(CX + 6, 59, CZ + 2, 0x8a5a6a, 0x2a3038);
+    V(CX + 1, 60, CZ + 7, 0x2a2a2e, { j: 0 }); V(CX + 2, 60, CZ + 7, 0x9fd8ff, { t: 2, j: 0 });
+    for (let a = 0; a < 6; a++) {
+      const th = a / 6 * Math.PI * 2;
+      V(CX + Math.round(Math.cos(th) * 6), 63, CZ + Math.round(Math.sin(th) * 6), N.lampWhite, { t: 3, j: 0 });
+    }
+    /* deck: parapet, rail, bulkhead stair, gold cone, mast */
+    for (let x = CX - 11; x <= CX + 11; x++) for (let z = CZ - 11; z <= CZ + 11; z++) {
+      const dd = d2(x, z);
+      if (dd > 64 && dd <= 81) { fillB(x, 65, z, x, 66, z, N.white, { j: 0.04 }); V(x, 67, z, N.mast, { j: 0.03 }); }
+    }
+    for (let i = 1; i <= 6; i++) fillB(41, 59, -35 - i, 42, 58 + i, -35 - i, N.white, { j: 0.04 });
+    clearB(41, 64, -41, 42, 64, -37);                                  // slab opening over the top treads
+    for (let x = CX - 5; x <= CX + 5; x++) for (let z = CZ - 5; z <= CZ + 5; z++) {
+      const dd = d2(x, z);
+      if (dd <= 16) fillB(x, 65, z, x, 66, z, N.gold, { j: 0.05 });
+      if (dd <= 9) fillB(x, 67, z, x, 68, z, N.gold, { j: 0.05 });
+      if (dd <= 4) fillB(x, 69, z, x, 70, z, N.gold, { j: 0.05 });
+      if (dd <= 1) fillB(x, 71, z, x, 72, z, N.gold, { j: 0.05 });
+    }
+    clearB(41, 65, -42, 42, 67, -38);                                  // hatch slot through the cone's NW base
+    fillB(41, 68, -42, 42, 68, -38, N.gold, { j: 0.05 });              // slot roof (the hatch housing)
+    V(CX, 73, CZ, N.goldDeep, { j: 0.03 });
+    for (let y = 74; y <= 80; y++) V(CX, y, CZ, (y % 3 === 0) ? N.steel : N.mast, { j: 0.03 });
+    fillB(CX - 1, 76, CZ, CX + 1, 76, CZ, N.steel, { j: 0.03 });
+    fillB(CX, 76, CZ - 1, CX, 76, CZ + 1, N.steel, { j: 0.03 });
+    V(CX, 78, CZ, N.strobe, { t: 2, j: 0 });
+    V(CX, 81, CZ, N.beacon, { t: 2, j: 0 }); V(CX, 82, CZ, N.beacon, { t: 2, j: 0 });
+    bperson(CX + 7, 65, CZ, 0x4a6a8a, 0x2a3038);
+    V(CX + 8, 66, CZ + 3, 0x6e7076, { j: 0.06 }); V(CX + 8, 67, CZ + 3, 0x53555c, { j: 0.06 });
+    fillB(CX - 8, 67, CZ - 2, CX - 8, 69, CZ - 2, N.mast, { j: 0.03 });
+    V(CX - 8, 68, CZ - 1, N.cartRed, { j: 0 }); V(CX - 8, 69, CZ - 1, N.cartRed, { j: 0 });
+    /* ---- carve the car channel through roof + saucer; rail the obs hole ---- */
+    clearB(43, 15, -39, 45, 58, -37);                                  // channel (lobby roof + discs + obs floor)
+    for (let z = -39; z <= -37; z++) fillB(42, 59, z, 42, 60, z, N.white, { j: 0.04 });   // rail W of the hole
+    for (let x = 43; x <= 45; x++) fillB(x, 59, -40, x, 60, -40, N.white, { j: 0.04 });   // rail N of the hole
+    elevConfig(43, 45, -39, -37, 11, 59);
+    /* ---- S7: park props ---- */
+    // gate gantry with NEEDLE / WORK
+    for (const gx of [43, 65]) {
+      for (let y = 11; y <= 26; y++) for (let x = gx; x <= gx + 1; x++) for (let z = -27; z <= -26; z++)
+        if (y % 3 === 0 || (x + z + y) % 2 === 0) V(x, y, z, N.steel, { j: 0.03 });
+    }
+    fillB(43, 27, -27, 66, 29, -26, N.steel, { j: 0.03 });
+    sign('NEEDLE', 43, 28, -25, 1, N.cyan, 2);
+    sign('WOW', 52, 28, -28, 1, N.workRed, 2);
+    // fountain plaza
+    for (let x = 53; x <= 63; x++) for (let z = -35; z <= -25; z++)
+      if ((x - 58) * (x - 58) + (z + 30) * (z + 30) <= 25) { V(x, 10, z, N.pad, { j: 0.08 }); noteTop(x, z, 10); }
+    for (let x = 55; x <= 61; x++) for (let z = -33; z <= -27; z++) {
+      const dd = (x - 58) * (x - 58) + (z + 30) * (z + 30);
+      if (dd > 4 && dd <= 9) V(x, 11, z, N.blue, { j: 0.05 });
+      else if (dd <= 4) V(x, 11, z, N.water, { t: 1, j: 0.02 });
+    }
+    fillB(58, 12, -30, 58, 14, -30, N.jet, { j: 0.03 });
+    for (const [sx, sz] of [[57, -31], [59, -29], [57, -29], [59, -31]]) V(sx, 12, sz, N.jet, { j: 0.03 });
+    V(57, 11, -30, 0xaad4ff, { t: 3, j: 0 }); V(59, 11, -30, 0xaad4ff, { t: 3, j: 0 });
+    benchS(54, -27, true); benchS(60, -26, true); benchS(53, -33, false);
+    // food cart
+    fillB(50, 11, -29, 54, 13, -27, N.cartCream, { j: 0.04 });
+    fillB(50, 11, -29, 54, 11, -29, 0x1c1c1e, { j: 0.03 });
+    V(50, 11, -28, 0x141416, { j: 0 }); V(54, 11, -28, 0x141416, { j: 0 });
+    for (let x = 49; x <= 55; x++) V(x, 15, -28, (x % 4 < 2) ? N.cartRed : N.cartCream, { j: 0.04 });
+    for (const hx of [51, 52, 53]) V(hx, 14, -28, 0xb06a3c, { j: 0.05 });
+    V(52, 15, -27, 0xf0f0f0, { t: 1, j: 0 });
+    V(54, 14, -27, P.glass, { t: 1, j: 0.02 }); V(54, 14, -26, 0xc9a227, { t: 2, j: 0 });
+    bperson(52, 11, -30, 0xe8e0cc, 0x8a3030);
+    V(51, 14, -28, N.lampWarm, { t: 3, j: 0 });
+    // cherry trees + petals
+    { const r = mulberry(505);
+      for (const [tx, tz] of [[36, -29], [41, -27], [62, -33], [64, -45], [60, -52]]) {
+        const base = groundAt(tx, tz); if (base === undefined) continue;
+        for (let y = base + 1; y <= base + 4; y++) V(tx, y, tz, P.bark, { j: 0.1 });
+        for (let dx = -3; dx <= 3; dx++) for (let dy = 0; dy <= 2; dy++) for (let dz = -3; dz <= 3; dz++) {
+          if (dx * dx + dy * dy * 2.4 + dz * dz > 9 + (h3(tx + dx, dy, tz + dz) - 0.5) * 4) continue;
+          V(tx + dx, base + 5 + dy, tz + dz, [0xe8a8c8, 0xdf9ab8, 0xf0c0d8][Math.floor(h3(tx + dx, dy * 5, tz + dz) * 3)], { j: 0.12 });
+        }
+        for (let i = 0; i < 6; i++) {
+          const px = tx - 3 + Math.floor(r() * 7), pz = tz - 3 + Math.floor(r() * 7);
+          const g = groundAt(px, pz);
+          if (g !== undefined && r() < 0.6) V(px, g + 1, pz, 0xf0c0d8, { j: 0.08 });
+        }
+      } }
+    fir(36, -52, 15); fir(37, -50, 13); fir(35, -47, 16); fir(36, -43, 14); fir(35, -33, 13); fir(37, -31, 12);
+    gaslampS(45, -30); gaslampS(50, -30); gaslampS(38, -37); gaslampS(38, -40);
+    gaslampS(44, -46); gaslampS(52, -38); gaslampS(60, -27); gaslampS(48, -26);
+    benchS(40, -47, true); benchS(53, -44, false);
+    // scooters at the gate (shared recipe: deck + stem, one tipped)
+    for (const [sx, sz, up] of [[57, -27, 1], [58, -27, 1], [59, -27, 1], [60, -27, 0]]) {
+      const g = groundAt(sx, sz); if (g === undefined) continue;
+      if (up) { fillB(sx, g + 1, sz, sx, g + 1, sz + 1, 0x2a2a2c, { j: 0.03 }); fillB(sx, g + 2, sz, sx, g + 3, sz, 0x8fd820, { j: 0.05 }); }
+      else { fillB(sx, g + 1, sz, sx + 1, g + 1, sz, 0x8fd820, { j: 0.05 }); V(sx + 2, g + 1, sz, 0x2a2a2c, { j: 0.03 }); }
+    }
+    bperson(42, 12, -52, 0xd85050, 0x2a3038); bperson(43, 12, -52, 0x5a8ad0, 0x3a3e46);   // lawn couple
+    bperson(59, 11, -32, 0x6ab04a, 0x23262c);                          // kid at the fountain
+    pigeon(58, 12, -33); pigeon(61, 11, -28); pigeon(47, 11, -27);
+    bperson(50, 11, -25, 0x4a4a52, 0x2a3038); V(50, 15, -25, 0x2a2a2e, { j: 0 });   // photographer
+  }
+  // SEATTLE-NEEDLE-ANCHOR
+  /* ============ SEATTLE CENTER MONORAIL ============ */
+  {
+    const R = {
+      beam: 0xc8c8cc, rail: 0x86868a, joint: 0xb4b6ba, pier: 0xb0b0b4,
+      deck: 0xa8a49a, fascia: 0x8e887c, yellow: 0xe8c020, steel: 0x3a4048,
+      canopy: 0x8c9096, canopyRib: 0x84888c, cGlass: 0x9fc6da, iron: 0x2a2a2c,
+      red: 0xc03028, doorRed: 0x8a1c1c, white: 0xe8ecec, seamW: 0xc8ccd2,
+      skirt: 0xb8bcc2, band: 0xcfe4f0, lino: 0x6a6e72, seat: 0x35507a,
+      console: 0x22262a, pole: 0xd0d4d8, cyan: 0x40e0e0, cream: 0xf2e8c8,
+      sigRed: 0xd03030, screen: 0x40c8e0, tickBlue: 0x2a4f8a, board: 0x1d3a2e,
+      bench: 0x8a6038, lampWhite: 0xfff4e0, lampWarm: 0xffd9a0,
+      headlight: 0xf6f1cf, tail: 0xd82020,
+    };
+    /* ---- 1: twin-beam guideway, straight x52..56 from END stub to buffer ---- */
+    for (let z = -44; z <= 34; z++) {
+      const joint = [26, 18, 10, 2, -6, -14].includes(z);
+      const haunch = z >= -19 && z <= -2;                              // Pike flyover
+      for (const [bx0, bx1] of [[52, 53], [55, 56]]) {
+        fillB(bx0, 18, z, bx1, 18, z, joint ? R.joint : R.beam, { j: 0.03 });
+        fillB(bx0, 19, z, bx1, 19, z, joint ? R.joint : R.rail, { j: 0.02 });
+        if (haunch) fillB(bx0, 17, z, bx1, 17, z, R.beam, { j: 0.03 });
+      }
+    }
+    for (const [bx0, bx1] of [[52, 53], [55, 56]]) {                    // haunch taper steps
+      fillB(bx0, 17, -20, bx1, 17, -20, R.beam, { j: 0.03 });
+      fillB(bx0, 17, -1, bx1, 17, -1, R.beam, { j: 0.03 });
+    }
+    // T-pylons (shaft to y15, stepped capital under the beams)
+    for (const [px, pz, base] of [[53, 30, 10], [53, 20, 10], [53, 10, 10], [53, 0, 10],
+                                  [53, -22, 11], [53, -31, 11], [53, -41, 11]]) {
+      fillB(px, base, pz, px + 1, 15, pz + 1, R.pier, { j: 0.03 });
+      fillB(px - 1, 16, pz, px + 2, 16, pz + 1, R.pier, { j: 0.03 });
+      fillB(px - 2, 17, pz, px + 3, 17, pz + 1, R.pier, { j: 0.03 });
+    }
+    // END stub buffer (south, faces the 5th & Madison signal)
+    fillB(52, 18, 33, 56, 21, 34, R.fascia, { j: 0.05 });
+    for (let x = 52; x <= 56; x++) for (let y = 18; y <= 21; y++)
+      V(x, y, 33, ((x + y) % 2 === 0) ? R.yellow : R.iron, { j: 0.04 });
+    V(53, 22, 34, R.sigRed, { t: 2, j: 0 }); V(55, 22, 34, R.sigRed, { t: 2, j: 0 });
+    sign('END', 48, 19, 35, 1, R.sigRed, 2);
+    // north buffer at the terminal
+    fillB(52, 18, -45, 56, 21, -44, R.fascia, { j: 0.05 });
+    for (let x = 52; x <= 56; x++) for (let y = 18; y <= 21; y++)
+      V(x, y, -44, ((x + y) % 2 === 0) ? R.yellow : R.iron, { j: 0.04 });
+    V(53, 22, -45, R.sigRed, { t: 2, j: 0 }); V(55, 22, -45, R.sigRed, { t: 2, j: 0 });
+    /* ---- 2: Westlake Station ---- */
+    for (let x = 44; x <= 49; x++) for (let z = 6; z <= 26; z++) {      // west platform
+      V(x, 18, z, R.fascia, { j: 0.06 });
+      V(x, 19, z, x === 49 ? R.yellow : (x === 48 && z % 2 === 0) ? 0x8c8880 : R.deck, { j: 0.06 });
+      noteTop(x, z, 19);
+    }
+    for (let x = 59; x <= 64; x++) for (let z = 6; z <= 26; z++) {      // east platform
+      V(x, 18, z, R.fascia, { j: 0.06 });
+      V(x, 19, z, x === 59 ? R.yellow : (x === 60 && z % 2 === 0) ? 0x8c8880 : R.deck, { j: 0.06 });
+      noteTop(x, z, 19);
+    }
+    for (const cz of [7, 13, 26]) fillB(46, 11, cz, 46, 17, cz, R.steel, { j: 0.03 });
+    for (const cz of [7, 13, 19, 25]) fillB(62, 11, cz, 62, 17, cz, R.steel, { j: 0.03 });
+    for (let z = 6; z <= 26; z++) {                                     // outer guard rails
+      if (z >= 16 && z <= 26) continue;                                 // stairwell mouths
+      if (z % 3 === 0) V(44, 20, z, R.iron, { j: 0.02 });
+      V(44, 21, z, R.iron, { j: 0.02 });
+      if (z % 3 === 0) V(64, 20, z, R.iron, { j: 0.02 });
+      V(64, 21, z, R.iron, { j: 0.02 });
+    }
+    for (let i = 1; i <= 9; i++) {                                      // straight platform stairs
+      fillB(44, 11, 26 - i, 46, 10 + i, 26 - i, R.pier, { j: 0.03 });
+      fillB(63, 11, 26 - i, 65, 10 + i, 26 - i, R.pier, { j: 0.03 });
+    }
+    clearB(44, 18, 16, 46, 19, 24);                                     // headroom through fascia+deck
+    clearB(63, 18, 16, 65, 19, 24);
+    for (let i = 1; i <= 9; i++) {                                      // re-lay treads the clear touched
+      fillB(44, 10 + i, 26 - i, 46, 10 + i, 26 - i, R.pier, { j: 0.03 });
+      fillB(63, 10 + i, 26 - i, 65, 10 + i, 26 - i, R.pier, { j: 0.03 });
+    }
+    fillB(44, 18, 16, 46, 18, 16, R.fascia, { j: 0.06 });               // restore the deck beyond the top tread
+    fillB(44, 19, 16, 46, 19, 16, R.deck, { j: 0.06 });
+    fillB(63, 18, 16, 65, 18, 16, R.fascia, { j: 0.06 });
+    fillB(63, 19, 16, 65, 19, 16, R.deck, { j: 0.06 });
+    for (const px of [43, 66]) {                                        // street portals
+      fillB(px, 11, 26, px, 14, 26, R.fascia, { j: 0.05 });
+      V(px, 14, 27, R.lampWarm, { t: 3, j: 0 });
+    }
+    // canopy
+    for (let x = 43; x <= 65; x++) for (let z = 6; z <= 26; z++) {
+      const edge = x === 43 || x === 65 || z === 6 || z === 26;
+      const sky = x >= 52 && x <= 56 && z >= 8 && z <= 24;
+      V(x, 28, z, edge ? R.steel : sky ? R.cGlass : (z % 3 === 0) ? R.canopyRib : R.canopy,
+        sky ? { t: 1, j: 0.02 } : { j: 0.04 });
+    }
+    for (const cx of [47, 61]) for (const cz of [8, 14, 20, 26]) {
+      V(cx, 20, cz, 0x2a2e34, { j: 0.02 });
+      fillB(cx, 21, cz, cx, 27, cz, R.steel, { j: 0.03 });
+    }
+    for (const cx of [47, 61]) for (let cz = 8; cz <= 24; cz += 4) V(cx, 27, cz, R.lampWhite, { t: 3, j: 0 });
+    sign('GO', 51, 28, 5, 1, R.cyan, 2);
+    sign('GO', 51, 28, 27, 1, R.cyan, 2);
+    sign('MONO', 46, 15, 5, 1, R.cream, 3);
+    sign('MONO', 46, 15, 27, 1, R.cream, 3);
+    // platform kit
+    fillB(45, 20, 10, 45, 20, 13, R.bench, { j: 0.05 });
+    fillB(44, 21, 10, 44, 21, 13, R.bench, { j: 0.05 });
+    fillB(63, 20, 10, 63, 20, 13, R.bench, { j: 0.05 });
+    for (const [mx, mz] of [[45, 14], [45, 15], [63, 14], [63, 15]]) {
+      fillB(mx, 20, mz, mx, 21, mz, R.tickBlue, { j: 0.03 });
+      V(mx, 22, mz, R.screen, { t: 2, j: 0 });
+    }
+    fillB(45, 20, 8, 45, 21, 8, R.iron, { j: 0.02 });
+    fillB(45, 22, 7, 45, 23, 9, R.board, { j: 0.03 });
+    V(45, 22, 7, R.sigRed, { t: 2, j: 0 }); V(45, 22, 9, R.white, { t: 2, j: 0 });
+    V(47, 20, 25, 0x2e3b32, { j: 0.03 }); V(47, 21, 25, 0x17171a, { j: 0 });
+    bperson(46, 20, 9, 0x6a5a4a, 0x2a3038); bperson(47, 20, 20, 0x4a6a8a, 0x3a3e46);
+    bperson(61, 20, 12, 0x8a5a6a, 0x23262c); V(61, 23, 11, 0x9fd8ff, { t: 2, j: 0 });
+    bperson(47, 20, 15, 0x8a8a7a, 0x2a3038); V(47, 23, 14, 0xa86a32, { j: 0.05 }); V(47, 24, 14, 0x3f5c30, { j: 0.1 });
+    pigeon(43, 29, 6); pigeon(62, 20, 9);
+    /* ---- 3: the berthed red Alweg (walk aboard) ---- */
+    {
+      const z0 = 3, z1 = 26;
+      fillB(50, 18, z0 + 1, 50, 19, z1 - 1, R.skirt, { j: 0.03 });
+      fillB(54, 18, z0 + 1, 54, 19, z1 - 1, R.skirt, { j: 0.03 });
+      fillB(51, 18, z0, 53, 19, z0, R.skirt, { j: 0.03 });
+      fillB(51, 18, z1, 53, 19, z1, R.skirt, { j: 0.03 });
+      for (const fx of [50, 54]) {
+        fillB(fx, 20, z0 + 1, fx, 22, z1 - 1, R.red, { j: 0.04 });
+        fillB(fx, 23, z0 + 2, fx, 24, z1 - 2, R.band, { t: 3, j: 0.02 });
+        fillB(fx, 23, z0 + 1, fx, 24, z0 + 1, R.red, { j: 0.04 });
+        fillB(fx, 23, z1 - 1, fx, 24, z1 - 1, R.red, { j: 0.04 });
+      }
+      for (const ez of [z0, z1]) {
+        fillB(51, 20, ez, 53, 21, ez, R.red, { j: 0.04 });
+        fillB(51, 22, ez, 53, 24, ez, R.band, { t: 3, j: 0.02 });
+        V(52, 20, ez, R.headlight, { t: 3, j: 0 });
+      }
+      for (const [cx, cz] of [[50, z0 + 1], [54, z0 + 1], [50, z1 - 1], [54, z1 - 1]])
+        fillB(cx, 22, cz, cx, 24, cz, R.band, { t: 3, j: 0.02 });
+      fillB(50, 25, z0 + 1, 54, 25, z1 - 1, R.white, { j: 0.03 });
+      fillB(51, 26, z0 + 1, 53, 26, z1 - 1, R.white, { j: 0.03 });
+      fillB(51, 25, z0, 53, 25, z0, R.white, { j: 0.03 });
+      fillB(51, 25, z1, 53, 25, z1, R.white, { j: 0.03 });
+      fillB(51, 20, z0 + 1, 53, 20, z1 - 1, R.lino, { j: 0.05 });
+      // door bays: true voids onto the west platform + slid-open leaves
+      clearB(50, 21, 9, 50, 24, 10); clearB(50, 21, 19, 50, 24, 20);
+      for (const dz of [8, 11, 18, 21]) fillB(50, 21, dz, 50, 24, dz, R.doorRed, { j: 0.03 });
+      // interior: stanchions, paired seats, cabs, riders
+      for (const sz of [8, 11, 18, 21]) fillB(51, 21, sz, 51, 24, sz, R.pole, { j: 0.02 });
+      for (const sz of [7, 8, 13, 14, 16, 17, 22, 23]) V(53, 21, sz, R.seat, { j: 0.05 });
+      for (const sz of [13, 14, 16, 17]) V(51, 21, sz, R.seat, { j: 0.05 });
+      fillB(51, 21, 5, 53, 21, 5, R.console, { j: 0.02 });
+      V(51, 22, 5, 0x40c060, { t: 2, j: 0 }); V(53, 22, 5, R.sigRed, { t: 2, j: 0 });
+      fillB(51, 21, 24, 53, 21, 24, R.console, { j: 0.02 });
+      V(52, 21, 6, R.seat, { j: 0.05 }); fillB(52, 22, 6, 52, 23, 6, 0x2a3440, { j: 0.03 }); V(52, 24, 6, 0xd9a47e, { j: 0.03 });
+      fillB(53, 22, 8, 53, 23, 8, 0x6e4a26, { j: 0.04 }); V(53, 24, 8, 0xd9a47e, { j: 0.03 });
+      fillB(53, 22, 14, 53, 23, 14, 0x5a6e8a, { j: 0.04 }); V(53, 24, 14, 0xd9a47e, { j: 0.03 });
+      V(53, 22, 13, 0xa86a32, { j: 0.05 }); V(53, 23, 13, 0x3f5c30, { j: 0.1 });
+      fillB(51, 22, 16, 51, 23, 16, 0x8e3a3a, { j: 0.04 }); V(51, 24, 16, 0xd9a47e, { j: 0.03 });
+      for (const lz of [7, 12, 17, 22]) V(52, 25, lz, R.lampWhite, { t: 3, j: 0 });
+    }
+    /* ---- 4: the flyover train (white, red noses — the money shot) ---- */
+    {
+      const z0 = -19, z1 = 4;
+      fillB(54, 18, z0 + 1, 54, 19, z1 - 1, R.skirt, { j: 0.03 });
+      fillB(58, 18, z0 + 1, 58, 19, z1 - 1, R.skirt, { j: 0.03 });
+      fillB(55, 18, z0, 57, 19, z0, R.skirt, { j: 0.03 });
+      fillB(55, 18, z1, 57, 19, z1, R.skirt, { j: 0.03 });
+      for (const fx of [54, 58]) {
+        fillB(fx, 20, z0 + 1, fx, 22, z1 - 1, R.white, { j: 0.03 });
+        fillB(fx, 23, z0 + 2, fx, 24, z1 - 2, R.band, { t: 3, j: 0.02 });
+        fillB(fx, 23, z0 + 1, fx, 24, z0 + 1, R.white, { j: 0.03 });
+        fillB(fx, 23, z1 - 1, fx, 24, z1 - 1, R.white, { j: 0.03 });
+        for (const dz of [-13, -12, -3, -2]) fillB(fx, 20, dz, fx, 22, dz, R.seamW, { j: 0.02 });
+      }
+      for (const [ez, lamp] of [[z0, R.tail], [z1, R.headlight]]) {
+        fillB(55, 20, ez, 57, 21, ez, R.red, { j: 0.04 });
+        fillB(55, 22, ez, 57, 24, ez, R.band, { t: 3, j: 0.02 });
+        V(56, 20, ez, lamp, { t: 2, j: 0 });
+      }
+      for (const [cx, cz] of [[54, z0 + 1], [58, z0 + 1], [54, z1 - 1], [58, z1 - 1]])
+        fillB(cx, 22, cz, cx, 24, cz, R.band, { t: 3, j: 0.02 });
+      fillB(54, 25, z0 + 1, 58, 25, z1 - 1, R.white, { j: 0.03 });
+      fillB(55, 26, z0 + 1, 57, 26, z1 - 1, R.white, { j: 0.03 });
+      fillB(55, 25, z0, 57, 25, z0, R.white, { j: 0.03 });
+      fillB(55, 25, z1, 57, 25, z1, R.white, { j: 0.03 });
+      fillB(56, 22, 3, 56, 23, 3, 0x2a3440, { j: 0.03 }); V(56, 24, 3, 0xd9a47e, { j: 0.03 });
+    }
+    /* ---- 5: Needle Terminal (east-side platform, per the cross-check) ---- */
+    for (let x = 57; x <= 60; x++) for (let z = -44; z <= -35; z++) {
+      V(x, 18, z, R.fascia, { j: 0.06 });
+      V(x, 19, z, x === 57 ? R.yellow : R.deck, { j: 0.06 });
+      noteTop(x, z, 19);
+    }
+    for (const cz of [-42, -37]) fillB(57, 11, cz, 57, 17, cz, R.steel, { j: 0.03 });
+    for (let i = 1; i <= 9; i++)
+      fillB(58, 11, -45 + i, 60, 10 + i, -45 + i, R.pier, { j: 0.03 });
+    clearB(58, 18, -43, 60, 19, -36);
+    for (let i = 1; i <= 9; i++)
+      fillB(58, 10 + i, -45 + i, 60, 10 + i, -45 + i, R.pier, { j: 0.03 });
+    for (let z = -44; z <= -35; z++) {                                  // east guard rail
+      if (z >= -44 && z <= -36) continue;                               // stair mouth zone
+      if (z % 3 === 0) V(60, 20, z, R.iron, { j: 0.02 });
+      V(60, 21, z, R.iron, { j: 0.02 });
+    }
+    for (let x = 57; x <= 60; x += 3) { V(x, 20, -35, R.iron, { j: 0.02 }); V(x, 21, -35, R.iron, { j: 0.02 }); }
+    for (let x = 56; x <= 61; x++) for (let z = -44; z <= -35; z++) {
+      const edge = x === 56 || x === 61 || z === -44 || z === -35;
+      V(x, 25, z, edge ? R.steel : (z % 3 === 0) ? R.canopyRib : R.canopy, { j: 0.04 });
+    }
+    for (const cz of [-43, -39, -36]) fillB(61, 11, cz, 61, 24, cz, R.steel, { j: 0.03 });
+    for (const cz of [-42, -38]) V(59, 24, cz, R.lampWarm, { t: 3, j: 0 });
+    fillB(60, 20, -42, 60, 20, -40, R.bench, { j: 0.05 });
+    fillB(60, 20, -36, 60, 21, -36, R.tickBlue, { j: 0.03 }); V(60, 22, -36, R.screen, { t: 2, j: 0 });
+    bperson(60, 20, -38, 0x4a5a6a, 0x2a3038); bperson(60, 20, -37, 0xd8b040, 0x3a3e46);
+    pigeon(54, 22, -44);
+  }
+  // SEATTLE-MONORAIL-ANCHOR
+  /* ============ NIMBUS SPHERES CAMPUS ============ */
+  {
+    const S = {
+      glassTeal: 0x9fd8c8, glassSky: 0x9fc6da, steel: 0x3a4048, steelDk: 0x23282e,
+      spandrel: 0x2d3238, paver: 0xc9c4b8, paverJt: 0xb4afa2, board: 0x8e887c,
+      granite: 0x6a6e72, blue: 0x6f7b84, soil: 0x5c4832, moss: 0x4a6a34,
+      water: 0x7ec8d8, basin: 0x3a4a42, trunk: 0x5a4028,
+      canopy: [0x4f7a2e, 0x5f8c38, 0x44691f], fern: 0x77a844, hangMoss: 0x6f8c4a,
+      rail: 0x2e3b32, deckA: 0x8a6038, deckB: 0x7a5430, quartz: 0xe4e2da,
+      deskWood: 0x9a6a3a, sedum: 0x6a7a3a, topiary: 0x3a5c30,
+      cartYellow: 0xd8a020, banana: 0xe8cf3a, podWhite: 0xe8ecec, cloud: 0xf2f4f6,
+      lampWarm: 0xffd9a0, lampWhite: 0xfff4e0, screen: 0xcfe8ff,
+      cyan: 0x6fe0ff, red: 0xff4060, go: 0x40d080, beacon: 0xc03028,
+    };
+    const SPH = [[81, 21, 7, 9], [79, 21, -1, 7], [79, 21, 16, 7]];
+    const sd = (x, y, z, i) => Math.hypot(x - SPH[i][0], y - SPH[i][1], z - SPH[i][2]);
+    /* ---- 0: terrace, mural, plaza ---- */
+    for (let x = 72; x <= 75; x++) for (let z = -7; z <= 23; z++) {
+      clearB(x, 10, z, x, 18, z);
+      fillB(x, 10, z, x, 15, z, SEA.earth, { j: 0.05 });
+      V(x, 16, z, x === 72 ? S.blue : S.paver, { j: 0.06 });
+      noteTop(x, z, 16);
+    }
+    for (let z = -7; z <= 23; z++) for (let y = 10; y <= 15; y++) {
+      const c = h3(72, y * 7, z) < 0.2 ? 0x3f5c30 : (z % 4 === 0) ? 0x77716a : S.board;
+      V(72, y, z, y <= 11 ? S.granite : c, { j: 0.09 });
+    }
+    fillB(72, 12, 12, 72, 15, 20, 0x2e6e64, { j: 0.04 });              // teal mural band
+    for (let z = 14; z <= 18; z++) for (let y = 13; y <= 14; y++)
+      if (!((z === 14 || z === 18) && y === 13)) V(72, y, z, S.cloud, { j: 0.02 });
+    for (let z = -7; z <= 23; z++) {
+      if (z >= 2 && z <= 12) continue;                                  // dome waist gap
+      if (z % 3 === 0) V(72, 17, z, S.rail, { j: 0.03 });
+      V(72, 18, z, S.rail, { j: 0.03 });
+    }
+    for (let x = 76; x <= 98; x++) for (let z = -10; z <= 23; z++) {
+      V(x, 16, z, (x % 5 === 0 || z % 5 === 0) ? S.paverJt : S.paver, { j: 0.06 });
+      noteTop(x, z, 16);
+    }
+    /* ---- 1: podium + tower ---- */
+    for (let x = 87; x <= 96; x++) for (let z = -7; z <= 17; z++) V(x, 16, z, 0xb8b4aa, { j: 0.05 });
+    const curtain = (x, y, z, mullionAxis) =>
+      (y <= 18) ? S.spandrel : (mullionAxis % 4 === 0) ? S.steel : (y === 20) ? S.steelDk : S.glassSky;
+    for (let y = 17; y <= 23; y++) {
+      for (let x = 86; x <= 97; x++) {                                  // podium N + S faces
+        const cN = y === 23 ? S.spandrel : curtain(x, y, -8, x);
+        V(x, y, -8, cN, cN === S.glassSky ? { t: 1, j: 0.02 } : { j: 0.03 });
+        const cS = y === 23 ? S.spandrel : curtain(x, y, 18, x);
+        V(x, y, 18, cS, cS === S.glassSky ? { t: 1, j: 0.02 } : { j: 0.03 });
+      }
+      for (let z = -8; z <= 18; z++) {                                  // podium W + E walls
+        const cW = y === 23 ? S.spandrel : curtain(86, y, z, z);
+        V(86, y, z, cW, cW === S.glassSky ? { t: 1, j: 0.02 } : { j: 0.03 });
+        V(97, y, z, (z % 4 === 0 || y === 23) ? S.steel : S.spandrel, { j: 0.03 });
+      }
+    }
+    fillB(86, 24, -8, 97, 24, 18, S.paverJt, { j: 0.05 });              // podium roof deck
+    // tower x90..97 z-8..12
+    for (let y = 17; y <= 40; y++) for (let x = 90; x <= 97; x++) for (const tz of [-8, 12]) {
+      const band = y <= 18 || (y >= 23 && y <= 26) || (y >= 31 && y <= 34) || (y >= 39 && y <= 40);
+      const c = band ? S.spandrel : (x % 4 === 0) ? S.steel : S.glassSky;
+      V(x, y, tz, c, c === S.glassSky ? { t: 1, j: 0.02 } : { j: 0.03 });
+    }
+    for (let y = 17; y <= 40; y++) for (let z = -8; z <= 12; z++) for (const tx of [90, 97]) {
+      const band = y <= 18 || (y >= 23 && y <= 26) || (y >= 31 && y <= 34) || (y >= 39 && y <= 40);
+      const c = band ? S.spandrel : (z % 4 === 0) ? S.steel : S.glassSky;
+      V(tx, y, z, c, c === S.glassSky ? { t: 1, j: 0.02 } : { j: 0.03 });
+    }
+    for (const [cx, cz] of [[90, -8], [97, -8], [90, 12], [97, 12]])
+      for (let y = 17; y <= 40; y++) V(cx, y, cz, S.steelDk, { j: 0.02 });
+    fillB(91, 24, -7, 96, 24, 11, S.spandrel, { j: 0.04 });             // storey slabs
+    fillB(91, 32, -7, 96, 32, 11, S.spandrel, { j: 0.04 });
+    fillB(90, 40, -8, 97, 40, 12, S.spandrel, { j: 0.04 });
+    for (let x = 90; x <= 97; x++) for (const pz of [-8, 12]) { fillB(x, 41, pz, x, 42, pz, S.steel, { j: 0.03 }); }
+    for (let z = -8; z <= 12; z++) for (const px of [90, 97]) { fillB(px, 41, z, px, 42, z, S.steel, { j: 0.03 }); }
+    // entrance canopy + doors + bollards
+    fillB(85, 21, -11, 89, 21, -8, S.steel, { j: 0.03 });
+    for (let x = 85; x <= 89; x += 2) V(x, 20, -10, S.lampWhite, { t: 3, j: 0 });
+    clearB(86, 17, -8, 88, 20, -8);
+    fillB(86, 17, -8, 88, 20, -8, S.glassSky, { t: 1, j: 0.02 }); markDoor(86, 17, -8, 88, 20, -8);
+    V(85, 17, -10, S.steelDk, { j: 0.02 }); V(89, 17, -10, S.steelDk, { j: 0.02 });
+    // green roof
+    { const r = mulberry(2121);
+      for (let x = 86; x <= 89; x++) for (let z = -7; z <= 17; z++)
+        if (r() < 0.45) V(x, 25, z, S.sedum, { j: 0.13 });
+      for (let x = 90; x <= 96; x++) for (let z = 13; z <= 17; z++)
+        if (r() < 0.45) V(x, 25, z, S.sedum, { j: 0.13 }); }
+    for (let z = -8; z <= 18; z++) { fillB(86, 25, z, 86, 26, z, S.paverJt, { j: 0.04 }); V(86, 27, z, S.rail, { j: 0.03 }); }
+    for (const [sx, sz] of [[87, -4], [87, 14]]) {
+      fillB(sx, 25, sz, sx + 1, 25, sz + 1, S.glassSky, { t: 1, j: 0.02 });
+    }
+    fillB(92, 25, 14, 93, 25, 16, S.deckA, { j: 0.05 });                // picnic table
+    V(91, 25, 15, S.deckB, { j: 0.05 }); V(94, 25, 15, S.deckB, { j: 0.05 });
+    for (const px of [88, 95]) fillB(px, 25, 16, px, 28, 16, S.rail, { j: 0.03 });
+    for (let x = 88; x <= 95; x++) {
+      const sag = 28 - Math.round(Math.sin((x - 88) / 7 * Math.PI) * 1.2);
+      V(x, sag, 16, 0x2a2a2c, { j: 0 });
+      if (x % 3 === 0) V(x, sag - 1, 16, S.lampWarm, { t: 3, j: 0 });
+    }
+    /* ---- 2: signage ---- */
+    sign('N', 92, 37, -9, 1, S.cyan, 2); sign('I', 93, 33, -9, 1, S.cyan, 2);
+    sign('M', 91, 29, -9, 1, S.cyan, 2); sign('B', 92, 25, -9, 1, S.cyan, 2);
+    sign('U', 92, 21, -9, 1, S.cyan, 2); sign('S', 92, 17, -9, 1, S.cyan, 2);
+    sign('HR', 90, 34, 13, 1, S.lampWhite, 3);
+    sign('RTO', 88, 20, 17, 1, S.red, 2);
+    fillB(94, 18, 18, 96, 19, 18, 0xf0ede4, { j: 0.03 });
+    for (const tx of [94, 95, 96]) V(tx, 18, 17, 0x2a2a2e, { j: 0 });
+    V(95, 19, 17, 0xc03028, { j: 0 });
+    // CORPO gateway
+    for (const gx of [77, 96]) fillB(gx, 17, -10, gx + 1, 23, -9, S.steel, { j: 0.03 });
+    fillB(76, 24, -10, 97, 25, -10, S.steel, { j: 0.03 });
+    sign('CORPO', 78, 26, -10, 1, S.cyan, 2);
+    for (const [cx, cy] of [[76, 26], [77, 27], [77, 26], [76, 27]]) V(cx, cy, -10, S.cloud, { t: 2, j: 0 });
+    /* ---- 3: the three sphere shells ---- */
+    const mod5 = n => ((n % 5) + 5) % 5;
+    for (let i = 0; i < 3; i++) {
+      const [cx, cy, cz, r] = SPH[i];
+      for (let x = cx - r; x <= cx + r; x++) for (let y = 17; y <= cy + r; y++) for (let z = cz - r; z <= cz + r; z++) {
+        const d = sd(x, y, z, i);
+        if (Math.abs(d - r) >= 0.6) continue;
+        let inSib = false;
+        for (let k = 0; k < 3; k++) if (k !== i && sd(x, y, z, k) < SPH[k][3] - 0.6) inSib = true;
+        if (inSib) continue;
+        if (x >= 86 && y <= 24) continue;                              // podium swallows A's east cap
+        let seam = false;
+        for (let k = 0; k < 3; k++) if (k !== i && Math.abs(sd(x, y, z, k) - SPH[k][3]) < 1.1) seam = true;
+        const u = (x - cx) + (z - cz), v = (x - cx) - (z - cz);
+        const mod7 = n => ((n % 7) + 7) % 7;
+        const node = mod7(u) === 0 && mod7(v) === 0;
+        const frame = mod7(u) === 0 || mod7(v) === 0 || y === 21 || y === 17 || y === 18;
+        const c = seam || node ? S.steelDk : frame ? 0x5c6b70 : S.glassTeal;
+        V(x, y, z, c, c === S.glassTeal ? { t: 1, j: 0.02 } : { j: 0.03 });
+      }
+      // cap oculus ring
+      const oy = cy + r - 1, orad = i === 0 ? 3 : 2;
+      for (let x = cx - orad; x <= cx + orad; x++) for (let z = cz - orad; z <= cz + orad; z++) {
+        const hd = Math.hypot(x - cx, z - cz);
+        if (Math.abs(hd - orad) < 0.7 && Math.abs(sd(x, oy, z, i) - r) < 1.2) V(x, oy, z, S.steel, { j: 0.03 });
+      }
+    }
+    // dome doors (glass panels, markDoor)
+    clearB(78, 17, -9, 80, 20, -7);
+    fillB(78, 17, -7, 80, 20, -7, S.glassTeal, { t: 1, j: 0.02 }); markDoor(78, 17, -7, 80, 20, -7);
+    clearB(78, 17, 21, 80, 20, 23);
+    fillB(78, 17, 22, 80, 20, 22, S.glassTeal, { t: 1, j: 0.02 }); markDoor(78, 17, 22, 80, 20, 22);
+    /* ---- 4: the forest ---- */
+    { const r = mulberry(88);
+      for (let i = 0; i < 3; i++) {
+        const [cx, cy, cz, rr] = SPH[i];
+        const fr = Math.sqrt(rr * rr - 25) + 0.2;
+        for (let x = Math.ceil(cx - fr); x <= cx + fr; x++) for (let z = Math.ceil(cz - fr); z <= cz + fr; z++) {
+          if (Math.hypot(x - cx, z - cz) >= fr) continue;
+          if (x >= 86) continue;
+          V(x, 16, z, r() < 0.55 ? S.moss : S.soil, { j: 0.12 });
+        }
+      } }
+    // bluestone path: B door -> lens -> tree loop -> C door + lobby spur
+    for (const [px, pz] of [[78, -6], [79, -6], [78, -4], [79, -4], [78, -2], [79, -2], [78, 0], [79, 0],
+      [78, 2], [79, 2], [78, 4], [79, 4], [78, 6], [79, 6], [78, 8], [79, 8],
+      [78, 10], [79, 10], [78, 12], [79, 12], [78, 14], [79, 14], [78, 16], [79, 16],
+      [78, 18], [79, 18], [78, 20], [79, 20], [80, 9], [81, 9], [82, 9], [83, 9], [84, 9], [85, 9],
+      [78, -5], [79, -5], [78, -3], [79, -3], [78, -1], [79, -1], [78, 1], [79, 1], [78, 3], [79, 3],
+      [78, 5], [79, 5], [78, 7], [79, 7], [78, 9], [79, 9], [78, 11], [79, 11], [78, 13], [79, 13],
+      [78, 15], [79, 15], [78, 17], [79, 17], [78, 19], [79, 19], [78, 21], [79, 21]])
+      V(px, 16, pz, S.blue, { j: 0.05 });
+    // central tree + canopy
+    for (let y = 17; y <= 27; y++) {
+      const drift = y > 22 ? Math.round(h3(3, y, 7) * 2 - 1) : 0;
+      fillB(80 + drift, y, 6, 81 + drift, y, 7, S.trunk, { j: 0.06 });
+    }
+    for (const [bx, by, bz] of [[78, 25, 5], [83, 25, 8], [79, 26, 9], [83, 26, 4], [81, 27, 10]])
+      V(bx, by, bz, S.trunk, { j: 0.06 });
+    for (let x = 75; x <= 87; x++) for (let y = 25; y <= 28; y++) for (let z = 1; z <= 13; z++) {
+      const dx = x - 81, dy = y - 27, dz = z - 7;
+      if ((dx * dx) / 36 + (dy * dy) / 4 + (dz * dz) / 36 > 1 + (h3(x, y, z) - 0.5) * 0.4) continue;
+      if (y < 26 && Math.hypot(dx, dz) >= 4) continue;
+      V(x, y, z, S.canopy[Math.floor(h3(x, y * 3, z) * 3)], { j: 0.14 });
+    }
+    // pond + rill
+    for (let x = 76; x <= 79; x++) for (let z = 9; z <= 12; z++) {
+      if ((x === 76 && z === 9) || (x === 79 && z === 12)) continue;
+      V(x, 15, z, S.basin, { j: 0.08 });
+      V(x, 16, z, S.water, { t: 1, j: 0.03 });
+    }
+    for (const [rx, rz] of [[80, 12], [81, 13], [81, 14], [82, 15]]) {
+      V(rx, 15, rz, S.basin, { j: 0.08 }); V(rx, 16, rz, S.water, { t: 1, j: 0.03 });
+    }
+    V(81, 16, 13, 0x8a8a84, { j: 0.08 });
+    // catwalk ring + cantilever + stair
+    for (let x = 74; x <= 88; x++) for (let z = 0; z <= 14; z++) {
+      const hd = Math.hypot(x - 81, z - 7);
+      if (hd >= 5 && hd < 6.6) {
+        V(x, 21, z, (((x >> 1) + z) % 2 === 0) ? S.deckA : S.deckB, { j: 0.05 });
+        if ((x + z) % 3 === 0) { V(x, 22, z, S.rail, { j: 0.03 }); V(x, 23, z, S.rail, { j: 0.03 }); }
+        if ((x + z) % 3 === 0) V(x, 23, z, S.lampWarm, { t: 3, j: 0 });
+      }
+    }
+    for (let x = 73; x <= 74; x++) for (let z = 6; z <= 8; z++) V(x, 21, z, S.deckA, { j: 0.05 });
+    for (let z = 6; z <= 8; z++) { V(73, 22, z, S.rail, { j: 0.03 }); V(73, 23, z, S.rail, { j: 0.03 }); }
+    bstair(16, 21, 80, 0, 1);
+    clearB(80, 21, 0, 83, 21, 1);                                     // ring deck off the lower treads
+    clearB(80, 22, 0, 83, 23, 5);                                     // rails/lamps out of the stair headroom
+    fillB(80, 17, 4, 83, 19, 5, S.soil, { j: 0.1 });                    // seal under landing
+    for (const [mx, my, mz] of [[77, 20, 3], [85, 20, 10], [79, 24, 11], [83, 24, 2], [76, 20, 8], [84, 19, 12], [80, 24, 4], [82, 23, 11]])
+      for (let d = 0; d < 2 + (mx % 2); d++) V(mx, my - d, mz, S.hangMoss, { j: 0.15 });
+    // dome B: nap grove
+    for (let x = 77; x <= 80; x++) for (let z = -4; z <= -3; z++) for (let y = 17; y <= 19; y++) {
+      if ((x === 77 || x === 80) && y === 19) continue;
+      if (x === 80 && y >= 18) continue;
+      V(x, y, z, S.podWhite, { j: 0.03 });
+    }
+    clearB(79, 17, -4, 79, 18, -3);
+    V(78, 17, -4, 0xd8c8b8, { j: 0.04 });
+    V(80, 17, -4, 0xe0d8c8, { j: 0.03 }); V(80, 17, -3, 0xe0d8c8, { j: 0.03 });
+    V(79, 18, -4, S.screen, { t: 3, j: 0 });
+    fillB(81, 17, -3, 82, 17, -3, 0xc8963c, { j: 0.06 });               // the office dog
+    V(82, 18, -3, 0xc8963c, { j: 0.06 }); V(80, 17, -3, 0xb87828, { j: 0.06 }); V(81, 18, -2, 0xc8963c, { j: 0.08 });
+    // dome C: work grove + the layoff
+    for (const [dx, dz] of [[77, 13], [80, 17], [76, 19]]) {
+      fillB(dx, 19, dz, dx + 2, 19, dz, S.deskWood, { j: 0.05 });
+      V(dx, 17, dz, S.trunk, { j: 0.06 }); V(dx + 2, 17, dz, S.trunk, { j: 0.06 });
+      V(dx, 18, dz, S.trunk, { j: 0.06 }); V(dx + 2, 18, dz, S.trunk, { j: 0.06 });
+      V(dx + 1, 20, dz, 0x22262a, { j: 0 }); V(dx + 2, 20, dz, S.screen, { t: 3, j: 0 });
+      V(dx + 1, 17, dz + 1, S.deckB, { j: 0.05 });
+      V(dx, 17, dz - 1, 0x8a4d3a, { j: 0.05 }); fillB(dx, 18, dz - 1, dx, 19, dz - 1, 0x3a7a34, { j: 0.1 });
+    }
+    bperson(76, 17, 17, 0x6a7a8a, 0x2a3038);
+    V(75, 19, 17, 0x9aa0a6, { j: 0 });
+    fillB(77, 17, 18, 77, 17, 18, 0xb08a5a, { j: 0.06 }); V(77, 18, 18, 0x3a7a34, { j: 0.1 });
+    // ferns + fairy lights, all domes
+    { const r = mulberry(414);
+      for (const [fx, fz] of [[76, 4], [85, 4], [84, 11], [76, 0], [83, -2], [75, -1], [82, 20], [76, 21], [82, 13], [75, 13]]) {
+        const h = 2 + Math.floor(r() * 2);
+        for (let y = 17; y < 17 + h; y++) V(fx, y, fz, S.trunk, { j: 0.06 });
+        V(fx + 1, 17 + h, fz, S.fern, { j: 0.13 }); V(fx - 1, 17 + h, fz, S.fern, { j: 0.13 });
+        V(fx, 17 + h, fz + 1, S.fern, { j: 0.13 }); V(fx, 17 + h, fz - 1, S.fern, { j: 0.13 });
+        V(fx, 17 + h + 1, fz, S.fern, { j: 0.13 });
+        if (r() < 0.6) V(fx, 17 + h + 2, fz, S.lampWarm, { t: 3, j: 0 });
+      }
+      for (let i = 0; i < 12; i++) {
+        const lx = 76 + Math.floor(r() * 10), lz = 2 + Math.floor(r() * 10);
+        V(lx, 25 + Math.floor(r() * 3), lz, S.lampWarm, { t: 3, j: 0 });
+      } }
+    pigeon(84, 22, 3);
+    /* ---- 5: lobby interior ---- */
+    for (let z = -8; z <= 18; z++) for (let y = 17; y <= 23; y++) {     // the arch: carve where sphere A owns the wall
+      if (sd(86, y, z, 0) < 9) clearB(86, y, z, 86, y, z);
+    }
+    for (let z = -8; z <= 18; z++) for (let y = 17; y <= 23; y++) {
+      if (Math.abs(sd(86, y, z, 0) - 9) < 0.8) V(86, y, z, S.steel, { j: 0.03 });
+    }
+    for (const tz of [3, 6, 9, 12]) {
+      fillB(87, 17, tz, 88, 19, tz, S.steelDk, { j: 0.02 });
+      V(87, 19, tz, S.go, { t: 2, j: 0 });
+    }
+    fillB(87, 17, 1, 88, 19, 2, S.steelDk, { j: 0.02 });
+    fillB(87, 17, 13, 88, 19, 13, S.steelDk, { j: 0.02 });
+    for (const [za, zb] of [[4, 5], [7, 8], [10, 11]]) {
+      fillB(87, 17, za, 88, 19, zb, S.glassSky, { t: 1, j: 0.02 });
+      markDoor(87, 17, za, 88, 19, zb);
+    }
+    fillB(91, 17, 8, 94, 18, 8, S.steelDk, { j: 0.02 });
+    fillB(94, 17, 9, 94, 18, 10, S.steelDk, { j: 0.02 });
+    fillB(91, 19, 8, 94, 19, 8, S.quartz, { j: 0.04 });
+    V(92, 20, 8, S.screen, { t: 3, j: 0 }); V(93, 20, 8, S.screen, { t: 3, j: 0 });
+    bperson(93, 17, 10, 0x2a3a5a, 0x23262c);
+    V(95, 17, 9, 0x6fa0c8, { j: 0 });
+    { const r = mulberry(717);
+      for (let z = 0; z <= 8; z++) for (let y = 18; y <= 22; y++)
+        if (r() < 0.8) V(96, y, z, [S.canopy[0], S.canopy[1], S.fern][Math.floor(r() * 3)], { j: 0.13 }); }
+    fillB(96, 19, 3, 96, 20, 5, 0x2e6e64, { j: 0.04 });
+    V(96, 20, 4, S.cloud, { j: 0.02 }); V(96, 19, 4, S.cloud, { j: 0.02 });
+    // cafe
+    fillB(87, 17, 17, 93, 18, 17, 0x445248, { j: 0.04 });
+    fillB(87, 19, 17, 93, 19, 17, S.quartz, { j: 0.04 });
+    V(88, 20, 17, 0x2e2e30, { j: 0 }); V(89, 20, 17, 0x9aa0a6, { j: 0 });
+    for (const [kx, kc] of [[91, 0xc03028], [92, 0x40d080], [93, 0xe8cf3a]]) {
+      fillB(kx, 20, 17, kx, 21, 17, 0x9aa0a6, { j: 0.03 }); V(kx, 20, 16, kc, { j: 0 });
+    }
+    { const r = mulberry(303);
+      for (let x = 88; x <= 93; x++) if (r() < 0.72) V(x, 21, 17, [0xd8a020, 0xc03028, 0x30608a, 0x6ab04a][Math.floor(r() * 4)], { j: 0.08 }); }
+    for (const [tx, tz] of [[89, 14], [92, 14]]) {
+      V(tx, 17, tz, S.steelDk, { j: 0 }); V(tx, 18, tz, S.quartz, { j: 0.04 });
+      V(tx - 1, 17, tz, S.deckB, { j: 0.05 }); V(tx + 1, 17, tz + 1, S.deckB, { j: 0.05 });
+    }
+    clearB(91, 17, 18, 93, 20, 18);
+    fillB(91, 17, 18, 93, 20, 18, S.glassSky, { t: 1, j: 0.02 }); markDoor(91, 17, 18, 93, 20, 18);
+    for (let x = 88; x <= 96; x += 4) { V(x, 23, 2, S.lampWhite, { t: 3, j: 0 }); V(x, 23, 12, S.lampWhite, { t: 3, j: 0 }); }
+    /* ---- 6: tower floors + roof ---- */
+    bstair(16, 24, 93, 5, 1);
+    fillB(93, 17, 10, 96, 20, 11, S.spandrel, { j: 0.04 });             // seal under landing
+    bstair(24, 32, 93, 5, 1);
+    bstair(32, 40, 93, 5, 1);
+    { const r = mulberry(555);
+      for (const fy of [25, 33]) {
+        for (let z = -5; z <= 3; z += 3) for (const dxr of [[91, 92], [95, 96]]) {
+          if (fy === 25 && dxr[0] === 95 && z >= -1) continue;
+          fillB(dxr[0], fy, z, dxr[1], fy, z, S.quartz, { j: 0.04 });
+          V(dxr[0], fy, z + 1, 0x445248, { j: 0.04 });
+          if (r() < 0.7) V(dxr[1], fy + 1, z, S.screen, { t: 3, j: 0 });
+        }
+      }
+      for (const fy of [25, 33]) for (let x = 91; x <= 96; x++) for (const wz of [-7, 11])
+        if (r() < 0.55) V(x, fy + 2, wz, S.lampWarm, { t: 3, j: 0 });
+    }
+    // glass meeting box, floor 2
+    for (let x = 91; x <= 94; x++) for (let z = -6; z <= -2; z++) {
+      if (x > 91 && x < 94 && z > -6 && z < -2) continue;
+      fillB(x, 25, z, x, 27, z, S.glassSky, { t: 1, j: 0.02 });
+    }
+    clearB(92, 25, -2, 93, 27, -2);
+    fillB(92, 25, -4, 93, 25, -4, S.quartz, { j: 0.04 });
+    fillB(91, 26, -6, 92, 27, -6, 0xf0ede4, { j: 0.02 });
+    V(91, 26, -6, 0x2a2a2e, { j: 0 }); V(92, 27, -6, 0xc03028, { j: 0 });
+    clearB(90, 25, 6, 90, 28, 8); markDoor(90, 25, 6, 90, 28, 8);
+    // floor 3 exec corner
+    fillB(95, 33, -6, 96, 33, -5, S.deskWood, { j: 0.05 });
+    V(95, 34, -6, 0x9aa0a6, { j: 0 }); V(96, 33, -4, 0xf2f4f6, { j: 0 });
+    fillB(95, 35, -7, 96, 36, -7, 0x2e6e64, { j: 0.04 }); V(95, 35, -7, S.cloud, { j: 0.02 });
+    // roof
+    fillB(93, 40, 5, 97, 44, 11, S.spandrel, { j: 0.04 });
+    clearB(94, 41, 6, 96, 43, 10);
+    clearB(93, 41, 7, 93, 44, 9); markDoor(93, 41, 7, 93, 44, 9);
+    fillB(92, 45, 4, 98, 45, 12, S.steel, { j: 0.03 });
+    fillB(91, 41, -5, 93, 42, -4, 0xa8acb0, { j: 0.04 });
+    fillB(95, 41, 0, 96, 42, 1, 0xa8acb0, { j: 0.04 });
+    for (const [vx, vz] of [[91, 2], [96, -7], [94, 2]]) fillB(vx, 41, vz, vx, 42, vz, 0x808488, { j: 0.04 });
+    V(95, 46, 8, S.beacon, { t: 2, j: 0 });
+    /* ---- 7: plaza + street life ---- */
+    for (const bx of [80, 82, 84]) {
+      V(bx, 17, -9, 0x9aa0a6, { j: 0.03 }); V(bx, 18, -9, 0x9aa0a6, { j: 0.03 }); V(bx + 1, 18, -9, 0x9aa0a6, { j: 0.03 });
+    }
+    for (const [bx, bc] of [[80, 0xc03028], [82, 0x2a6ac0], [84, 0x8fd820]]) {
+      V(bx, 17, -8, bc, { j: 0.04 }); V(bx + 1, 17, -8, 0x141416, { j: 0 });
+    }
+    for (const [sx, up] of [[94, 1], [95, 1], [96, 0]]) {
+      if (up) { fillB(sx, 17, -9, sx, 17, -8, 0x2a2a2c, { j: 0.03 }); fillB(sx, 18, -9, sx, 19, -9, 0x8fd820, { j: 0.05 }); }
+      else { fillB(sx, 17, -9, sx + 1, 17, -9, 0x8fd820, { j: 0.05 }); V(sx + 1, 17, -8, 0x2a2a2c, { j: 0.03 }); }
+    }
+    // free banana stand
+    fillB(87, 17, 20, 89, 18, 21, S.cartYellow, { j: 0.06 });
+    fillB(87, 19, 20, 89, 19, 21, S.quartz, { j: 0.04 });
+    for (const bx of [87, 88, 89]) V(bx, 20, 20, S.banana, { j: 0.1 });
+    V(86, 17, 21, 0x8a6a3c, { j: 0.06 }); V(86, 18, 21, S.banana, { j: 0.1 });
+    fillB(88, 20, 20, 88, 22, 20, S.steelDk, { j: 0.02 });
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++)
+      if (!(dx && dz)) V(88 + dx, 23, 20 + dz, 0x2e6e64, { j: 0.04 });
+    bperson(88, 17, 22, 0xd8a020, 0x2a3038);
+    bperson(90, 17, 21, 0x6a5a4a, 0x3a3e46); bperson(91, 17, 22, 0x4a6a8a, 0x2a3038);
+    bperson(94, 17, 19, 0x8a5a6a, 0x23262c); V(94, 20, 18, S.banana, { j: 0.1 });
+    // topiary + benches + acorn lamps + uplights
+    for (const [px, pz] of [[92, 21], [95, 21], [84, -9]]) {
+      fillB(px, 17, pz, px + 1, 17, pz + 1, 0x5a5e64, { j: 0.04 });
+      V(px, 18, pz, S.trunk, { j: 0.06 });
+      for (let dy = 0; dy < 3; dy++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++)
+        if (!(Math.abs(dx) && Math.abs(dz) && (dy === 0 || dy === 2))) V(px + dx, 19 + dy, pz + dz, S.topiary, { j: 0.13 });
+    }
+    benchS(90, 19, true); benchS(85, 22, true);
+    acorn(78, -9); acorn(88, -9); acorn(85, 21); acorn(97, 21);
+    for (const [ux, uz] of [[81, -3], [81, 17], [90, 7], [73, 7], [79, -9], [79, 22]])
+      V(ux, 16, uz, S.lampWhite, { t: 3, j: 0 });
+  }
+  // SEATTLE-SPHERES-ANCHOR
+  /* ============ SUPPORTING CAST: CAR WASH, HOMES, BUS STOP, STREET KIT ============ */
+  {
+    const K = {
+      washPink: 0xff5a9e, washPinkDk: 0xd23c78, brushRed: 0xe03a70, pipe: 0x9aa0a6,
+      wet: 0x8e949a, drain: 0x5a6066, bubble: 0xeaf6fa, mitter: 0x4a9ad4,
+      curtain: 0x30343a, shed: 0xdcdcd4, buff: 0xc4a368, buffM: 0xb5945c,
+      cream: 0xd8cfc0, gBase: 0x3c3c40, cTan: 0x8a7a5c, dentil: 0xb8a888,
+      iron: 0x2e3236, neonRed: 0xff3040, deadNeon: 0x5a1418, darkBrick: 0x6e4436,
+      cement: 0x8a8e90, rust: 0xb0562e, olive: 0x6a7a4a, panelCream: 0xdcd8ce,
+      seam: 0x5a5e60, frame: 0x2a2e32, glass: 0x9fc6da, lit: 0xffd9a0,
+      glassDk: 0x1e242c, cedar: 0x7a5a3c, cedarDk: 0x6e5036, tCream: 0xe0d8c4,
+      green: 0x2e5444, stone: 0x8a8278, shingle: 0x6a4a34, charcoal: 0x3a3e42,
+      white: 0xe8e6e0, slat: 0x9a6a3c, slatBk: 0x2a2622, orange: 0xd45a28,
+      lime: 0x8fd820, scoot: 0x2a2a2c, led: 0xdfe8f0, rapid: 0xd42428,
+      soil: 0x4a3826, bush: 0x3f5c30, card: 0xb08a5a, tank: 0x7a5a38, hoop: 0x5a4026,
+      lampWarm: 0xffd9a0, amber: 0xffa028,
+    };
+    const rr = mulberry(9090);
+    const litOr = () => rr() < 0.6;
+    const win = (x0, y0, z0, x1, y1, z1, proudDx, proudDz) => {   // seeded lit/day window
+      const lit0 = litOr();
+      fillB(x0, y0, z0, x1, y1, z1, lit0 ? K.lit : K.glass, lit0 ? { t: 3, j: 0.02 } : { t: 1, j: 0.02 });
+    };
+    /* ==== N1: PINK ELEPHANT CAR WASH ==== */
+    fillB(28, 10, 60, 48, 10, 72, 0x9aa0a4, { j: 0.08 });               // apron + driveway
+    for (let z = 64; z <= 71; z += 2) V(46, 10, z, 0xe8c020, { j: 0.05 });
+    const bowH = { 62: 19, 63: 20, 64: 21, 65: 21, 66: 22, 67: 22, 68: 22, 69: 21, 70: 21, 71: 20, 72: 19 };
+    for (let z = 62; z <= 72; z++) {
+      const top = bowH[z];
+      for (const wx of [28, 42]) {
+        for (let y = 11; y <= top; y++) {
+          if (z >= 64 && z <= 71 && y <= 18) continue;                  // arch openings
+          V(wx, y, z, y === 11 ? K.washPink : K.shed, { j: 0.06 });
+        }
+      }
+      fillB(29, top, z, 41, top, z, K.shed, { j: 0.06 });               // bowstring roof
+      V(27, top, z, K.washPink, { t: 2, j: 0 });                        // neon crest outlines
+      V(43, top, z, K.washPink, { t: 2, j: 0 });
+    }
+    fillB(29, 11, 62, 41, 18, 62, K.shed, { j: 0.06 });                 // north wall
+    fillB(29, 11, 72, 41, 18, 72, K.shed, { j: 0.06 });                 // rear wall
+    fillB(29, 11, 62, 41, 11, 62, K.washPink, { j: 0.04 });
+    for (let x = 29; x <= 41; x++) for (let z = 64; z <= 71; z++) V(x, 10, z, (z >= 67 && z <= 68) ? K.drain : K.wet, { j: 0.06 });
+    for (const cx of [28, 42]) for (const cz of [64, 66, 68, 70]) {
+      fillB(cx, 11, cz, cx, 17, cz, K.curtain, { j: 0.03 });
+      markDoor(cx, 11, cz, cx, 17, cz);
+    }
+    for (const [dx, dc] of [[30, 0x3a6ac0], [31, 0xd23c50], [32, 0xe8c020]]) fillB(dx, 11, 63, dx, 12, 63, dc, { j: 0.04 });
+    fillB(39, 11, 63, 39, 13, 63, 0x2a2e32, { j: 0.02 }); V(39, 12, 64, K.amber, { t: 2, j: 0 });
+    for (const px of [40, 41]) {                                        // pre-soak arch
+      fillB(px, 11, 64, px, 18, 64, K.pipe, { j: 0.03 });
+      fillB(px, 11, 71, px, 18, 71, K.pipe, { j: 0.03 });
+      fillB(px, 18, 64, px, 18, 71, K.pipe, { j: 0.03 });
+    }
+    for (const bz of [65, 67, 69]) { V(40, 16, bz, K.bubble, { t: 1, j: 0.02 }); V(41, 17, bz + 1, K.bubble, { t: 1, j: 0.02 }); }
+    for (const [bx, bz] of [[36, 65], [38, 65], [36, 70], [38, 70]]) {   // brush stacks
+      for (let y = 11; y <= 17; y++) {
+        const c = (y >> 1) % 2 === 0 ? K.washPink : K.brushRed;
+        V(bx, y, bz, c, { j: 0.1 }); V(bx + 1, y, bz, c, { j: 0.1 });
+        V(bx, y, bz + (bz === 65 ? 1 : -1), c, { j: 0.1 });
+      }
+    }
+    for (let z = 66; z <= 69; z++) for (const ty of [16, 17]) V(37, ty, z, (ty % 2 === 0) ? K.washPink : K.brushRed, { j: 0.1 });
+    for (const [mx, mz] of [[33, 66], [33, 68], [34, 67], [34, 69]])
+      for (let y = 15; y <= 17; y++) V(mx, y, mz, K.mitter, { j: 0.05 });
+    for (const px of [30, 31]) {                                        // rinse arch + blower
+      fillB(px, 11, 64, px, 18, 64, K.pipe, { j: 0.03 });
+      fillB(px, 11, 71, px, 18, 71, K.pipe, { j: 0.03 });
+      fillB(px, 18, 64, px, 18, 71, K.pipe, { j: 0.03 });
+    }
+    fillB(30, 18, 66, 31, 18, 69, 0x6a6e72, { j: 0.04 });
+    { const r = mulberry(64);
+      for (let i = 0; i < 25; i++) {
+        const bx = 33 + Math.floor(r() * 7), by = 11 + Math.floor(r() * 8), bz = 64 + Math.floor(r() * 8);
+        if (r() < 0.3) V(bx, by, bz, K.bubble, { t: 1, j: 0.02 });
+      }
+      for (const [bx, by, bz] of [[42, 19, 66], [43, 20, 68], [44, 22, 67], [43, 21, 70], [42, 20, 64]])
+        V(bx, by, bz, K.bubble, { t: 1, j: 0.02 }); }
+    for (const lz of [66, 69]) for (let lx = 30; lx <= 40; lx += 5) V(lx, 19, lz, K.led, { t: 3, j: 0 });
+    sign('WASH', 28, 17, 61, 1, 0xffffff, 2);
+    for (let x = 28; x <= 43; x++) { V(x, 16, 61, K.washPink, { t: 2, j: 0 }); V(x, 20, 61, K.washPink, { t: 2, j: 0 }); }
+    // the elephant sign
+    fillB(40, 11, 60, 41, 26, 61, 0x8a8e94, { j: 0.03 });
+    fillB(33, 29, 60, 41, 34, 60, K.washPink, { t: 2, j: 0 });          // body
+    clearB(33, 29, 60, 33, 29, 60); clearB(41, 34, 60, 41, 34, 60);
+    fillB(30, 30, 60, 33, 34, 60, K.washPink, { t: 2, j: 0 });          // head
+    fillB(33, 31, 60, 35, 33, 60, K.washPinkDk, { t: 2, j: 0 });        // ear
+    for (const [tx, ty] of [[31, 31], [30, 31], [29, 32], [29, 33], [30, 34]]) V(tx, ty, 60, K.washPink, { t: 2, j: 0 });
+    V(31, 33, 60, 0x2a1420, { t: 0, j: 0 });
+    V(31, 30, 60, 0xfff4f8, { t: 2, j: 0 });
+    fillB(34, 27, 60, 35, 28, 60, K.washPink, { t: 2, j: 0 });
+    fillB(38, 27, 60, 39, 28, 60, K.washPink, { t: 2, j: 0 });
+    V(42, 31, 60, K.washPink, { t: 2, j: 0 });
+    V(41, 36, 60, K.washPink, { t: 2, j: 0 });
+    V(30, 36, 60, 0xffffff, { t: 2, j: 0 }); V(40, 37, 60, 0xffffff, { t: 2, j: 0 }); V(35, 26, 60, 0xffffff, { t: 2, j: 0 });
+    // vacuum, attendant, the freshly washed tesla
+    for (const vx of [30, 31]) { fillB(vx, 11, 60, vx, 13, 60, K.scoot, { j: 0.03 }); }
+    V(30, 12, 61, 0x4a4a52, { j: 0.03 });
+    bperson(44, 11, 66, 0xff7ab0, 0x2a3038); V(45, 13, 66, K.pipe, { j: 0 }); V(45, 14, 66, K.bubble, { t: 1, j: 0 });
+    teslaS(16, 65, 10, 0xb01c28, false);
+    for (const [px, pz] of [[26, 66], [25, 69], [23, 67], [22, 70]]) V(px, 11, pz, K.bubble, { t: 1, j: 0.02 });
+    /* ==== N2: BELLTOWN FLATS ==== */
+    for (let y = 11; y <= 34; y++) {
+      const c = (y % 3 === 0) ? K.buffM : K.buff;
+      fillB(70, y, 59, 85, y, 59, y === 11 ? K.gBase : c, { j: 0.07 });
+      fillB(70, y, 72, 85, y, 72, c, { j: 0.07 });
+      fillB(70, y, 60, 70, y, 71, c, { j: 0.07 });
+      fillB(85, y, 60, 85, y, 71, c, { j: 0.07 });
+    }
+    for (const sy of [10, 18, 26]) fillB(71, sy, 60, 84, sy, 71, (sy === 10) ? 0xe8e8e2 : 0xa87848, { j: 0.05 });
+    fillB(70, 34, 59, 85, 34, 72, 0x8c8c90, { j: 0.05 });
+    for (const by of [18, 26]) fillB(70, by, 58, 85, by, 58, K.cream, { j: 0.04 });
+    for (let x = 70; x <= 85; x += 2) V(x, 33, 58, K.dentil, { j: 0.04 });
+    fillB(70, 34, 58, 85, 35, 58, K.cTan, { j: 0.05 });
+    fillB(70, 36, 57, 85, 36, 59, K.cTan, { j: 0.05 });
+    fillB(70, 35, 72, 85, 36, 72, K.buff, { j: 0.07 });
+    // entry + bays + windows
+    clearB(76, 11, 59, 79, 15, 59);
+    fillB(76, 11, 59, 79, 14, 59, 0x45291a, { j: 0.05 }); markDoor(76, 11, 59, 79, 14, 59);
+    fillB(77, 11, 59, 77, 14, 59, 0x331d10, { j: 0.04 });
+    V(76, 12, 58, 0xc9a227, { t: 2, j: 0 }); V(79, 12, 58, 0xc9a227, { t: 2, j: 0 });
+    fillB(76, 15, 59, 79, 15, 59, K.glass, { t: 1, j: 0.02 });
+    fillB(75, 11, 58, 75, 16, 58, K.cream, { j: 0.04 }); fillB(80, 11, 58, 80, 16, 58, K.cream, { j: 0.04 });
+    fillB(74, 17, 57, 81, 17, 58, K.cream, { j: 0.04 });
+    for (const [bx0, bx1] of [[71, 75], [80, 84]]) {                    // projecting bays
+      for (let y = 19; y <= 32; y++) fillB(bx0, y, 58, bx1, y, 58, (y % 3 === 0) ? K.buffM : K.buff, { j: 0.07 });
+      for (const wy of [20, 28]) {
+        clearB(bx0 + 1, wy, 58, bx1 - 1, wy + 3, 58);
+        win(bx0 + 1, wy, 58, bx1 - 1, wy + 3, 58);
+        V(bx0 + 1 + 1, wy + 1, 58, 0x2b2724, { j: 0 });
+      }
+      fillB(bx0, 33, 58, bx1, 33, 58, 0x4a6a5c, { j: 0.04 });
+      fillB(bx0, 19, 57, bx0, 32, 57, K.cream, { j: 0.04 }); fillB(bx1, 19, 57, bx1, 32, 57, K.cream, { j: 0.04 });
+    }
+    for (const [wx0, wx1] of [[72, 74], [81, 83]]) {                    // ground windows
+      clearB(wx0, 12, 59, wx1, 15, 59);
+      win(wx0, 12, 59, wx1, 15, 59);
+      fillB(wx0 - 1, 11, 58, wx1 + 1, 11, 58, K.cream, { j: 0.04 });
+      fillB(wx0 - 1, 16, 58, wx1 + 1, 16, 58, K.cream, { j: 0.04 }); V((wx0 + wx1) >> 1, 17, 58, K.cream, { j: 0.04 });
+    }
+    for (const wy of [20, 28]) { clearB(77, wy, 59, 78, wy + 3, 59); win(77, wy, 59, 78, wy + 3, 59); }
+    // fire escape + RENT
+    for (const fy of [19, 27]) {
+      fillB(70, fy, 56, 75, fy, 57, 0x3a3e42, { j: 0.02 });
+      for (let x = 70; x <= 75; x += 2) V(x, fy + 1, 56, K.iron, { j: 0.02 });
+    }
+    for (const [lx, ly] of [[75, 20], [74, 22], [73, 24], [72, 26]]) V(lx, ly, 57, K.iron, { j: 0.02 });
+    fillB(71, 16, 57, 71, 17, 57, K.iron, { j: 0.02 });
+    for (const px of [[70, 71], [84, 85]]) fillB(px[0], 37, 58, px[1], 41, 59, K.iron, { j: 0.02 });
+    sign('R', 70, 38, 58, 1, K.neonRed, 2);
+    sign('E', 74, 38, 58, 1, K.deadNeon, 0);
+    sign('N', 78, 38, 58, 1, K.neonRed, 2);
+    sign('T', 83, 38, 58, 1, K.neonRed, 2);
+    fillB(70, 41, 58, 85, 41, 58, K.iron, { j: 0.02 });
+    for (const [fz, fy] of [[63, 21], [68, 21], [63, 29], [68, 29]]) {
+      clearB(70, fy, fz, 70, fy + 2, fz + 1); win(70, fy, fz, 70, fy + 2, fz + 1);
+      clearB(85, fy, fz, 85, fy + 2, fz + 1); win(85, fy, fz, 85, fy + 2, fz + 1);
+    }
+    fillB(86, 11, 58, 86, 14, 59, K.buff, { j: 0.07 });                 // alley seal
+    V(86, 11, 57, 0x2e3b32, { j: 0.03 }); V(86, 12, 57, 0x17171a, { j: 0 }); V(85, 11, 56, 0x17171a, { j: 0 });
+    // lobby
+    for (let x = 74; x <= 81; x++) for (let z = 60; z <= 66; z++) V(x, 10, z, ((x + z) % 2 === 0) ? 0xe8e8e2 : 0x3c4248, { j: 0.04 });
+    fillB(74, 13, 61, 74, 14, 63, 0xc9a227, { t: 2, j: 0 });
+    fillB(81, 13, 61, 81, 14, 62, 0x2f4858, { j: 0.04 });
+    V(81, 11, 65, 0x8a4030, { j: 0.05 }); fillB(81, 12, 65, 81, 13, 65, 0x3a7a4a, { j: 0.14 });
+    V(75, 16, 62, K.lampWarm, { t: 3, j: 0 }); V(79, 16, 65, K.lampWarm, { t: 3, j: 0 });
+    bstair(10, 18, 77, 65, 1);
+    fillB(77, 11, 70, 80, 14, 71, K.buff, { j: 0.06 });                 // seal under landing
+    bstair(18, 26, 77, 65, 1);
+    // floor 2 flat
+    for (let x = 71; x <= 76; x++) for (let z = 60; z <= 71; z++) V(x, 18, z, ((x + (z >> 2)) % 2 === 0) ? 0xa87848 : 0x95673b, { j: 0.05 });
+    fillB(72, 19, 62, 74, 19, 64, 0x2f4858, { j: 0.04 });
+    fillB(72, 19, 66, 74, 20, 67, 0x8a5c44, { j: 0.05 });
+    V(72, 21, 66, 0xc9a227, { j: 0 }); V(74, 21, 67, 0x8e3a3a, { j: 0 });
+    V(75, 20, 67, 0xd8943a, { j: 0.05 }); V(75, 20, 66, 0xb87828, { j: 0.05 });
+    { const r = mulberry(1912);
+      for (const sy of [19, 21, 23]) for (let z = 61; z <= 63; z++)
+        if (r() < 0.78) V(71, sy, z, [0xc03028, 0x30608a, 0xe8d05a, 0x6ab04a, 0x8a4a30, 0x5a3a72, 0xd8d0b8][Math.floor(r() * 7)], { j: 0.1 }); }
+    V(72, 19, 60, K.iron, { j: 0 }); V(72, 20, 60, K.lampWarm, { t: 3, j: 0 });
+    fillB(71, 19, 69, 72, 20, 71, 0x5a6e5a, { j: 0.04 }); fillB(71, 21, 69, 72, 21, 71, 0xd9d4c8, { j: 0.03 });
+    // floor 3 bedroom
+    for (let x = 71; x <= 76; x++) for (let z = 60; z <= 71; z++) V(x, 26, z, ((x + (z >> 2)) % 2 === 0) ? 0xa87848 : 0x95673b, { j: 0.05 });
+    fillB(72, 27, 61, 74, 27, 64, 0x5a6e8a, { j: 0.04 });
+    V(72, 27, 61, 0xf0f0e8, { j: 0 }); V(73, 27, 61, 0xf0f0e8, { j: 0 });
+    fillB(71, 27, 66, 72, 28, 67, 0x8a5c44, { j: 0.05 }); V(71, 29, 66, K.lampWarm, { t: 3, j: 0 });
+    V(75, 27, 69, 0x4a7aa0, { j: 0.03 });
+    // roof
+    fillB(77, 34, 66, 80, 38, 71, K.buff, { j: 0.06 });
+    fillB(76, 39, 65, 81, 39, 72, 0x8c8c90, { j: 0.05 });
+    V(78, 35, 66, 0x45291a, { j: 0.04 }); V(79, 35, 66, 0x45291a, { j: 0.04 });
+    fillB(73, 35, 62, 73, 36, 62, 0x808488, { j: 0.04 }); fillB(83, 35, 69, 83, 37, 69, 0x808488, { j: 0.04 });
+    fillB(71, 35, 68, 73, 35, 69, 0xa8acb0, { j: 0.04 });
+    pigeon(72, 42, 58); pigeon(80, 42, 58);
+    /* ==== N3: OK COFFEE 5-OVER-1 ==== */
+    for (let y = 11; y <= 42; y++) {
+      const pod = y <= 18;
+      const face = (x, isRust) => pod ? ((y === 11) ? K.gBase : (y % 3 === 0) ? 0x5e3a2e : K.darkBrick)
+        : [18, 26, 34].includes(y) ? K.seam
+        : isRust ? K.rust : K.cement;
+      for (let x = 87; x <= 95; x++) {
+        V(x, y, 58, face(x, x >= 88 && x <= 90), { j: pod ? 0.07 : 0.03 });
+        V(x, y, 70, pod ? ((y % 3 === 0) ? 0x5e3a2e : K.darkBrick) : (y % 8 < 4 ? K.panelCream : K.olive), { j: pod ? 0.07 : 0.03 });
+      }
+      for (let z = 59; z <= 69; z++) {
+        V(87, y, z, pod ? ((y % 3 === 0) ? 0x5e3a2e : K.darkBrick) : K.panelCream, { j: pod ? 0.07 : 0.03 });
+        V(95, y, z, pod ? ((y % 3 === 0) ? 0x5e3a2e : K.darkBrick) : (z >= 62 && z <= 66 ? K.olive : K.panelCream), { j: pod ? 0.07 : 0.03 });
+      }
+    }
+    for (const sy of [10, 18, 26, 34]) fillB(88, sy, 59, 94, sy, 69, sy === 10 ? 0x9a9a94 : 0xd8d4cc, { j: 0.04 });
+    fillB(87, 42, 58, 95, 42, 70, 0x8e8a80, { j: 0.04 });
+    fillB(87, 43, 58, 95, 44, 58, K.iron, { j: 0.02 });
+    for (const pz of [58, 70]) fillB(87, 43, pz, 95, 43, pz, K.iron, { j: 0.02 });
+    for (const px of [87, 95]) fillB(px, 43, 58, px, 43, 70, K.iron, { j: 0.02 });
+    // storefront + door + OK sign
+    fillB(88, 12, 58, 91, 12, 58, K.frame, { j: 0.02 });
+    clearB(88, 13, 58, 91, 16, 58);
+    fillB(88, 13, 58, 91, 16, 58, K.glass, { t: 1, j: 0.02 });
+    fillB(89, 13, 58, 89, 16, 58, K.frame, { j: 0.02 });
+    clearB(93, 11, 58, 94, 14, 58);
+    fillB(93, 11, 58, 94, 14, 58, K.glass, { t: 1, j: 0.02 }); markDoor(93, 11, 58, 94, 14, 58);
+    fillB(88, 17, 58, 95, 19, 58, 0x2a2420, { j: 0.02 });
+    sign('OK', 88, 17, 57, 1, 0xfff4e0, 3);
+    for (const wy of [20, 28, 36]) for (const [wx0, wx1] of [[88, 90], [92, 94]]) {
+      clearB(wx0, wy, 58, wx1, wy + 3, 58);
+      win(wx0, wy, 58, wx1, wy + 3, 58);
+      fillB(wx0 - 1, wy, 57, wx0 - 1, wy + 3, 57, K.frame, { j: 0.02 });
+    }
+    // SOLD vertical blade
+    fillB(87, 21, 57, 91, 41, 57, K.frame, { j: 0.02 });
+    sign('S', 88, 37, 56, 1, 0xff8c50, 3); sign('O', 88, 32, 56, 1, 0xff8c50, 3);
+    sign('L', 88, 27, 56, 1, 0xff8c50, 3); sign('D', 88, 22, 56, 1, 0xff8c50, 3);
+    // lobby: the package mountain + fake elevator
+    { const r = mulberry(2020);
+      for (let i = 0; i < 6; i++) V(92 + Math.floor(r() * 3), 11 + Math.floor(r() * 2), 60 + Math.floor(r() * 3), K.card, { j: 0.08 }); }
+    V(93, 12, 61, 0xc03028, { j: 0 });
+    fillB(94, 12, 64, 94, 15, 65, 0x9aa0a6, { j: 0.02 }); V(94, 13, 66, K.amber, { t: 2, j: 0 });
+    V(92, 16, 62, 0xfff4e0, { t: 3, j: 0 });
+    // coffee shop
+    fillB(88, 11, 60, 89, 12, 62, 0x9a6a3a, { j: 0.05 });
+    V(88, 13, 60, 0x2a2a2e, { j: 0 }); V(88, 14, 60, K.bubble, { t: 1, j: 0 });
+    fillB(89, 13, 61, 89, 14, 62, K.glass, { t: 1, j: 0.02 });
+    V(89, 13, 61, 0xc08a4a, { j: 0 }); V(89, 13, 62, 0xe8c8a0, { j: 0 });
+    { const r = mulberry(808);
+      for (const sy of [12, 14]) for (let z = 59; z <= 62; z++)
+        if (r() < 0.72) V(87, sy, z, [0xd8a020, 0xc03028, 0x30608a, 0x6ab04a][Math.floor(r() * 4)], { j: 0.08 }); }
+    fillB(90, 13, 59, 91, 15, 59, 0x2a2420, { j: 0.02 });
+    for (const [mx, my] of [[90, 14], [91, 13], [90, 13]]) V(mx, my, 60, 0xe8e0cc, { j: 0 });
+    V(91, 11, 62, K.frame, { j: 0 }); V(91, 12, 62, 0xd8d4cc, { j: 0.03 });
+    bperson(91, 11, 60, 0x4a5a6a, 0x2a3038); V(91, 13, 61, 0xd0d4d8, { j: 0 });
+    V(88, 13, 63, K.bubble, { t: 1, j: 0 }); V(88, 13, 64, 0xc9a227, { t: 2, j: 0 });
+    V(90, 16, 61, K.lampWarm, { t: 3, j: 0 }); V(92, 16, 60, K.lampWarm, { t: 3, j: 0 });
+    // stairs + floor 2 unit + roof deck + tank
+    bstair(10, 18, 88, 63, 1);
+    fillB(88, 11, 68, 91, 14, 69, K.cement, { j: 0.03 });
+    bstair(18, 26, 88, 63, 1); bstair(26, 34, 88, 63, 1);
+    fillB(92, 19, 60, 94, 19, 62, 0x6a6e72, { j: 0.04 });
+    fillB(95, 20, 63, 95, 21, 64, 0x16181a, { j: 0 });
+    V(92, 19, 59, 0x8a4030, { j: 0.05 }); fillB(92, 20, 59, 92, 21, 59, 0x3a7a4a, { j: 0.14 });
+    for (const [bx, bz] of [[93, 66], [92, 67], [94, 67]]) V(bx, 19, bz, K.card, { j: 0.08 });
+    fillB(92, 27, 60, 94, 27, 62, 0x5a6e8a, { j: 0.04 });
+    V(93, 33, 64, 0xfff4e0, { t: 3, j: 0 });
+    for (let x = 88; x <= 94; x++) for (let z = 60; z <= 66; z++) V(x, 42, z, (((x >> 1) + z) % 2 === 0) ? 0x8a6038 : 0x7a5430, { j: 0.05 });
+    bstair(34, 42, 88, 63, 1);
+    fillB(88, 42, 59, 91, 46, 63, K.cement, { j: 0.03 });
+    fillB(87, 47, 58, 92, 47, 64, 0x8c8c90, { j: 0.04 });
+    clearB(90, 43, 63, 91, 45, 63); markDoor(90, 43, 63, 91, 45, 63);
+    for (const [px, pz] of [[89, 61], [94, 66]]) fillB(px, 43, pz, px, 45, pz, K.iron, { j: 0.02 });
+    for (let x = 89; x <= 94; x++) {
+      const sag = 45 - Math.round(Math.sin((x - 89) / 5 * Math.PI) * 1.1);
+      V(x, sag, 64, 0x2a2a2c, { j: 0 });
+      if (x % 3 === 1) V(x, sag - 1, 64, K.amber, { t: 3, j: 0 });
+    }
+    fillB(92, 43, 66, 92, 44, 66, 0xc05a3a, { j: 0.05 });
+    for (const [lx, lz] of [[92, 69], [95, 69], [92, 66], [95, 66]]) fillB(lx, 43, lz, lx, 45, lz, 0x4a3a28, { j: 0.05 });
+    for (let y = 46; y <= 49; y++) fillB(92, y, 66, 95, y, 69, (y === 47 || y === 49) ? K.hoop : K.tank, { j: 0.05 });
+    fillB(93, 50, 67, 94, 50, 68, 0x55585e, { j: 0.03 }); V(93, 51, 67, 0x55585e, { j: 0.03 });
+    V(94, 52, 68, 0x1a1a1e, { j: 0 }); V(94, 53, 68, 0x1a1a1e, { j: 0 });
+    /* ==== N4: CRAFTSMAN BUNGALOW ==== */
+    for (let y = 17; y <= 24; y++) {
+      const c = (y % 2 === 0) ? K.cedarDk : K.cedar;
+      fillB(83, y, -33, 92, y, -33, c, { j: 0.06 });
+      fillB(83, y, -23, 92, y, -23, c, { j: 0.06 });
+      fillB(83, y, -32, 83, y, -24, c, { j: 0.06 });
+      fillB(92, y, -32, 92, y, -24, c, { j: 0.06 });
+    }
+    for (const [cx, cz] of [[83, -33], [92, -33], [83, -23], [92, -23]])
+      fillB(cx, 17, cz, cx, 24, cz, K.tCream, { j: 0.04 });
+    fillB(84, 16, -32, 91, 16, -24, 0xa87848, { j: 0.05 });
+    const gable = { [-34]: 24, [-33]: 24, [-32]: 25, [-31]: 25, [-30]: 26, [-29]: 27, [-28]: 27, [-27]: 27, [-26]: 26, [-25]: 25, [-24]: 25, [-23]: 24, [-22]: 24 };
+    for (let z = -34; z <= -22; z++) fillB(82, gable[z], z, 93, gable[z], z, K.shingle, { j: 0.08 });
+    for (let z = -33; z <= -23; z++) for (let y = 25; y < gable[z]; y++) {
+      V(83, y, z, (y % 2 === 0) ? K.cedarDk : K.cedar, { j: 0.06 });
+      V(92, y, z, (y % 2 === 0) ? K.cedarDk : K.cedar, { j: 0.06 });
+    }
+    fillB(83, 25, -29, 83, 26, -28, K.glass, { t: 1, j: 0.02 });
+    for (let x = 84; x <= 92; x += 3) V(x, 23, -34, K.cedarDk, { j: 0.05 });
+    // porch
+    fillB(80, 17, -32, 82, 17, -24, 0x8a6038, { j: 0.06 });
+    for (const pz of [[-32, -31], [-25, -24]]) {
+      fillB(80, 17, pz[0], 81, 18, pz[1], K.stone, { j: 0.09 });
+      fillB(80, 19, pz[0], 80, 22, pz[0], K.cedar, { j: 0.05 });
+      V(80, 23, pz[0], K.tCream, { j: 0.04 });
+    }
+    fillB(80, 23, -32, 82, 23, -24, K.shingle, { j: 0.08 });
+    for (let z = -30; z <= -26; z += 2) V(80, 19, z, K.tCream, { j: 0.04 });
+    fillB(81, 19, -25, 82, 19, -25, 0x8a6038, { j: 0.05 });
+    V(81, 21, -25, 0x2a2a2c, { j: 0 });
+    V(81, 18, -27, 0xd8943a, { j: 0.05 }); V(81, 18, -26, 0xb87828, { j: 0.05 });
+    V(83, 21, -31, K.lampWarm, { t: 3, j: 0 });
+    clearB(83, 17, -29, 83, 20, -28);
+    fillB(83, 17, -29, 83, 19, -28, 0x5a3a22, { j: 0.04 }); markDoor(83, 17, -29, 83, 20, -28);
+    V(83, 19, -29, K.glass, { t: 1, j: 0.02 }); V(84, 18, -28, 0xc9a227, { t: 2, j: 0 });
+    for (const wz of [[-32, -30], [-26, -24]]) {
+      clearB(83, 18, wz[0], 83, 21, wz[1]);
+      win(83, 18, wz[0], 83, 21, wz[1]);
+      V(83, 21, wz[0], 0x2b2724, { j: 0 }); V(83, 21, wz[1], 0x2b2724, { j: 0 });
+    }
+    for (const [wx0, wx1] of [[85, 87], [89, 91]]) {
+      clearB(wx0, 18, -33, wx1, 20, -33); win(wx0, 18, -33, wx1, 20, -33);
+      clearB(wx0, 18, -23, wx1, 20, -23); win(wx0, 18, -23, wx1, 20, -23);
+    }
+    fillB(88, 16, -34, 89, 29, -33, K.stone, { j: 0.09 });
+    fillB(88, 30, -34, 89, 30, -33, 0x5e3424, { j: 0.04 });
+    V(88, 31, -33, 0xb06a3c, { j: 0.05 });
+    // interior: fireplace, kitchen with pie, telescope bedroom
+    fillB(85, 17, -32, 86, 19, -32, 0x8a4d3a, { j: 0.06 });
+    V(85, 17, -31, 0x1a1414, { j: 0 }); V(85, 17, -31, K.amber, { t: 2, j: 0 });
+    fillB(84, 17, -30, 87, 17, -28, 0x7a3040, { j: 0.05 });
+    fillB(84, 17, -27, 86, 18, -27, 0x8a5c44, { j: 0.05 });
+    V(87, 17, -32, 0x8a5c44, { j: 0.05 }); V(87, 18, -32, 0x2a2a2e, { j: 0 });
+    fillB(89, 17, -32, 91, 18, -32, 0x5a6e5a, { j: 0.04 });
+    fillB(89, 19, -32, 91, 19, -32, 0xd9d4c8, { j: 0.03 });
+    V(90, 19, -31, 0xc08a4a, { j: 0 }); V(91, 19, -31, 0xe07818, { j: 0 });
+    V(89, 18, -30, 0xb8bcc2, { j: 0.02 }); V(89, 19, -30, 0xb8bcc2, { j: 0.02 });
+    fillB(85, 17, -26, 87, 17, -24, 0x6a4a72, { j: 0.04 });
+    V(85, 18, -24, 0xf0f0e8, { j: 0 });
+    V(90, 17, -25, K.iron, { j: 0 }); V(90, 18, -25, K.iron, { j: 0 }); V(89, 18, -26, K.glass, { t: 1, j: 0 });
+    V(91, 18, -24, K.lampWarm, { t: 3, j: 0 });
+    // garden + fence
+    { const r = mulberry(41);
+      for (const [gx0, gz0] of [[80, -34], [80, -23]]) {
+        fillB(gx0, 16, gz0, gx0 + 2, 16, gz0 + 1, K.soil, { j: 0.11 });
+        for (let x = gx0; x <= gx0 + 2; x++) if (r() < 0.55) V(x, 17, gz0 + (x % 2), [0xd86a8a, 0xe0d05a, 0xd4523a][Math.floor(r() * 3)], { j: 0.1 });
+      } }
+    fillB(93, 17, -30, 93, 17, -28, 0x9a7a4a, { j: 0.06 });
+    fillB(93, 18, -30, 93, 18, -28, 0x5f8c38, { j: 0.12 });
+    for (let x = 80; x <= 93; x += 2) fillB(x, 17, -22, x, 18, -22, K.tCream, { j: 0.05 });
+    /* ==== N5: MODERN BOX INFILL ==== */
+    for (let y = 17; y <= 23; y++) {
+      fillB(83, y, -49, 93, y, -49, K.charcoal, { j: 0.03 });
+      fillB(83, y, -39, 93, y, -39, K.charcoal, { j: 0.03 });
+      fillB(83, y, -48, 83, y, -40, K.charcoal, { j: 0.03 });
+      fillB(93, y, -48, 93, y, -40, K.charcoal, { j: 0.03 });
+    }
+    fillB(84, 16, -48, 92, 16, -40, 0x9a9a94, { j: 0.04 });
+    fillB(81, 24, -49, 93, 24, -39, K.seam, { j: 0.03 });
+    for (let y = 25; y <= 31; y++) {
+      fillB(81, y, -49, 93, y, -49, K.white, { j: 0.03 });
+      fillB(81, y, -39, 93, y, -39, K.white, { j: 0.03 });
+      fillB(81, y, -48, 81, y, -40, K.white, { j: 0.03 });
+      fillB(93, y, -48, 93, y, -40, K.white, { j: 0.03 });
+    }
+    fillB(81, 32, -49, 93, 32, -39, 0x8e8a80, { j: 0.04 });
+    for (const pz of [-49, -39]) fillB(81, 33, pz, 93, 33, pz, K.white, { j: 0.03 });
+    for (const px of [81, 93]) fillB(px, 33, -49, px, 33, -39, K.white, { j: 0.03 });
+    fillB(81, 17, -41, 81, 23, -41, K.frame, { j: 0.02 });
+    for (let z = -49; z <= -44; z += 2) for (let y = 25; y <= 31; y++) V(82, y, z, K.slat, { j: 0.06 });
+    for (let x = 81; x <= 86; x += 2) for (let y = 25; y <= 31; y++) V(x, y, -50, K.slat, { j: 0.06 });
+    clearB(83, 17, -47, 83, 23, -43);
+    fillB(83, 17, -47, 83, 23, -43, K.glassDk, { t: 1, j: 0.02 });
+    for (const mz of [-45]) fillB(83, 17, mz, 83, 23, mz, K.frame, { j: 0.02 });
+    fillB(83, 20, -47, 83, 20, -43, K.frame, { j: 0.02 });
+    clearB(85, 27, -49, 90, 29, -49);
+    win(85, 27, -49, 90, 29, -49);
+    for (const [wx, wy] of [[85, 19], [89, 27]]) {
+      clearB(wx, wy, -39, wx + 1, wy + 1, -39);
+      win(wx, wy, -39, wx + 1, wy + 1, -39);
+    }
+    clearB(83, 17, -41, 83, 20, -40);
+    fillB(83, 17, -41, 83, 20, -40, K.orange, { j: 0.03 }); markDoor(83, 17, -41, 83, 20, -40);
+    V(84, 18, -42, 0xc9a227, { t: 2, j: 0 }); V(84, 19, -42, 0xc9a227, { t: 2, j: 0 });
+    fillB(80, 16, -41, 82, 16, -40, 0x9a9a94, { j: 0.05 });
+    V(81, 24, -40, K.lampWarm, { t: 3, j: 0 }); V(81, 24, -42, K.lampWarm, { t: 3, j: 0 });
+    // interior
+    fillB(84, 17, -48, 87, 18, -48, 0x24262a, { j: 0.02 });
+    fillB(85, 17, -46, 87, 18, -46, K.white, { j: 0.02 });
+    V(85, 19, -47, K.lampWarm, { t: 3, j: 0 }); V(87, 19, -47, K.lampWarm, { t: 3, j: 0 });
+    fillB(85, 17, -44, 87, 17, -43, 0x8a5c44, { j: 0.05 });
+    V(86, 18, -44, K.white, { j: 0 }); V(86, 19, -44, K.white, { j: 0 });   // the architect's model
+    fillB(84, 17, -42, 86, 17, -41, 0x6a6e72, { j: 0.04 });
+    V(87, 17, -42, 0xefece4, { j: 0.03 });
+    fillB(88, 17, -41, 88, 18, -41, 0x16181a, { j: 0 }); fillB(88, 19, -41, 88, 22, -41, 0x3a3e42, { j: 0.02 });
+    V(88, 18, -40, K.amber, { t: 2, j: 0 });
+    V(84, 17, -45, 0x8a4030, { j: 0.05 }); fillB(84, 18, -45, 84, 19, -45, 0x3a7a4a, { j: 0.14 });
+    bstair(16, 24, 89, -48, 1);
+    fillB(89, 17, -43, 92, 20, -42, K.charcoal, { j: 0.03 });
+    fillB(84, 25, -48, 86, 25, -46, 0x5a6e8a, { j: 0.04 });
+    fillB(90, 25, -44, 91, 25, -43, 0x8a5c44, { j: 0.05 });
+    V(90, 26, -44, 0x16181a, { j: 0 });
+    V(91, 26, -43, K.card, { j: 0.08 }); V(91, 27, -43, 0x3f5c30, { j: 0.1 }); V(90, 26, -43, 0xd23c50, { j: 0 });
+    fillB(84, 25, -41, 85, 25, -40, 0xf2efe8, { j: 0.02 }); V(84, 25, -40, 0xbcd4dc, { j: 0.03 });
+    fillB(90, 33, -47, 91, 33, -46, K.glass, { t: 1, j: 0.02 });
+    fillB(84, 33, -46, 86, 33, -44, 0x1e2836, { j: 0.02 });
+    V(81, 34, -49, 0x1a1a1e, { j: 0 }); V(81, 35, -49, 0x1a1a1e, { j: 0 });
+    fillB(80, 16, -48, 82, 16, -44, 0x8e887c, { j: 0.09 });
+    V(80, 17, -47, 0x7a7d82, { j: 0.09 }); V(82, 17, -45, 0x7a7d82, { j: 0.09 });
+    for (let y = 17; y <= 20; y++) V(81, y, -48, P.bark, { j: 0.08 });
+    fillB(80, 21, -49, 82, 22, -47, 0xb0402a, { j: 0.14 });
+    for (let x = 83; x <= 93; x += 2) fillB(x, 17, -50, x, 19, -50, K.slat, { j: 0.06 });
+    for (let x = 80; x <= 93; x += 2) fillB(x, 17, -38, x, 19, -38, K.slat, { j: 0.06 });
+    /* ==== N6: BUS STOP ==== */
+    for (const [px, pz] of [[69, 36], [74, 36], [78, 36], [69, 33], [78, 33]])
+      fillB(px, 11, pz, px, 16, pz, K.frame, { j: 0.02 });
+    for (let x = 69; x <= 78; x++) for (let y = 11; y <= 14; y++)
+      if (x !== 69 && x !== 78) V(x, y, 33, x === 73 ? K.frame : K.glass, x === 73 ? { j: 0.02 } : { t: 1, j: 0.02 });
+    fillB(73, 12, 33, 74, 14, 33, K.led, { t: 3, j: 0.02 });
+    V(73, 13, 34, K.washPink, { t: 0, j: 0 }); V(74, 13, 34, K.washPink, { t: 0, j: 0 });
+    fillB(68, 17, 32, 79, 17, 37, K.glass, { t: 1, j: 0.02 });
+    for (const [ex0, ez0, ex1, ez1] of [[68, 32, 79, 32], [68, 37, 79, 37], [68, 32, 68, 37], [79, 32, 79, 37]])
+      fillB(ex0, 17, ez0, ex1, 17, ez1, K.frame, { j: 0.02 });
+    fillB(68, 14, 37, 79, 16, 37, 0x2a2420, { j: 0.02 });
+    sign('BUS', 68, 14, 38, 1, 0xfff4e0, 3);
+    fillB(75, 11, 35, 79, 17, 35, K.rapid, { t: 2, j: 0 });
+    fillB(75, 18, 35, 79, 18, 35, 0x2a2420, { j: 0.02 });
+    sign('R', 76, 13, 36, 1, 0xffffff, 2);
+    fillB(70, 12, 33, 72, 14, 33, 0x1c1e22, { j: 0.02 });
+    { const r = mulberry(11);
+      for (let x = 70; x <= 72; x++) for (const y of [12, 13]) if (r() < 0.6) V(x, y, 34, 0xe8a020, { t: 2, j: 0 }); }
+    fillB(71, 12, 35, 74, 12, 35, 0x9a7a4a, { j: 0.06 });
+    V(71, 11, 35, K.iron, { j: 0 }); V(74, 11, 35, K.iron, { j: 0 });
+    for (const [gy, gc] of [[12, 0xd45aa0], [13, 0x58c05a]]) V(69, gy, 35, gc, { j: 0 });
+    V(68, 11, 38, 0x2e3b32, { j: 0.03 }); V(68, 12, 38, 0x17171a, { j: 0 });
+    bperson(75, 11, 34, 0x4a5a6a, 0x2a3038); V(76, 13, 34, 0xcfe8ff, { t: 3, j: 0 });
+    V(72, 13, 35, 0x8a5a6a, { j: 0.04 }); V(72, 14, 35, 0x8a5a6a, { j: 0.04 }); V(72, 15, 35, 0xd9a47e, { j: 0.03 });
+    /* ==== STREET KIT ==== */
+    // scooters
+    const scoot = (x, z, up, alongZ) => {
+      const g = groundAt(x, z); if (g === undefined) return;
+      if (up) {
+        if (alongZ) { fillB(x, g + 1, z, x, g + 1, z + 1, K.scoot, { j: 0.03 }); fillB(x, g + 2, z, x, g + 3, z, K.lime, { j: 0.04 }); V(x, g + 4, z, K.scoot, { j: 0.03 }); }
+        else { fillB(x, g + 1, z, x + 1, g + 1, z, K.scoot, { j: 0.03 }); fillB(x, g + 2, z, x, g + 3, z, K.lime, { j: 0.04 }); V(x, g + 4, z, K.scoot, { j: 0.03 }); }
+      } else {
+        fillB(x, g + 1, z, x + 1, g + 1, z, K.lime, { j: 0.04 });
+        V(x + 2, g + 1, z, K.scoot, { j: 0.03 });
+      }
+    };
+    scoot(76, 38, 1, 0); scoot(77, 38, 1, 1); scoot(78, 38, 0, 0);
+    scoot(45, 53, 1, 0); scoot(46, 53, 1, 1); scoot(47, 53, 0, 0); scoot(44, 53, 1, 1);
+    scoot(31, 60, 1, 0); scoot(32, 60, 1, 1);
+    scoot(69, 54, 1, 0); scoot(70, 54, 0, 1); scoot(71, 54, 1, 0);
+    scoot(55, -12, 0, 0);                                               // the crosswalk casualty
+    // teslas: parked on 5th west curb, driving north + east
+    teslaS(60, 56, 9, 0xe8ecec, true);
+    teslaS(28, 56, 9, 0x16181a, true);
+    teslaS(18, 47, 9, 0x2a4a7a, true);
+    teslaS(38, 45, 9, 0xb01c28, false);
+    teslaS(2, 47, 9, 0xb8bcc0, true);
+    // cobra-head street lights (grounded per local surface)
+    const cobra = (x, z, dz) => {
+      const g = groundAt(x, z); if (g === undefined) return;
+      V(x, g + 1, z, 0x3a3a3e, { j: 0.02 });
+      fillB(x, g + 2, z, x, g + 13, z, 0x8a8e94, { j: 0.03 });
+      fillB(x, g + 13, z + dz, x, g + 13, z + dz * 3, K.frame, { j: 0.02 });
+      V(x, g + 12, z + dz * 3, K.led, { t: 3, j: 0 });
+    };
+    for (const cx of [30, 44, 72, 86, 96]) cobra(cx, 57, -1);
+    for (const cx of [23, 37, 82, 93]) cobra(cx, 34, 1);
+    // bushes + hedge
+    for (const [bx, bz] of [[44, 6], [61, 26], [44, 62], [61, 48], [44, -18], [67, 4]]) {
+      const g = groundAt(bx, bz); if (g === undefined) continue;
+      fillB(bx, g + 1, bz, bx + 1, g + 2, bz + 1, K.bush, { j: 0.15 });
+      if (h3(bx, 1, bz) < 0.3) V(bx, g + 3, bz, 0xd86a8a, { j: 0.1 });
+    }
+    // street tree pits on Madison south walk + Tier B strip trees
+    for (const [tx, tz] of [[30, 54], [72, 54], [92, 54]]) {
+      const g = groundAt(tx + 1, tz + 1); if (g === undefined) continue;
+      fillB(tx, g, tz, tx + 3, g, tz + 3, K.soil, { j: 0.11 });
+      for (let x = tx - 1; x <= tx + 4; x++) for (let z = tz - 1; z <= tz + 4; z++) {
+        const edge = x === tx - 1 || x === tx + 4 || z === tz - 1 || z === tz + 4;
+        if (edge && (x + z) % 2 === 0) fillB(x, g + 1, z, x, g + 2, z, K.iron, { j: 0.02 });
+      }
+      fir(tx + 1, tz + 1, 9);
+    }
+    fir(68, 9, 14); fir(68, 21, 13);
+    // newspaper boxes
+    for (const [nx, nc] of [[84, 0xc03028], [86, 0xe8c020], [88, 0x2a4a7a]]) {
+      const g = groundAt(nx, 56); if (g === undefined) continue;
+      V(nx, g + 1, 56, 0x1c1e22, { j: 0 });
+      fillB(nx, g + 2, 56, nx, g + 3, 56, nc, { j: 0.04 });
+      V(nx, g + 3, 57, K.glass, { t: 1, j: 0.02 });
+    }
+    // vignettes: dog walker, layoff latte, jogger
+    bperson(78, 11, 55, 0xb04a3a, 0x2f4858);
+    fillB(80, 11, 55, 81, 11, 55, 0x6e4a26, { j: 0.05 });
+    V(81, 12, 55, 0x6e4a26, { j: 0.05 }); V(80, 12, 54, 0x6e4a26, { j: 0.08 });
+    fillB(82, 11, 56, 82, 12, 56, 0xb52a20, { j: 0.04 }); V(82, 13, 56, 0xb52a20, { j: 0.04 });
+    bperson(90, 11, 56, 0x2a2e36, 0x1e2228); V(90, 13, 55, K.card, { j: 0.08 }); V(90, 14, 55, 0x3f5c30, { j: 0.1 });
+    bperson(92, 11, 56, 0xe8e0cc, 0x2e5444); V(91, 13, 56, 0xe8e0cc, { j: 0 });
+    pigeon(91, 11, 55);
+    bperson(77, 17, -36, 0x58c05a, 0x2a3038);
+  }
+  // SEATTLE-FILL-ANCHOR
+  // SEATTLE-LIFE-ANCHOR
 }
+}
+
 buildWorld();
+
 /* ============================================================
    16. MESHER — face culling + baked ambient occlusion
    ============================================================ */
@@ -4562,7 +7039,8 @@ let playZMax = 54.5;    // northern world edge (extended by Tech Brooklyn / Bost
 let playXMax = 60.5;    // eastern world edge (extended by Tech Brooklyn Long / Boston)
 let playXMin = X0 + 0.5, playZMin = -55.5;
 // safe sidewalk per scene, for un-burying the player after resets
-const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5] : [21.5, 2, 17.5];
+const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
+  : sceneId === 'seattle' ? [45.5, 11, 14.5] : [21.5, 2, 17.5];
 
 // the figure: a stack of four bright-red voxels (visible to shadows
 // and when looking down; its own head is backface-culled from inside)
@@ -4865,6 +7343,16 @@ function stepPlayer(dt) {
     const ny = player.y + player.vy * h;
     if (boxFree(player.x, ny, player.z)) { player.y = ny; player.grounded = false; }
     else { if (player.vy < 0) player.grounded = true; player.vy = 0; }
+  }
+  // ride the needle elevator: feet inside the car footprint near the moving
+  // floor get carried with it (entering, riding, and being scooped gently
+  // if the car descends onto you)
+  if (elev.on && player.x >= elev.x0 && player.x <= elev.x1 + 1
+      && player.z >= elev.z0 && player.z <= elev.z1 + 1
+      && player.y >= elev.y - 1.4 && player.y <= elev.y + 1.2) {
+    player.y = elev.y;
+    if (player.vy < 0) player.vy = 0;
+    player.grounded = true;
   }
   if (player.grounded && keys.has('Space')) { player.vy = P_JUMP; player.grounded = false; }
 
@@ -5296,9 +7784,53 @@ wsConnect();
 
 // debug/automation handle (the module scope is otherwise sealed); tick()
 // steps the player sim by hand where rAF is throttled (hidden tabs, tests)
+/* ---- the Space Needle elevator: an animated car that carries players.
+       Geometry comes from buildSeattle via elevConfig; physics hooks in
+       stepPlayer snap riders' feet to the moving car floor. ---- */
+const elev = {
+  on: false, x0: 0, x1: 0, z0: 0, z1: 0, yLo: 0, yHi: 0,
+  y: 0, dir: 1, dwell: 2, speed: 5.5, group: null,
+};
+function elevConfig(x0, x1, z0, z1, yLo, yHi) {
+  elev.x0 = x0; elev.x1 = x1; elev.z0 = z0; elev.z1 = z1;
+  elev.yLo = yLo; elev.yHi = yHi; elev.y = yLo; elev.dir = 1; elev.dwell = 2.5;
+  if (!elev.group) {
+    const g = new THREE.Group();
+    const w = x1 - x0 + 1, d = z1 - z0 + 1;
+    const floor = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.5, d),
+      new THREE.MeshLambertMaterial({ color: 0xc8922c }));
+    floor.position.y = -0.25;
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.4, d),
+      new THREE.MeshLambertMaterial({ color: 0xc8922c }));
+    roof.position.y = 4.3;
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.2, 4.1, d - 0.2),
+      new THREE.MeshLambertMaterial({ color: 0xcfe6ea, transparent: true, opacity: 0.24 }));
+    glass.position.y = 2.1;
+    g.add(floor, roof, glass);
+    g.visible = false;
+    scene.add(g);
+    elev.group = g;
+  }
+  elev.group.position.set((x0 + x1 + 1) / 2, yLo, (z0 + z1 + 1) / 2);
+}
+function stepElev(dt) {
+  if (!elev.on || !elev.group) return;
+  if (elev.dwell > 0) elev.dwell -= dt;
+  else {
+    elev.y += elev.dir * elev.speed * dt;
+    if (elev.y >= elev.yHi) { elev.y = elev.yHi; elev.dir = -1; elev.dwell = 3.5; }
+    else if (elev.y <= elev.yLo) { elev.y = elev.yLo; elev.dir = 1; elev.dwell = 3.5; }
+  }
+  elev.group.position.y = elev.y;
+}
+
 window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick,
-  tick: dt => stepPlayer(dt), boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
-  render: () => renderer.render(scene, activeCam), debrisCount: () => debris.length };
+  tick: dt => { stepPlayer(dt); stepElev(dt); }, boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
+  render: () => renderer.render(scene, activeCam), debrisCount: () => debris.length,
+  elev, elevConfig };
 
 /* ---- reset scene: rebuild every voxel in place (synced when online) ---- */
 function resetWorld() {
@@ -5328,7 +7860,7 @@ document.getElementById('reset').addEventListener('click', () => {
 /* ---- scene selection (synced when online) ---- */
 const sceneSel = document.getElementById('scene');
 function setSceneLocal(id) {
-  if (!['default', 'tech', 'techlong', 'boston', 'bostonlong'].includes(id)) return;
+  if (!['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle'].includes(id)) return;
   sceneSel.value = id;
   if (id === sceneId) return;
   sceneId = id;
@@ -5472,11 +8004,65 @@ const bostonLights = [
   roomLight(58, 30, 64, 60, 0xc8c0ff, 22),     // HUBB nap floor (dim violet)
   roomLight(64, 38, 62, 120),                  // HUBB exec
 ];
-interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights);
+// Seattle lights: market hall + arcade, the neon wash off the roof sign,
+// STARBUX, ferry cabin, terminal, spheres, saucer, station, marquee, grotto
+const seattleLights = [
+  roomLight(44, 66, -38, 140, 0xcfe8ff, 30),    // needle halo
+  roomLight(27, 20, -6, 120, 0xff4060, 20),     // market neon wash
+  roomLight(81, 24, 7, 130, 0xaef0d0, 22),      // dome canopy heart
+  roomLight(41, 18, 61, 100, 0xff5a9e, 16),     // elephant sign
+  roomLight(-15, 8, 45, 100, 0xffd9a0, 16),     // ferry headhouse
+  roomLight(54, 22, 16, 100, 0xfff4e0, 14),     // Westlake platform
+  roomLight(54, 14, 45, 90, 0xfff4e0, 12),      // 5th & Madison
+  roomLight(16, 8, -13, 90, 0xffd9a0, 14),      // Hillclimb base
+  roomLight(-25, 28, 39, 80, 0xffa028, 10),     // ferry stack beacon
+  roomLight(78, 19, -33, 80, 0xffd9a0, 10),     // home porches
+  roomLight(-26, 15, 42, 110, 0xfff4e0, 18),    // ferry cabin (drives the ribbon glow)
+  roomLight(-25, 7, 44, 80, 0xffd9a0, 14),      // car-deck work lights spilling out
+  roomLight(35, 15, 15, 110, 0xffd9a0, 16),     // market nave wash
+  roomLight(28, 7, 27, 90, 0xffd9a0, 12),       // Post Alley / Down Under
+  roomLight(91, 20, 3, 90, 0xfff4e0, 12),       // NIMBUS lobby spill
+  roomLight(44, 15, -31, 90, 0xffd9a0, 12),     // needle lobby spill
+  roomLight(58, 23, -40, 90, 0xffd9a0, 12),     // monorail terminal pool
+  roomLight(35, 16, 67, 90, 0xbfe0ff, 12),      // wash-tunnel glow
+  roomLight(90, 14, 57, 80, 0xffd9a0, 10),      // OK COFFEE spill
+];
+interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights, ...seattleLights);
 for (const l of techLights) l.visible = false;
 for (const l of longLights) l.visible = false;
 for (const l of bostonLights) l.visible = false;
 for (const l of bostonLongLights) l.visible = false;
+for (const l of seattleLights) l.visible = false;
+
+/* ---- Seattle rain: a quiet field of drops over the whole map ---- */
+const rainGroup = new THREE.Group();
+rainGroup.visible = false;
+scene.add(rainGroup);
+const RAIN_N = 1500, RAIN_TOP = 52, RAIN_BOT = 1;
+const rainGeo = new THREE.BufferGeometry();
+const rainPos = new Float32Array(RAIN_N * 3);
+const rainSpd = new Float32Array(RAIN_N);
+{
+  const r = mulberry(31);
+  for (let i = 0; i < RAIN_N; i++) {
+    rainPos[i * 3] = -34 + r() * 144;
+    rainPos[i * 3 + 1] = RAIN_BOT + r() * (RAIN_TOP - RAIN_BOT);
+    rainPos[i * 3 + 2] = -56 + r() * 130;
+    rainSpd[i] = 22 + r() * 12;
+  }
+}
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rainMat = new THREE.PointsMaterial({ color: 0x9fb4c8, size: 0.55, transparent: true, opacity: 0.45 });
+rainGroup.add(new THREE.Points(rainGeo, rainMat));
+function stepRain(dt) {
+  if (!rainGroup.visible) return;
+  for (let i = 0; i < RAIN_N; i++) {
+    let y = rainPos[i * 3 + 1] - rainSpd[i] * dt;
+    if (y < RAIN_BOT) y = RAIN_TOP - (RAIN_BOT - y) % (RAIN_TOP - RAIN_BOT);
+    rainPos[i * 3 + 1] = y;
+  }
+  rainGeo.attributes.position.needsUpdate = true;
+}
 
 /* ---- corpo night searchlight: follows the corpo's cursor after dark.
        The aim is broadcast, so humans see where the corpo is hunting. ---- */
@@ -5593,10 +8179,10 @@ const pitKey = () => sceneId + '/' + pitCol.value;
 const pitDummy = new THREE.Object3D();
 function worldRect() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong';
-  const bos = sceneId === 'boston', blong = sceneId === 'bostonlong';
+  const bos = sceneId === 'boston', blong = sceneId === 'bostonlong', sea = sceneId === 'seattle';
   return {
-    x0: X0, x1: long ? 152 : blong ? 142 : bos ? 90 : 60,
-    z0: -56, z1: tech ? 102 : (bos || blong) ? 74 : 54,
+    x0: X0, x1: long ? 152 : blong ? 142 : sea ? 110 : bos ? 90 : 60,
+    z0: -56, z1: tech ? 102 : (bos || blong || sea) ? 74 : 54,
   };
 }
 let rockTex = null;
@@ -5762,23 +8348,27 @@ pitCol.addEventListener('change', () => {
 
 function applySceneEnv() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong', bos = sceneId === 'boston';
-  const blong = sceneId === 'bostonlong';
-  const ext = (long || blong) ? 165 : (tech || bos) ? 135 : 95;
+  const blong = sceneId === 'bostonlong', sea = sceneId === 'seattle';
+  const ext = (long || blong || sea) ? 165 : (tech || bos) ? 135 : 95;
   sun.shadow.camera.left = -ext; sun.shadow.camera.right = ext;
   sun.shadow.camera.top = ext; sun.shadow.camera.bottom = -ext;
   sun.shadow.camera.updateProjectionMatrix();
   for (const l of techLights) l.visible = tech;
   for (const l of longLights) l.visible = long;
-  for (const l of brookLights) l.visible = !bos;
+  for (const l of brookLights) l.visible = !bos && !sea;
   for (const l of bostonLights) l.visible = bos;
   for (const l of bostonLongLights) l.visible = blong;
-  controls.maxDistance = (tech || long || bos || blong) ? 360 : 260;
-  playZMax = tech ? 101.5 : (bos || blong) ? 74.5 : 54.5;
-  playXMax = long ? 152.5 : blong ? 141.5 : bos ? 89.5 : 60.5;
+  for (const l of seattleLights) l.visible = sea;
+  rainGroup.visible = sea;
+  elev.on = sea;
+  if (elev.group) elev.group.visible = sea;
+  controls.maxDistance = (tech || long || bos || blong || sea) ? 360 : 260;
+  playZMax = tech ? 101.5 : (bos || blong || sea) ? 74.5 : 54.5;
+  playXMax = long ? 152.5 : blong ? 141.5 : sea ? 110.5 : bos ? 89.5 : 60.5;
   playXMin = X0 + 0.5;
   playZMin = -55.5;
   // the live traffic-light bulbs follow each scene's signal head
-  const [tx, tz] = bos ? [44, 31] : [51, 31];
+  const [tx, tz] = sea ? [48, 39] : bos ? [44, 31] : [51, 31];
   tlRed.position.set(tx + 0.5, 15.5, tz + 0.5);
   tlAmber.position.set(tx + 0.5, 14.5, tz + 0.5);
   tlGreen.position.set(tx + 0.5, 13.5, tz + 0.5);
@@ -5960,6 +8550,24 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'plaza',      name: 'Kettle Plaza',          scene: 'boston',     box: [8, 45, 48, 76],    walls: false },
   { id: 'tripledeck', name: 'The Triple-Decker',     scene: 'bostonlong', box: [125, 141, -10, 14], walls: true },
   { id: 'billboard',  name: 'The Roast Billboard',   scene: 'bostonlong', box: [80, 143, -36, -29], walls: false },
+  { id: 'needle',     name: 'The Space Needle',        scene: 'seattle', box: [33, 56, -50, -26],  walls: false },
+  { id: 'ngate',      name: 'Needle Park Gate',        scene: 'seattle', box: [42, 67, -28, -24],  walls: false },
+  { id: 'market',     name: 'Pike Place Market',       scene: 'seattle', box: [14, 46, -2, 31],    walls: true },
+  { id: 'gumwall',    name: 'Post Alley Gum Wall',     scene: 'seattle', box: [19, 35, 23, 31],    walls: false },
+  { id: 'terminal',   name: 'The Ferry Terminal',      scene: 'seattle', box: [-33, -5, 19, 67],   walls: true },
+  { id: 'ferry',      name: 'MV LAYOFF',               scene: 'seattle', box: [-33, -17, 19, 64],  walls: true },
+  { id: 'westlake',   name: 'Westlake Monorail Stn',   scene: 'seattle', box: [42, 67, 2, 28],     walls: false },
+  { id: 'needleterm', name: 'Needle Monorail Term',    scene: 'seattle', box: [50, 63, -47, -33],  walls: false },
+  { id: 'spheres',    name: 'The NIMBUS Spheres',      scene: 'seattle', box: [72, 98, -10, 23],   walls: false },
+  { id: 'corpogate',  name: 'The CORPO Gate',          scene: 'seattle', box: [75, 98, -11, -8],   walls: false },
+  { id: 'banana',     name: 'Free Banana Stand',       scene: 'seattle', box: [85, 91, 19, 23],    walls: false },
+  { id: 'carwash',    name: 'Pink Elephant Car Wash',  scene: 'seattle', box: [21, 45, 59, 72],    walls: true },
+  { id: 'belltown',   name: 'Belltown Flats',          scene: 'seattle', box: [69, 86, 56, 72],    walls: true },
+  { id: 'okcoffee',   name: 'OK COFFEE 5-over-1',      scene: 'seattle', box: [86, 96, 56, 70],    walls: true },
+  { id: 'craftsman',  name: 'Craftsman Bungalow',      scene: 'seattle', box: [79, 94, -35, -21],  walls: true },
+  { id: 'modernbox',  name: 'Modern Box Infill',       scene: 'seattle', box: [79, 94, -51, -37],  walls: true },
+  { id: 'busstop',    name: 'Bus Stop (no bus)',       scene: 'seattle', box: [66, 81, 32, 39],    walls: false },
+  { id: 'lighthouse', name: 'The Lighthouse',          scene: 'seattle', box: [-33, -26, 66, 73],  walls: false },
 ];
 const sideBox = {
   n: document.getElementById('side-n'), s: document.getElementById('side-s'),
@@ -6059,7 +8667,7 @@ if (CATALOG) {
   controls.autoRotate = true;
   controls.autoRotateSpeed = 1.1;
   const listEl = document.getElementById('cat-list');
-  const SCENE_LABEL = { default: 'BROOKLYN', tech: 'TECH BROOKLYN', boston: 'BOSTON', bostonlong: 'BOSTON LONG' };
+  const SCENE_LABEL = { default: 'BROOKLYN', tech: 'TECH BROOKLYN', boston: 'BOSTON', bostonlong: 'BOSTON LONG', seattle: 'SEATTLE' };
   let lastScene = null;
   for (const it of CAT_ITEMS) {
     if (it.scene !== lastScene) {
@@ -6101,6 +8709,8 @@ renderer.setAnimationLoop(() => {
   stepNet(dt);
   stepSpot(dt);
   stepPit();
+  stepRain(dt);
+  stepElev(dt);
 
   if (playBox.checked) {
     let t = +slider.value + dt * 90; // ~16 s per full day

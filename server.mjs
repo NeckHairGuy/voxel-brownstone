@@ -142,6 +142,8 @@ const SPAWNS = {
   boston: [[10.5, 2, 17.5], [64.5, 2, 17.5], [36.5, 2, 50.5], [-14.5, 2, 50.5]],
   bostonlong: [[21.5, 2, 17.5], [44.5, 2, 18.5], [80.5, 2, 17.5], [102.5, 2, 17.5],
                [134.5, 2, 17.5], [13.5, 2, 58.5], [72.5, 2, 58.5], [118.5, 2, 58.5]],
+  seattle: [[-12.5, 3, 60.5], [-2.5, 3, 10.5], [45.5, 11, 14.5], [17.5, 3, -13.5],
+            [56.5, 11, -28.5], [78.5, 17, 6.5], [46.5, 11, 54.5], [78.5, 17, -30.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -297,7 +299,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
         console.log(`scene -> ${scene} by ${p.name}`);
