@@ -9006,6 +9006,19 @@ function pkBuild(u) {
     star.rotation.z = Math.PI / 4;
     g.add(disc, star);
   }
+  // small rotating label over the drop (plane, not sprite — it spins with the prize)
+  const cnv = document.createElement('canvas');
+  cnv.width = 256; cnv.height = 48;
+  const ctx = cnv.getContext('2d');
+  ctx.font = '16px "Press Start 2P", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = u.kind === 'tshirt' ? '#ffd724' : '#66f0ff';
+  ctx.fillText(u.kind === 'tshirt' ? 'FREE TSHIRT!' : 'FREE STICKER!', 128, 26);
+  const label = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.2, 0.6),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cnv), transparent: true, side: THREE.DoubleSide }));
+  label.position.y = 1.5;
+  g.add(label);
   const halo = new THREE.PointLight(u.kind === 'tshirt' ? 0xffe8b0 : 0x66f0ff, 60, 10);
   g.add(halo);
   g.position.set(u.x, u.y, u.z);
