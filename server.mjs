@@ -144,6 +144,8 @@ const SPAWNS = {
                [134.5, 2, 17.5], [13.5, 2, 58.5], [72.5, 2, 58.5], [118.5, 2, 58.5]],
   seattle: [[-12.5, 3, 60.5], [-2.5, 3, 10.5], [45.5, 11, 14.5], [17.5, 3, -13.5],
             [56.5, 11, -28.5], [78.5, 17, 6.5], [46.5, 11, 54.5], [78.5, 17, -30.5]],
+  seattlelong: [[-45.5, 3, -10.5], [8.5, 3, -4.5], [30.5, 3, 11.5], [44.5, 3, -11.5],
+                [80.5, 3, -4.5], [106.5, 3, -4.5], [30.5, 3, 30.5], [13.5, 3, 50.5]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -212,10 +214,20 @@ function onMessage(conn, m) {
       const humans = [...players.values()].filter(q => q.role === 'human').length;
       let role;
       if (m.want === 'corpo') {
-        if (CORPO_KEY && String(m.key || '') !== CORPO_KEY) {
+        const hasKey = CORPO_KEY !== '' && String(m.key || '') === CORPO_KEY;
+        if (CORPO_KEY && !hasKey) {
           conn.send({ t: 'denied', reason: 'the corpo seat is locked for this show' }); return;
         }
-        if (corpoTaken) { conn.send({ t: 'denied', reason: 'corpo seat is taken' }); return; }
+        if (corpoTaken) {
+          if (!hasKey) { conn.send({ t: 'denied', reason: 'corpo seat is taken' }); return; }
+          // the host link always wins: evict whoever holds the seat (ghost tabs included)
+          for (const q of [...players.values()]) if (q.role === 'corpo') {
+            console.log(`corpo seat reclaimed by host key — evicting ${q.name}`);
+            q.conn.send({ t: 'msg', text: 'the host reclaimed the corpo seat' });
+            dropConn(q.conn);
+            q.conn.socket.destroy();
+          }
+        }
         role = 'corpo';
       } else {
         if (humans >= 4) { conn.send({ t: 'denied', reason: 'all 4 human seats are full' }); return; }
@@ -299,7 +311,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
         console.log(`scene -> ${scene} by ${p.name}`);

@@ -62,7 +62,17 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   Alweg monorail runs from an END stub through Westlake to the Needle;
   plus the Pink Elephant Car Wash (walk the brush tunnel), Belltown
   walk-up with a dead-E RENT sign, OK COFFEE under a SOLD blade, two
-  furnished homes, a busless bus stop, lime scooters, teslas, and rain
+  furnished homes, a busless bus stop, lime scooters, teslas, and rain;
+  and **Seattle Long** — the show cut: one straight street with the whole
+  city on its north side (a porch-swing craftsman, the Space Needle and
+  its park with the working elevator, a glass-cornered modern box, the
+  vine-swallowed Ivy Court walk-up, the NIMBUS Spheres blown up to
+  proper scale with an indoor forest and catwalk, a 5-over-1 with a
+  VINYL shop and a burnt-out LIVE blade, and STARBUX No. 1 with siren
+  roundel, roastery mezzanine, and street parklet) and the working
+  waterfront on the south: promenade, a PUBLIC MARKET neon arch with
+  clock over the market stalls, the berthed MV LAYOFF, and a container
+  wharf under two coral port cranes — one mid-lift over the bay
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 - **The Catalogue** (`?catalog`, or the "building catalogue" button in the
