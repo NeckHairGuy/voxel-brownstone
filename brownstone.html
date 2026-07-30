@@ -270,6 +270,11 @@ if (new URLSearchParams(location.search).has('catalog'))
 #pkbox label { display: block; margin: 3px 0; }
 #pkbox button { margin: 4px 0; }
 #pkcodes { font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; user-select: text; }
+#pkslots { margin: 4px 0 2px; }
+#pkslots .pkrow { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+#pkslots .pkrow span { flex: 1; opacity: .85; }
+#pkslots .pkrow button { margin: 0; padding: 2px 8px; font-size: 11px; min-width: 58px; }
+#pkslots .pkrow.pkoff span { opacity: .35; }
 #codecard { position: fixed; left: 50%; top: 38%; transform: translate(-50%,-50%); z-index: 60;
   background: rgba(12,14,20,.94); border: 2px solid #ffd724; border-radius: 10px;
   padding: 18px 26px; text-align: center; cursor: pointer; display: none; }
@@ -396,6 +401,7 @@ if (new URLSearchParams(location.search).has('catalog'))
     <ul id="mp-list"></ul>
     <div id="pkbox">
       <label><input id="pkon" type="checkbox"> merch pickups</label>
+      <div id="pkslots"></div>
       <button id="pkrespawn">respawn pickups</button>
       <label><input id="pkreveal" type="checkbox"> reveal codes</label>
       <div id="pkcodes" style="display:none"></div>
@@ -8807,6 +8813,7 @@ function handleNet(m) {
       pkList = m.list || [];
       pkOnEl.checked = pkOn;
       pkSync();
+      pkRenderSlots();
       if (pkRevealEl.checked && net.role === 'corpo') nsend({ t: 'pickupcodes' });
       break;
     case 'pickupcode':
@@ -8998,19 +9005,27 @@ const pkMeshes = new Map();
 let pkList = [], pkOn = false, pkSpin = 0;
 function pkBuild(u) {
   const g = new THREE.Group();
+  const black = new THREE.MeshBasicMaterial({ color: 0x17171a });
+  const red = new THREE.MeshBasicMaterial({ color: 0xff2020 });
   if (u.kind === 'tshirt') {
-    const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.25), m);
-    const arms = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 0.25), m);
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.25), black);
+    const arms = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 0.25), black);
     arms.position.y = 0.35;
-    const logo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: 0xd82818 }));
-    g.add(torso, arms, logo);
+    const cuffL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.27), red);
+    cuffL.position.set(-0.95, 0.35, 0);
+    const cuffR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 0.27), red);
+    cuffR.position.set(0.95, 0.35, 0);
+    const logo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), red);
+    g.add(torso, arms, cuffL, cuffR, logo);
   } else {
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.16, 8), new THREE.MeshBasicMaterial({ color: 0x35e0e8 }));
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.16, 8), black);
     disc.rotation.x = Math.PI / 2;
-    const star = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), new THREE.MeshBasicMaterial({ color: 0xffd724 }));
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.1, 8), red);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.z = -0.05;
+    const star = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.3), red);
     star.rotation.z = Math.PI / 4;
-    g.add(disc, star);
+    g.add(disc, ring, star);
   }
   // small rotating label over the drop (plane, not sprite — it spins with the prize)
   const cnv = document.createElement('canvas');
@@ -9018,14 +9033,14 @@ function pkBuild(u) {
   const ctx = cnv.getContext('2d');
   ctx.font = '16px "Press Start 2P", monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = u.kind === 'tshirt' ? '#ffd724' : '#66f0ff';
+  ctx.fillStyle = '#ff3040';
   ctx.fillText(u.kind === 'tshirt' ? 'FREE TSHIRT!' : 'FREE STICKER!', 128, 26);
   const label = new THREE.Mesh(
     new THREE.PlaneGeometry(3.2, 0.6),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cnv), transparent: true, side: THREE.DoubleSide }));
   label.position.y = 1.5;
   g.add(label);
-  const halo = new THREE.PointLight(u.kind === 'tshirt' ? 0xffe8b0 : 0x66f0ff, 60, 10);
+  const halo = new THREE.PointLight(0xff3040, 60, 10);
   g.add(halo);
   g.position.set(u.x, u.y, u.z);
   return g;
@@ -9034,7 +9049,7 @@ function pkSync() {
   for (const [id, m] of pkMeshes) { pkGroup.remove(m); pkMeshes.delete(id); }
   if (!pkOn) return;
   for (const u of pkList) {
-    if (u.taken) continue;
+    if (u.taken || u.on === false) continue;
     const m = pkBuild(u);
     pkMeshes.set(u.id, m);
     pkGroup.add(m);
@@ -9050,10 +9065,30 @@ function stepPickups(dt) {
   }
   if (net.online && net.role === 'human' && net.alive && player.active) {
     for (const u of pkList) {
-      if (u.taken) continue;
+      if (u.taken || u.on === false) continue;
       const dx = player.x - u.x, dy = player.y + 2 - u.y, dz = player.z - u.z;
       if (dx * dx + dy * dy + dz * dz < 2.6) nsend({ t: 'pickup', id: u.id });
     }
+  }
+}
+const pkSlotsEl = document.getElementById('pkslots');
+function pkRenderSlots() {
+  pkSlotsEl.textContent = '';
+  for (const u of pkList) {
+    const row = document.createElement('div');
+    row.className = 'pkrow' + (u.on === false ? ' pkoff' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = u.on !== false;
+    cb.addEventListener('change', () => nsend({ t: 'pickupcfg', id: u.id, on: cb.checked }));
+    const lbl = document.createElement('span');
+    lbl.textContent = (u.name || 'drop ' + u.id) + (u.taken ? ' \u2713' : '');
+    const kb = document.createElement('button');
+    kb.textContent = u.kind;
+    kb.title = 'switch prize (re-rolls the code)';
+    kb.addEventListener('click', () => nsend({ t: 'pickupcfg', id: u.id, kind: u.kind === 'sticker' ? 'tshirt' : 'sticker' }));
+    row.append(cb, lbl, kb);
+    pkSlotsEl.appendChild(row);
   }
 }
 const pkBoxEl = document.getElementById('pkbox');

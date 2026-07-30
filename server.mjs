@@ -160,17 +160,20 @@ let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
   seattlelong: [
-    { kind: 'sticker', x: -39.5, y: 58.5, z: -19.5 },   // Space Needle open-air deck
-    { kind: 'sticker', x: 43.5, y: 26.5, z: -18.5 },    // crown of the big sphere
-    { kind: 'tshirt', x: 61.5, y: 13.5, z: 46.5 },      // ferry cabin, second deck
+    { kind: 'sticker', name: 'needle deck', x: -39.5, y: 58.5, z: -19.5 },
+    { kind: 'sticker', name: 'sphere crown', x: 43.5, y: 26.5, z: -18.5 },
+    { kind: 'tshirt', name: 'ferry cabin', x: 61.5, y: 13.5, z: 46.5 },
   ],
 };
 const genCode = kind => (kind === 'tshirt' ? 'TEE-' : 'STKR-') +
   Array.from({ length: 5 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
-function spawnPickups() {
-  pickups = (PICKUP_SPOTS[scene] || []).map((s, i) => ({ id: i + 1, ...s, code: genCode(s.kind), foundBy: null }));
+function spawnPickups() {   // scene defaults: every slot on, default kinds
+  pickups = (PICKUP_SPOTS[scene] || []).map((s, i) => ({ id: i + 1, ...s, on: true, code: genCode(s.kind), foundBy: null }));
 }
-const pkState = () => ({ on: pickupsOn, list: pickups.map(u => ({ id: u.id, kind: u.kind, x: u.x, y: u.y, z: u.z, taken: !!u.foundBy })) });
+function respawnCodes() {   // fresh unfound codes, keep per-slot on/kind config
+  for (const u of pickups) { u.code = genCode(u.kind); u.foundBy = null; }
+}
+const pkState = () => ({ on: pickupsOn, list: pickups.map(u => ({ id: u.id, kind: u.kind, name: u.name, x: u.x, y: u.y, z: u.z, taken: !!u.foundBy, on: u.on })) });
 
 /* ---- name filter: slurs and hate terms are refused; casual profanity is
        not our problem. Kept in sync with the copy in brownstone.html. ---- */
@@ -295,11 +298,24 @@ function onMessage(conn, m) {
         broadcast({ t: 'pickupstate', ...pkState() });
       }
       break;
-    case 'pickuprespawn': // corpo re-rolls fresh, unfound codes
+    case 'pickuprespawn': // corpo re-rolls fresh, unfound codes (keeps per-slot config)
       if (p && p.role === 'corpo') {
-        spawnPickups();
+        if (pickups.length === 0) spawnPickups(); else respawnCodes();
         broadcast({ t: 'pickupstate', ...pkState() });
         console.log('pickups respawned by ' + p.name);
+      }
+      break;
+    case 'pickupcfg': // corpo tunes one slot: on/off, sticker <-> tshirt
+      if (p && p.role === 'corpo') {
+        const u = pickups.find(q => q.id === +m.id);
+        if (!u) break;
+        if (typeof m.on === 'boolean') u.on = m.on;
+        if ((m.kind === 'sticker' || m.kind === 'tshirt') && m.kind !== u.kind) {
+          u.kind = m.kind;             // a different prize: new code, back up for grabs
+          u.code = genCode(u.kind);
+          u.foundBy = null;
+        }
+        broadcast({ t: 'pickupstate', ...pkState() });
       }
       break;
     case 'pickupcodes': // corpo-only reveal
@@ -309,7 +325,7 @@ function onMessage(conn, m) {
     case 'pickup': { // first human to reach it wins — exactly one
       if (!p || p.role !== 'human' || !p.alive || !pickupsOn) break;
       const u = pickups.find(q => q.id === +m.id);
-      if (!u || u.foundBy) break;
+      if (!u || !u.on || u.foundBy) break;
       const dd = (p.x - u.x) ** 2 + (p.y + 2 - u.y) ** 2 + (p.z - u.z) ** 2;
       if (dd > 36) break;                                  // must actually be standing there
       u.foundBy = p.name;
