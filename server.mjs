@@ -168,7 +168,7 @@ const PICKUP_SPOTS = {
   sanjose: [
     { kind: 'sticker', name: 'basilica dome', x: 61.5, y: 37, z: -23.5 },
     { kind: 'sticker', name: 'hotel roof sign', x: -30.5, y: 38.5, z: -26.5 },
-    { kind: 'tshirt', name: 'observatory dome', x: 84.5, y: 45, z: -49.5 },
+    { kind: 'tshirt', name: 'observatory dome', x: -19.5, y: 45, z: -49.5 },
   ],
   seattlelong: [
     { kind: 'sticker', name: 'needle deck', x: -39.5, y: 58.5, z: -19.5 },
