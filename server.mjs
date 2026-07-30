@@ -129,14 +129,16 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined, pk: pkState() });
+  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined, pk: pkState(), maxh: MAX_HUMANS });
 });
 
 /* ============================================================
    Game state — 1 corpo, up to 4 humans
    Humans: +1 point per second alive. Corpo: +50 per layoff.
    ============================================================ */
-const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff];
+const MAX_HUMANS = +(process.env.MAX_HUMANS || 24);
+const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff, 0x2ad4a8, 0xff7a24,
+                0x24c8ff, 0xff4fa3, 0x8fd820, 0xd0d0d8, 0xa86a32, 0x7a8cff];
 const SPAWNS = {
   default: [[21.5, 2, 17.5], [40.5, 2, 18.5], [-8.5, 2, 16.5], [13.5, 2, 50.5]],
   boston: [[10.5, 2, 17.5], [64.5, 2, 17.5], [36.5, 2, 50.5], [-14.5, 2, 50.5]],
@@ -251,7 +253,7 @@ function onMessage(conn, m) {
         }
         role = 'corpo';
       } else {
-        if (humans >= 4) { conn.send({ t: 'denied', reason: 'all 4 human seats are full' }); return; }
+        if (humans >= MAX_HUMANS) { conn.send({ t: 'denied', reason: 'all human seats are full' }); return; }
         role = 'human';
       }
       const id = nextId++;
@@ -270,9 +272,11 @@ function onMessage(conn, m) {
       break;
     }
     case 'pos':
+      // accumulated only — one combined broadcast per tick keeps the
+      // fan-out at 15 msgs/sec/conn no matter how many humans move
       if (p && p.role === 'human' && p.alive) {
         p.x = +m.x || 0; p.y = +m.y || 0; p.z = +m.z || 0; p.yaw = +m.yaw || 0;
-        broadcast({ t: 'pos', id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, conn);
+        p.moved = true;
       }
       break;
     case 'time': // the corpo's clock is authoritative for the whole lobby
@@ -391,6 +395,17 @@ function onMessage(conn, m) {
       break;
   }
 }
+
+// movement tick: every moved human's position goes out in ONE frame
+setInterval(() => {
+  const l = [];
+  for (const q of players.values())
+    if (q.role === 'human' && q.alive && q.moved) {
+      q.moved = false;
+      l.push({ id: q.id, x: q.x, y: q.y, z: q.z, yaw: q.yaw });
+    }
+  if (l.length && sockets.size) broadcast({ t: 'poss', l });
+}, 66);
 
 // survival pay: +1/sec to every living human; the once-a-second push also
 // keeps every client's scoreboard and connected head-count fresh

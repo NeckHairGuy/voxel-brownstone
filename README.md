@@ -91,7 +91,7 @@ server), the scene becomes a game. Join from the panel in the top right:
 - **Corpo** (1 seat): keeps the orbit/zoom camera, and is the only role with
   the explosion ability. Clicking a human figure **lays them off** — the figure
   goes up in flame and disappears. +50 points per layoff.
-- **Humans** (up to 4 seats): each possesses an FPV figure and earns
+- **Humans** (up to 24 seats, `MAX_HUMANS` env to change): each possesses an FPV figure and earns
   **1 point per second alive**. Laid-off humans can respawn after 10 s.
 - Everyone else spectates in the free orbit camera; the panel shows a live
   **connected head-count** so you can watch the room fill up. Connections are

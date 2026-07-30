@@ -395,7 +395,7 @@ if (new URLSearchParams(location.search).has('catalog'))
         <button id="join-human">jump in</button>
         <button id="join-corpo">join as corpo</button>
       </div>
-      <div class="help">human — survive on foot, +1 pt per second alive (4 seats) &middot;
+      <div class="help">human — survive on foot, +1 pt per second alive (24 seats) &middot;
         corpo — orbit view, tap voxels to explode, tap a human to lay them off (1 seat)</div>
     </div>
     <ul id="mp-list"></ul>
@@ -8634,6 +8634,7 @@ let diedAtLocal = 0;
 // both menus stay hidden for good; a centered card offers name + join-as-human
 const AUDIENCE = /(?:^|\/)join\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('audience');
 const HOST_KEY = new URLSearchParams(location.search).get('corpo') || '';
+let maxHumans = 24;
 let hostStandDown = false;   // set when another host tab reclaims the seat — no auto-rejoin fights
 const audJoinBtn = document.getElementById('aud-join');
 const audNameEl = document.getElementById('aud-name');
@@ -8759,6 +8760,7 @@ function handleNet(m) {
       setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
       if (m.marquee !== undefined) marqueeEl.value = m.marquee;
+      if (m.maxh) maxHumans = m.maxh;
       if (m.pk) handleNet({ t: 'pickupstate', ...m.pk });
       // the host link claims (or reclaims) the corpo seat automatically
       if (HOST_KEY && !AUDIENCE && !net.role && !hostStandDown) doJoin('corpo');
@@ -8842,6 +8844,13 @@ function handleNet(m) {
       if (r) { r.tx = m.x; r.ty = m.y; r.tz = m.z; r.tyaw = m.yaw; }
       break;
     }
+    case 'poss':
+      for (const e of m.l || []) {
+        if (e.id === net.id) continue;
+        const r = remotes.get(e.id);
+        if (r) { r.tx = e.x; r.ty = e.y; r.tz = e.z; r.tyaw = e.yaw; }
+      }
+      break;
     case 'boom':
       explode(m.x, m.y, m.z);
       break;
@@ -8915,12 +8924,12 @@ function updateRoster(list) {
   for (const [id, r] of remotes) if (!seen.has(id)) { scene.remove(r.group); remotes.delete(id); }
   // seat availability
   joinCorpoBtn.disabled = !HOST_KEY && list.some(p => p.role === 'corpo');
-  const humansFull = list.filter(p => p.role === 'human').length >= 4;
+  const humansFull = list.filter(p => p.role === 'human').length >= maxHumans;
   joinHumanBtn.disabled = humansFull;
   if (AUDIENCE && !net.role) {
     audJoinBtn.disabled = humansFull || !net.online;
     if (performance.now() > audMsgUntil)
-      audStatusEl.textContent = humansFull ? 'all 4 human seats are taken — drag to look around; a seat frees when someone leaves' : '';
+      audStatusEl.textContent = humansFull ? 'all human seats are taken — drag to look around; a seat frees when someone leaves' : '';
   }
   // scoreboard
   mpListEl.innerHTML = '';
