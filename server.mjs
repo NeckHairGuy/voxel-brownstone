@@ -144,8 +144,10 @@ const SPAWNS = {
                [134.5, 2, 17.5], [13.5, 2, 58.5], [72.5, 2, 58.5], [118.5, 2, 58.5]],
   seattle: [[-12.5, 3, 60.5], [-2.5, 3, 10.5], [45.5, 11, 14.5], [17.5, 3, -13.5],
             [56.5, 11, -28.5], [78.5, 17, 6.5], [46.5, 11, 54.5], [78.5, 17, -30.5]],
-  seattlelong: [[-45.5, 3, -10.5], [8.5, 3, -4.5], [30.5, 3, 11.5], [44.5, 3, -11.5],
-                [80.5, 3, -4.5], [106.5, 3, -4.5], [94.5, 3, 30.5], [80.5, 3, 50.5]],
+  // 4th element = spawn yaw: 0 faces north (-z), 3.14 south, -1.57 east, 1.57 west.
+  // Every Seattle Long spawn opens onto street/water/promenade — never nose-to-wall.
+  seattlelong: [[-38.5, 3, -4.5, 3.14], [8.5, 3, -4.5, 3.14], [30.5, 3, 11.5, -1.57], [43.5, 3, -4.5, 3.14],
+                [88.5, 3, -4.5, 3.14], [105.5, 3, -4.5, 3.14], [90.5, 3, 26.5, 3.14], [75.5, 3, 44.5, 3.14]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -258,12 +260,12 @@ function onMessage(conn, m) {
         id, conn, name, role, score: 0,
         alive: role === 'human', diedAt: 0,
         color: role === 'corpo' ? 0x9aa0a6 : COLORS[humans % COLORS.length],
-        x: spawn[0], y: spawn[1], z: spawn[2], yaw: 0,
+        x: spawn[0], y: spawn[1], z: spawn[2], yaw: spawn[3] || 0,
       };
       conn.player = pl;
       players.set(id, pl);
       console.log(`joined: ${name} as ${role}`);
-      conn.send({ t: 'welcome', id, role, color: pl.color, x: pl.x, y: pl.y, z: pl.z });
+      conn.send({ t: 'welcome', id, role, color: pl.color, x: pl.x, y: pl.y, z: pl.z, yaw: pl.yaw });
       pushPlayers();
       break;
     }
@@ -360,8 +362,8 @@ function onMessage(conn, m) {
       if (p && p.role === 'human' && !p.alive && Date.now() - p.diedAt >= RESPAWN_MS) {
         p.alive = true;
         const s = randomSpawn();
-        p.x = s[0]; p.y = s[1]; p.z = s[2];
-        broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z });
+        p.x = s[0]; p.y = s[1]; p.z = s[2]; p.yaw = s[3] || 0;
+        broadcast({ t: 'respawn', id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw });
         pushPlayers();
       }
       break;
