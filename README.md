@@ -72,7 +72,15 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   roundel, roastery mezzanine, and street parklet) and the working
   waterfront on the south: promenade, a PUBLIC MARKET neon arch with
   clock over the market stalls, the berthed MV LAYOFF, and a container
-  wharf under two coral port cranes — one mid-lift over the bay
+  wharf under two coral port cranes — one mid-lift over the bay; and
+  **San Jose** — one wide trolley street under dry brown-green hills:
+  the Basilica (copper dome, climbable to its cross), the BADOBE glass
+  campus, the HOTEL with its diagonal rooftop letters, a Spanish
+  courtyard apartment, Monopoly in the Park (top hat, dice, GO corner),
+  striped parking lots full of teslas and metallic cybertrucks, tall
+  and short palms, a walkable VTA trolley on center tracks, the Sonic
+  Runway rippling color down the sidewalk, and a white observatory on
+  the ridge at the end of a switchback hike
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 - **The Catalogue** (`?catalog`, or the "building catalogue" button in the
@@ -91,7 +99,7 @@ server), the scene becomes a game. Join from the panel in the top right:
 - **Corpo** (1 seat): keeps the orbit/zoom camera, and is the only role with
   the explosion ability. Clicking a human figure **lays them off** — the figure
   goes up in flame and disappears. +50 points per layoff.
-- **Humans** (up to 24 seats, `MAX_HUMANS` env to change): each possesses an FPV figure and earns
+- **Humans** (up to 50 seats, `MAX_HUMANS` env to change): each possesses an FPV figure and earns
   **1 point per second alive**. Laid-off humans can respawn after 10 s.
 - Everyone else spectates in the free orbit camera; the panel shows a live
   **connected head-count** so you can watch the room fill up. Connections are

@@ -136,7 +136,7 @@ server.on('upgrade', (req, socket) => {
    Game state — 1 corpo, up to 4 humans
    Humans: +1 point per second alive. Corpo: +50 per layoff.
    ============================================================ */
-const MAX_HUMANS = +(process.env.MAX_HUMANS || 24);
+const MAX_HUMANS = +(process.env.MAX_HUMANS || 50);
 const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff, 0x2ad4a8, 0xff7a24,
                 0x24c8ff, 0xff4fa3, 0x8fd820, 0xd0d0d8, 0xa86a32, 0x7a8cff];
 const SPAWNS = {
@@ -150,6 +150,8 @@ const SPAWNS = {
   // Every Seattle Long spawn opens onto street/water/promenade — never nose-to-wall.
   seattlelong: [[-38.5, 3, -4.5, 3.14], [8.5, 3, -4.5, 3.14], [30.5, 3, 11.5, -1.57], [43.5, 3, -4.5, 3.14],
                 [88.5, 3, -4.5, 3.14], [105.5, 3, -4.5, 3.14], [90.5, 3, 26.5, 3.14], [75.5, 3, 44.5, 3.14]],
+  sanjose: [[-20.5, 3, -4.5, 3.14], [28.5, 3, -4.5, 3.14], [76.5, 3, -4.5, 3.14], [110.5, 3, -4.5, 3.14],
+            [58.5, 3, 20.5, 0], [-38.5, 3, 22.5, -1.57], [98.5, 3, 22.5, 3.14], [33.5, 3, 10.5, -1.57]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -163,6 +165,11 @@ let marqueeText = '';      // the corpo's line to the room, shown top-center eve
 let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
+  sanjose: [
+    { kind: 'sticker', name: 'basilica dome', x: -36.5, y: 29, z: -21.5 },
+    { kind: 'sticker', name: 'hotel roof sign', x: 67.5, y: 36.5, z: -26.5 },
+    { kind: 'tshirt', name: 'observatory dome', x: 74.5, y: 41, z: -50.5 },
+  ],
   seattlelong: [
     { kind: 'sticker', name: 'needle deck', x: -39.5, y: 58.5, z: -19.5 },
     { kind: 'sticker', name: 'sphere crown', x: 43.5, y: 26.5, z: -18.5 },
@@ -381,7 +388,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         booms.length = 0;
         pickups = [];
