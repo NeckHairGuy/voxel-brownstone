@@ -150,8 +150,8 @@ const SPAWNS = {
   // Every Seattle Long spawn opens onto street/water/promenade — never nose-to-wall.
   seattlelong: [[-38.5, 3, -4.5, 3.14], [8.5, 3, -4.5, 3.14], [30.5, 3, 11.5, -1.57], [43.5, 3, -4.5, 3.14],
                 [88.5, 3, -4.5, 3.14], [105.5, 3, -4.5, 3.14], [90.5, 3, 26.5, 3.14], [75.5, 3, 44.5, 3.14]],
-  sanjose: [[-20.5, 3, -4.5, 3.14], [28.5, 3, -4.5, 3.14], [76.5, 3, -4.5, 3.14], [110.5, 3, -4.5, 3.14],
-            [58.5, 3, 20.5, 0], [-38.5, 3, 22.5, -1.57], [98.5, 3, 22.5, 3.14], [33.5, 3, 10.5, -1.57]],
+  sanjose: [[-20.5, 3, -6.5, 3.14], [28.5, 3, -6.5, 3.14], [76.5, 3, -6.5, 3.14], [110.5, 3, -6.5, 3.14],
+            [58.5, 3, 24.5, 0], [-38.5, 3, 32.5, -1.57], [98.5, 3, 32.5, 3.14], [33.5, 3, 13.5, -1.57]],
 };
 const spawnsFor = () => SPAWNS[scene] || SPAWNS.default;
 const randomSpawn = () => { const s = spawnsFor(); return s[Math.floor(Math.random() * s.length)]; };
@@ -166,9 +166,9 @@ let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
   sanjose: [
-    { kind: 'sticker', name: 'basilica dome', x: -36.5, y: 29, z: -21.5 },
+    { kind: 'sticker', name: 'basilica dome', x: -38.5, y: 37, z: -23.5 },
     { kind: 'sticker', name: 'hotel roof sign', x: 67.5, y: 36.5, z: -26.5 },
-    { kind: 'tshirt', name: 'observatory dome', x: 74.5, y: 41, z: -50.5 },
+    { kind: 'tshirt', name: 'observatory dome', x: 84.5, y: 45, z: -49.5 },
   ],
   seattlelong: [
     { kind: 'sticker', name: 'needle deck', x: -39.5, y: 58.5, z: -19.5 },
