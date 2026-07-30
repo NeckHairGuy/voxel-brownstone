@@ -166,8 +166,8 @@ let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
   sanjose: [
-    { kind: 'sticker', name: 'basilica dome', x: -38.5, y: 37, z: -23.5 },
-    { kind: 'sticker', name: 'hotel roof sign', x: 67.5, y: 36.5, z: -26.5 },
+    { kind: 'sticker', name: 'basilica dome', x: 61.5, y: 37, z: -23.5 },
+    { kind: 'sticker', name: 'hotel roof sign', x: -30.5, y: 36.5, z: -26.5 },
     { kind: 'tshirt', name: 'observatory dome', x: 84.5, y: 45, z: -49.5 },
   ],
   seattlelong: [
