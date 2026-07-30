@@ -8197,11 +8197,11 @@ const figDetail = { on: localStorage.getItem('vb-pmodel') === '1' };
 let selfColor = 0xff2424;
 /* one builder, two silhouettes — children are always [legs, torso, arms, head]
    so the crouch/FPV visibility toggles keep working on both */
-function buildFigureInto(group, color, pid) {
+function buildFigureInto(group, color, pid, detailed = figDetail.on) {
   for (const c of [...group.children]) { if (!c.isSprite) group.remove(c); }
   const mats = { shirt: new THREE.MeshLambertMaterial({ color }) };
   const tag = m => { if (pid != null) m.userData.pid = pid; m.castShadow = true; return m; };
-  if (!figDetail.on) {
+  if (!detailed) {
     const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
     for (let i = 0; i < 4; i++) {
       const cube = tag(new THREE.Mesh(geo, mats.shirt));
@@ -8249,7 +8249,7 @@ function buildFigureInto(group, color, pid) {
   group.userData.mats = mats;
   group.userData.head = head;
 }
-buildFigureInto(playerGroup, selfColor, null);
+buildFigureInto(playerGroup, selfColor, null, false);   // own body stays slim — never clips the FPV lens
 playerGroup.visible = false;
 scene.add(playerGroup);
 const pmodelBox = document.getElementById('pmodel');
@@ -8257,7 +8257,7 @@ pmodelBox.checked = figDetail.on;
 pmodelBox.addEventListener('change', () => {
   figDetail.on = pmodelBox.checked;
   localStorage.setItem('vb-pmodel', figDetail.on ? '1' : '0');
-  buildFigureInto(playerGroup, selfColor, null);
+  buildFigureInto(playerGroup, selfColor, null, false);
   for (const [id, r] of remotes) { scene.remove(r.group); remotes.delete(id); }
   updateRoster(lastRoster);
 });
