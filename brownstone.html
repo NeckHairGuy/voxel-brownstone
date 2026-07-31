@@ -371,6 +371,7 @@ if (new URLSearchParams(location.search).has('catalog'))
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
   </div>
 </div>
+<div id="thumb-hint" style="position:fixed;left:50%;top:54%;transform:translate(-50%,-50%);background:rgba(10,12,16,.85);color:#f2efe6;font:600 15px/1.45 system-ui,sans-serif;padding:12px 20px;border-radius:14px;border:1px solid rgba(255,255,255,.16);text-align:center;z-index:60;display:none;pointer-events:none;opacity:1;transition:opacity .6s">drag your <span style="color:#ffb838">RIGHT THUMB</span><br>to look around</div>
 <div id="xhair">+</div>
 <div id="qr">
   <div id="qr-label">SCAN TO PLAY</div>
@@ -9747,6 +9748,18 @@ function setIso(on) {
 isoBox.addEventListener('change', () => setIso(isoBox.checked));
 
 /* ---- mobile touch controls: joystick, look-drag, jump + crouch ---- */
+const thumbHintEl = document.getElementById('thumb-hint');
+let thumbHintT = 0;
+function showThumbHint() {
+  thumbHintEl.style.display = 'block'; thumbHintEl.style.opacity = '1';
+  clearTimeout(thumbHintT);
+  thumbHintT = setTimeout(hideThumbHint, 8000);
+}
+function hideThumbHint() {
+  if (thumbHintEl.style.display === 'none') return;
+  thumbHintEl.style.opacity = '0';
+  setTimeout(() => { thumbHintEl.style.display = 'none'; }, 650);
+}
 const isTouch = COARSE;
 const touchStick = { x: 0, y: 0, len: 0 };
 {
@@ -9786,6 +9799,7 @@ const touchStick = { x: 0, y: 0, len: 0 };
   renderer.domElement.addEventListener('pointerdown', e => {
     if (isTouch && player.active && e.pointerType === 'touch' && lid === -1) {
       lid = e.pointerId; lx = e.clientX; ly = e.clientY;
+      hideThumbHint();
     }
   });
   addEventListener('pointermove', e => {
@@ -10110,6 +10124,7 @@ function handleNet(m) {
         selfColor = m.color;
         playerGroup.userData.mats.shirt.color.set(m.color);
         if (!player.active) enterFPV();   // pointer lock was requested by the join click
+        if (isTouch) showThumbHint();
       }
       break;
     case 'evicted':
