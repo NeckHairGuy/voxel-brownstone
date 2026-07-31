@@ -9316,11 +9316,36 @@ function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for 
       }
   if (!removedPts.length) return;
   if (loadBearing) collapseCheck(removedPts, dirty, quiet);
-  for (const ck of dirty) meshChunk(ck);
+  if (quiet) { for (const ck of dirty) meshChunk(ck); }   // join replay: batch now
+  else { for (const ck of dirty) pendingDirty.add(ck); rebuildT = 0.12; }
   if (quiet) return;
   flashLight.position.set(cx + 0.5, cy + 1.5, cz + 0.5);
   flashT = 0;
   spawnSparks(cx, cy, cz);
+}
+
+// fast voxel raycast (Amanatides-Woo DDA): O(cells along the ray), one
+// map lookup per cell — the merged chunk meshes are never triangle-tested
+function voxelRayHit(origin, dir, maxDist) {
+  let x = fl(origin.x), y = fl(origin.y), z = fl(origin.z);
+  const sx = dir.x > 0 ? 1 : -1, sy = dir.y > 0 ? 1 : -1, sz = dir.z > 0 ? 1 : -1;
+  const tdx = Math.abs(1 / (Math.abs(dir.x) < 1e-9 ? 1e-9 : dir.x));
+  const tdy = Math.abs(1 / (Math.abs(dir.y) < 1e-9 ? 1e-9 : dir.y));
+  const tdz = Math.abs(1 / (Math.abs(dir.z) < 1e-9 ? 1e-9 : dir.z));
+  let tmx = (sx > 0 ? x + 1 - origin.x : origin.x - x) * tdx;
+  let tmy = (sy > 0 ? y + 1 - origin.y : origin.y - y) * tdy;
+  let tmz = (sz > 0 ? z + 1 - origin.z : origin.z - z) * tdz;
+  let t = 0;
+  for (let i = 0; i < 2200 && t <= maxDist; i++) {
+    const v = vox.get(x + '|' + y + '|' + z);
+    if (v && !(facadeHidden && v.gr === 1)) return { x, y, z, t };
+    if (y < -3 && sy < 0) return null;
+    if (y > 90 && sy > 0) return null;
+    if (tmx < tmy && tmx < tmz) { x += sx; t = tmx; tmx += tdx; }
+    else if (tmy < tmz) { y += sy; t = tmy; tmy += tdy; }
+    else { z += sz; t = tmz; tmz += tdz; }
+  }
+  return null;
 }
 
 // click/tap (not drag, not pinch) to detonate
@@ -9363,18 +9388,22 @@ renderer.domElement.addEventListener('pointerup', e => {
   // waking from sleep must not detonate its first tap.
   if (!sandbox && net.role !== 'corpo') return;
   _ray.setFromCamera(_ndc, activeCam);
+  // players first: a handful of small meshes, cheap to triangle-test.
+  // The WORLD is voxel-marched instead — triangle-testing the merged San
+  // Jose chunk meshes froze the corpo screen for seconds per click.
   const targets = [];
   if (net.online) for (const r of remotes.values())
     if (r.alive) for (const c of r.group.children) if (c.isMesh) targets.push(c);
-  for (const ms of chunkMeshes.values()) for (const m of ms) if (m.visible) targets.push(m);
-  const hit = _ray.intersectObjects(targets, false)[0];
-  if (!hit) return;
-  const pid = hit.object.userData.pid;
-  if (pid) { nsend({ t: 'fire', target: pid }); return; }   // clicked a human figure
-  if (!hit.face) return;
-  const p = hit.point.clone().addScaledVector(hit.face.normal, -0.5);
-  if (net.online) nsend({ t: 'boom', x: fl(p.x), y: fl(p.y), z: fl(p.z) });
-  else explode(fl(p.x), fl(p.y), fl(p.z));
+  const phit = _ray.intersectObjects(targets, false)[0];
+  const vhit = voxelRayHit(_ray.ray.origin, _ray.ray.direction, 600);
+  if (phit && (!vhit || phit.distance < vhit.t)) {
+    const pid = phit.object.userData.pid;
+    if (pid) nsend({ t: 'fire', target: pid });   // clicked a human figure
+    return;
+  }
+  if (!vhit) return;
+  if (net.online) nsend({ t: 'boom', x: vhit.x, y: vhit.y, z: vhit.z });
+  else explode(vhit.x, vhit.y, vhit.z);
 });
 
 function writeDebrisMatrix(i) {
@@ -9477,10 +9506,14 @@ function stepExplosions(dt) {
 
   // --- throttled remeshing as rubble freezes in ---
   rebuildT += dt;
-  if (pendingDirty.size && rebuildT > 0.3) {
-    for (const ck of pendingDirty) meshChunk(ck);
-    pendingDirty.clear();
-    rebuildT = 0;
+  if (pendingDirty.size && rebuildT > 0.15) {
+    const t0 = performance.now();
+    for (const ck of pendingDirty) {
+      meshChunk(ck);
+      pendingDirty.delete(ck);
+      if (performance.now() - t0 > 6) break;   // spread rebuilds across frames
+    }
+    if (!pendingDirty.size) rebuildT = 0;
   }
 }
 
