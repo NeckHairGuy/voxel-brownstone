@@ -5231,7 +5231,9 @@ function buildSanJose() {
   ct(17, -9, true);
   ct(17, 99, true);
   ct(30, -30, false);                                                  // one cruising the aisle
-  { // walkable VTA trolley on the center tracks (x 16..42, z 1..6)
+  { // walkable VTA trolley on the center tracks, fronting the basilica
+    // and the Mural Lofts (x 64..90, z 1..6)
+    const { V, fillB, clearB, markDoor, sign } = sjFrame(48, 0);
     const T = { body: 0xe8ecec, blue: 0x2a5a9a, glass: 0x9fc6da, lino: 0x6a6e72, seat: 0x35507a, pole: 0xd0d4d8 };
     fillB(16, 1, 1, 42, 2, 6, T.blue, { j: 0.03 });
     for (let y = 3; y <= 8; y++) {
@@ -9502,7 +9504,7 @@ let playXMax = 60.5;    // eastern world edge (extended by Tech Brooklyn Long / 
 let playXMin = X0 + 0.5, playZMin = -55.5;
 // safe sidewalk per scene, for un-burying the player after resets
 const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
-  : sceneId === 'sanjose' ? [28.5, 4, 2.5]
+  : sceneId === 'sanjose' ? [76.5, 4, 2.5]
   : sceneId === 'seattlelong' ? [29.5, 4, 0.5]
   : sceneId === 'seattle' ? [45.5, 11, 14.5] : [21.5, 2, 17.5];
 
@@ -10805,7 +10807,7 @@ const sanjoseLights = [
   roomLight(-16, 6, -20, 80, 0xffa028, 12),     // alley sodium lamp
   roomLight(9, 22, -25, 90, 0xfff4e0, 14),      // SADOBE creative floor
   roomLight(28, 21, -25, 90, 0x9fd8ff, 12),     // SADOBE game room
-  roomLight(29, 5, 3, 90, 0xfff4e0, 12),        // trolley interior
+  roomLight(77, 5, 3, 90, 0xfff4e0, 12),        // trolley interior
   roomLight(58, 6, 29, 90, 0xffe8b8, 18),       // serpent plaza wash
   roomLight(-20, 31, -50, 100, 0xcfe8ff, 16),   // observatory great dome
 ];
@@ -11371,7 +11373,7 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'murallofts', name: 'The Mural Lofts',         scene: 'sanjose', box: [83, 118, -34, -4],   walls: true },
   { id: 'serpent',    name: 'The Serpent Statue',      scene: 'sanjose', box: [36, 80, 14, 44],     walls: false },
   { id: 'observatory', name: 'The Observatory',        scene: 'sanjose', box: [-50, -6, -62, -40],   walls: false },
-  { id: 'vtatrolley', name: 'VTA Trolley',             scene: 'sanjose', box: [12, 48, -2, 10],     walls: false },
+  { id: 'vtatrolley', name: 'VTA Trolley',             scene: 'sanjose', box: [60, 96, -2, 10],     walls: false },
 ];
 const sideBox = {
   n: document.getElementById('side-n'), s: document.getElementById('side-s'),
