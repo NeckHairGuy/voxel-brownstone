@@ -150,6 +150,8 @@ const SPAWNS = {
   // Every Seattle Long spawn opens onto street/water/promenade — never nose-to-wall.
   seattlelong: [[-38.5, 3, -4.5, 3.14], [8.5, 3, -4.5, 3.14], [30.5, 3, 11.5, -1.57], [43.5, 3, -4.5, 3.14],
                 [88.5, 3, -4.5, 3.14], [105.5, 3, -4.5, 3.14], [90.5, 3, 26.5, 3.14], [75.5, 3, 44.5, 3.14]],
+  sf: [[-32.5, 3, 18.5, 0], [-32.5, 3, -30.5, 0], [24.5, 3, 27.5, -1.57], [70.5, 3, 27.5, -1.57],
+    [101.5, 3, 10.5, 0], [101.5, 3, -30.5, 0], [-8.5, 3, 40.5, 3.14], [33.5, 3, -8.5, 0]],
   sanjose: [[-20.5, 3, -6.5, 3.14], [28.5, 3, -6.5, 3.14], [76.5, 3, -6.5, 3.14], [110.5, 3, -6.5, 3.14],
             [58.5, 3, 24.5, 0], [-38.5, 3, 32.5, -1.57], [98.5, 3, 32.5, 3.14], [33.5, 3, 13.5, -1.57]],
 };
@@ -165,6 +167,11 @@ let marqueeText = '';      // the corpo's line to the room, shown top-center eve
 let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
+  sf: [
+    { kind: 'sticker', name: 'sailboat cabin', x: 20.5, y: 6, z: -17.5 },
+    { kind: 'sticker', name: 'bridge east saddle', x: 58.5, y: 42, z: -55.5 },
+    { kind: 'tshirt', name: 'coit gallery', x: 84.5, y: 43, z: -39.5 },
+  ],
   sanjose: [
     { kind: 'sticker', name: 'basilica dome', x: 63.5, y: 27, z: -22.5 },
     { kind: 'sticker', name: 'hotel roof sign', x: -30.5, y: 38.5, z: -26.5 },
@@ -439,7 +446,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose', 'sf'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         clearBots();
         booms.length = 0;
