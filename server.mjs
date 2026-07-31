@@ -398,6 +398,18 @@ function onMessage(conn, m) {
         broadcast({ t: 'scene', scene });
       }
       break;
+    case 'kickall': // corpo clears the floor before the show
+      if (p && p.role === 'corpo') {
+        const msg = 'thank you for playing, now we have to focus on grabbing your data before the show starts';
+        let n = 0;
+        for (const q of [...players.values()]) if (q.role === 'human') {
+          q.conn.send({ t: 'kicked', msg });
+          q.conn.socket.end();   // flush the notice, then close; dropConn frees the seat
+          n++;
+        }
+        console.log(`kickall by ${p.name}: ${n} humans dropped`);
+      }
+      break;
     case 'ping':
       break;
   }

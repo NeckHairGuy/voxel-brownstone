@@ -368,8 +368,16 @@ if (new URLSearchParams(location.search).has('catalog'))
     <div class="help">catalogue — every building as a spinning diorama (new tab)</div>
     <button id="reset">reset scene</button>
     <div class="help">reset — rebuild every destroyed voxel (for everyone online)</div>
+    <div id="kickbox" style="display:none">
+      <button id="kickall" style="background:#4a1414;border-color:#8a2020;color:#ffb0a0">kick all players</button>
+      <div class="help">kick — every phone gets the pre-show data-grab notice</div>
+    </div>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
   </div>
+</div>
+<div id="kick-msg" style="position:fixed;inset:0;z-index:80;display:none;background:rgba(6,8,10,.92);opacity:1;transition:opacity .5s">
+  <div id="kick-msg-text" style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);max-width:560px;width:86%;text-align:center;color:#f2efe6;font:700 21px/1.55 system-ui,sans-serif"></div>
+  <div style="position:absolute;left:50%;top:72%;transform:translate(-50%,-50%);color:#8a8f98;font:500 13px system-ui,sans-serif">tap to dismiss</div>
 </div>
 <div id="thumb-hint" style="position:fixed;left:50%;top:54%;transform:translate(-50%,-50%);background:rgba(10,12,16,.85);color:#f2efe6;font:600 15px/1.45 system-ui,sans-serif;padding:12px 20px;border-radius:14px;border:1px solid rgba(255,255,255,.16);text-align:center;z-index:60;display:none;pointer-events:none;opacity:1;transition:opacity .6s">drag your <span style="color:#ffb838">RIGHT THUMB</span><br>to look around</div>
 <div id="xhair">+</div>
@@ -9781,6 +9789,20 @@ function setIso(on) {
 isoBox.addEventListener('change', () => setIso(isoBox.checked));
 
 /* ---- mobile touch controls: joystick, look-drag, jump + crouch ---- */
+const kickMsgEl = document.getElementById('kick-msg');
+const kickMsgTxt = document.getElementById('kick-msg-text');
+let kickMsgT = 0;
+function showKickMsg(msg) {
+  kickMsgTxt.textContent = msg || 'thank you for playing';
+  kickMsgEl.style.display = 'block'; kickMsgEl.style.opacity = '1';
+  clearTimeout(kickMsgT);
+  kickMsgT = setTimeout(hideKickMsg, 12000);
+}
+function hideKickMsg() {
+  kickMsgEl.style.opacity = '0';
+  setTimeout(() => { kickMsgEl.style.display = 'none'; }, 550);
+}
+kickMsgEl.addEventListener('click', hideKickMsg);
 const thumbHintEl = document.getElementById('thumb-hint');
 let thumbHintT = 0;
 function showThumbHint() {
@@ -10151,6 +10173,7 @@ function handleNet(m) {
         document.body.classList.add('mq-edit');
         marqueeEl.readOnly = false;
         pkBoxEl.style.display = 'block';
+        document.getElementById('kickbox').style.display = 'block';
       } else {
         mpStatus.textContent = 'corpo is hunting. survive as long as you can without getting laid off. find secret codes for free merch!';
         player.x = m.x; player.y = m.y; player.z = m.z; player.yaw = m.yaw || 0; player.pitch = 0;
@@ -10159,6 +10182,9 @@ function handleNet(m) {
         if (!player.active) enterFPV();   // pointer lock was requested by the join click
         if (isTouch) showThumbHint();
       }
+      break;
+    case 'kicked':
+      showKickMsg(m.msg);
       break;
     case 'evicted':
       hostStandDown = true;
@@ -10620,6 +10646,7 @@ function stepElev(dt) {
 }
 
 window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick,
+  voxelRayHit,
   tick: dt => { stepPlayer(dt); stepElev(dt); }, boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
   render: () => renderer.render(scene, activeCam), debrisCount: () => debris.length,
   elev, elevConfig, vox };
@@ -10641,6 +10668,10 @@ function resetWorld() {
     [player.x, player.y, player.z] = HOME(); player.vy = 0;
   }
 }
+document.getElementById('kickall').addEventListener('click', () => {
+  if (!net.online || net.role !== 'corpo') return;
+  nsend({ t: 'kickall' });
+});
 document.getElementById('reset').addEventListener('click', () => {
   if (net.online && !net.role) { mpStatus.textContent = 'join a seat first to reset the scene'; return; }
   const scope = net.online ? ' for every connected player' : '';
