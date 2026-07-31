@@ -4528,6 +4528,11 @@ function buildSanJose() {
     V(CX, 39, CZ, B.gold, { j: 0.02 });
     fillB(CX, 40, CZ, CX, 42, CZ, B.gold, { j: 0.02 });
     fillB(CX - 1, 41, CZ, CX + 1, 41, CZ, B.gold, { j: 0.02 });
+    // maintenance hatch in the lantern's west face + open oculus: step in
+    // off the meridian and drop through the dome to the crossing floor
+    clearB(CX - 1, 34, CZ, CX - 1, 36, CZ);
+    clearB(CX, 34, CZ, CX, 34, CZ);
+    clearB(CX, 20, CZ, CX, 22, CZ);
     /* ---- INTERIOR: narthex, colonnades, pews, sanctuary, loft ---- */
     for (let x = -49; x <= -25; x++) for (let z = -35; z <= -13; z++) {
       const aisle = x >= -39 && x <= -35;
@@ -4588,14 +4593,9 @@ function buildSanJose() {
       V(Math.round(CX + Math.cos(th) * 3), 2, Math.round(CZ + Math.sin(th) * 3), stainedPal[a % 6], { j: 0.03 });
     }
     for (const [lx, lz] of [[-45, -18], [-29, -18], [-45, -28], [-29, -28]]) V(lx, 13, lz, SJ.lampWarm, { t: 3, j: 0 });
-    V(CX, 25, CZ, SJ.lampWarm, { t: 3, j: 0 });
-    /* ---- maintenance route to the crown: apse ladder-march, roof,
+    V(CX + 2, 25, CZ, SJ.lampWarm, { t: 3, j: 0 });
+    /* ---- crown route: roof (jump across from the Mural Lofts parapet),
        drum notches, dome meridian — every move an honest +1 ---- */
-    for (let i = 0; i <= 16; i++) {
-      const hx = -30 - i, hy = 3 + i;
-      V(hx, hy, -37, B.bone, { j: 0.03 });
-      clearB(hx, hy + 1, -37, hx, hy + 4, -37);
-    }
     for (const [hx, hz] of [[-46, -36], [-46, -35], [-47, -34], [-46, -33], [-45, -32]])
       clearB(hx, 23, hz, hx, 26, hz);
     for (const [hx, hy, hz] of [[-44, 23, -25], [-43, 24, -26], [-42, 25, -27], [-41, 26, -28]])
@@ -5141,6 +5141,7 @@ function buildSanJose() {
     for (let x = 88; x <= 100; x += 3) V(x, 29, -26, SJ.lampWarm, { t: 3, j: 0 });
     V(90, 27, -12, 0x2a2a2c, { j: 0.02 }); V(90, 28, -12, 0x53555c, { j: 0.02 });
     fillB(94, 27, -11, 95, 27, -10, 0x8a6038, { j: 0.05 });
+    fillB(85, 27, -20, 85, 27, -18, 0x9a6a3a, { j: 0.05 });            // step to the west parapet
     /* windows: street, east edge, rear */
     for (const fy of [12, 20]) for (const fx of [86, 90, 94, 98, 102]) win(fx, fy, -8, fx + 1, fy + 2, -8);
     for (const fz of [-27, -21, -13]) win(114, 4, fz, 114, 6, fz + 1);
@@ -10320,25 +10321,23 @@ function applyTimeLock() {
   playChk.disabled = follower;
 }
 
-/* ---- the Sonic Runway: 8 near-circle light rings straddling the
-       sidewalk edge, colors rippling down the line like the real one ---- */
+/* ---- the Sonic Runway: 8 near-circle rings built from unit voxel
+       cubes, colors rippling down the line like the real one ---- */
 const sonicGroup = new THREE.Group();
 sonicGroup.visible = false;
 scene.add(sonicGroup);
 const sonicMats = [];
 {
-  const baseMat = new THREE.MeshBasicMaterial({ color: 0x22262a });
+  const cube = new THREE.BoxGeometry(1, 1, 1);
   for (let i = 0; i < 8; i++) {
     const x = -8 + i * 8;
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.28, 10, 40), mat);
-    ring.rotation.y = Math.PI / 2;
-    ring.position.set(x + 0.5, 5.0, -3.0);
-    sonicGroup.add(ring);
-    for (const s of [-1, 1]) {
-      const f = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.9), baseMat);
-      f.position.set(x + 0.5, 2.4, -3.0 + s * 3.5);
-      sonicGroup.add(f);
+    for (let y = 2; y <= 9; y++) for (let z = -7; z <= 0; z++) {
+      const d = Math.hypot(y + 0.5 - 5.5, z + 0.5 + 3.0);
+      if (Math.abs(d - 3.6) > 0.55) continue;
+      const m = new THREE.Mesh(cube, mat);
+      m.position.set(x + 0.5, y + 0.5, z + 0.5);
+      sonicGroup.add(m);
     }
     sonicMats.push(mat);
   }
