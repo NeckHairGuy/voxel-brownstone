@@ -371,6 +371,8 @@ if (new URLSearchParams(location.search).has('catalog'))
     <div id="kickbox" style="display:none">
       <button id="kickall" style="background:#4a1414;border-color:#8a2020;color:#ffb0a0">kick all players</button>
       <div class="help">kick — every phone gets the pre-show data-grab notice</div>
+      <button id="botswarm" style="background:#14324a;border-color:#2a5a9a;color:#a0c8ff">seat 50 test bots</button>
+      <div class="help">bots — toggle a synthetic 50-player swarm (kick clears it too)</div>
     </div>
     <div class="hint">drag &mdash; orbit &middot; scroll &mdash; zoom &middot; right-drag &mdash; pan &middot; click &mdash; explode</div>
   </div>
@@ -10671,6 +10673,10 @@ function resetWorld() {
 document.getElementById('kickall').addEventListener('click', () => {
   if (!net.online || net.role !== 'corpo') return;
   nsend({ t: 'kickall' });
+});
+document.getElementById('botswarm').addEventListener('click', () => {
+  if (!net.online || net.role !== 'corpo') return;
+  nsend({ t: 'botswarm' });
 });
 document.getElementById('reset').addEventListener('click', () => {
   if (net.online && !net.role) { mpStatus.textContent = 'join a seat first to reset the scene'; return; }

@@ -232,6 +232,57 @@ function dropConn(conn) {
   }
 }
 
+/* ---- synthetic show-test bots: server-side seats, no sockets ---- */
+const bots = [];
+function spawnBot(i) {
+  const humans = [...players.values()].filter(q => q.role === 'human').length;
+  if (humans >= MAX_HUMANS) return false;
+  const id = nextId++;
+  const spawn = randomSpawn();
+  const stub = { send: () => {}, socket: {} };
+  stub.socket.end = () => dropConn(stub);
+  const pl = {
+    id, conn: stub, name: 'bot' + (i + 1), role: 'human', score: 0,
+    alive: true, diedAt: 0, bot: true,
+    color: COLORS[humans % COLORS.length],
+    x: spawn[0], y: spawn[1], z: spawn[2], yaw: spawn[3] || 0,
+  };
+  stub.player = pl;
+  players.set(id, pl);
+  bots.push({ pl, kind: i % 2, cx: pl.x, cz: pl.z, r: 4 + (i % 4) * 2, ph: i * 0.7, tx: pl.x, tz: pl.z, retarget: 0 });
+  return true;
+}
+function clearBots() {
+  for (const b of bots) if (players.has(b.pl.id)) dropConn(b.pl.conn);
+  bots.length = 0;
+}
+setInterval(() => {   // bot mover: half circle their spawn, half roam spawn-to-spawn
+  if (!bots.length) return;
+  const t = Date.now() / 1000;
+  for (let bi = bots.length - 1; bi >= 0; bi--) {
+    const b = bots[bi];
+    if (!players.has(b.pl.id)) { bots.splice(bi, 1); continue; }
+    const pl = b.pl;
+    if (!pl.alive) continue;
+    if (b.kind === 0) {
+      pl.x = b.cx + Math.cos(t * 0.9 + b.ph) * b.r;
+      pl.z = b.cz + Math.sin(t * 0.9 + b.ph) * b.r;
+      pl.yaw = -((t * 0.9 + b.ph) % 6.283);
+    } else {
+      if (t > b.retarget) {
+        const s = randomSpawn();
+        b.tx = s[0] + (Math.random() - 0.5) * 16;
+        b.tz = s[2] + (Math.random() - 0.5) * 16;
+        b.retarget = t + 4 + Math.random() * 4;
+      }
+      const dx = b.tx - pl.x, dz = b.tz - pl.z, L = Math.hypot(dx, dz);
+      if (L > 0.4) { pl.x += dx / L * 0.5; pl.z += dz / L * 0.5; pl.yaw = Math.atan2(-dx, -dz); }
+    }
+    pl.x = +pl.x.toFixed(2); pl.z = +pl.z.toFixed(2); pl.yaw = +pl.yaw.toFixed(2);
+    pl.moved = true;
+  }
+}, 66);
+
 function onMessage(conn, m) {
   const p = conn.player;
   switch (m.t) {
@@ -390,12 +441,22 @@ function onMessage(conn, m) {
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
       if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
+        clearBots();
         booms.length = 0;
         pickups = [];
         if (pickupsOn) spawnPickups();
         broadcast({ t: 'pickupstate', ...pkState() });
         console.log(`scene -> ${scene} by ${p.name}`);
         broadcast({ t: 'scene', scene });
+      }
+      break;
+    case 'botswarm': // corpo toggles the 50-seat synthetic test swarm
+      if (p && p.role === 'corpo') {
+        if (bots.length) { clearBots(); console.log(`bot swarm cleared by ${p.name}`); break; }
+        let n = 0;
+        for (let i = 0; i < 50; i++) if (spawnBot(i)) n++;
+        console.log(`bot swarm seated by ${p.name}: ${n}`);
+        pushPlayers();
       }
       break;
     case 'kickall': // corpo clears the floor before the show
@@ -407,6 +468,7 @@ function onMessage(conn, m) {
           q.conn.socket.end();   // flush the notice, then close; dropConn frees the seat
           n++;
         }
+        bots.length = 0;
         console.log(`kickall by ${p.name}: ${n} humans dropped`);
       }
       break;
