@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.mjs"],
       "port": 3101
+    },
+    {
+      "name": "voxel-sf",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PORT=3177", "node", "server.mjs"],
+      "port": 3177
     }
   ]
 }

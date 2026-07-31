@@ -80,7 +80,22 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   striped parking lots full of teslas and metallic cybertrucks, tall
   and short palms, a walkable VTA trolley on center tracks, the Sonic
   Runway rippling color down the sidewalk, and a white observatory on
-  the ridge at the end of a switchback hike
+  the ridge at the end of a switchback hike; and **San Francisco** — a
+  true horseshoe island in open water: an inner bay ringed with sand, a
+  crescent city beach (umbrellas, lifeguard tower, volleyball,
+  sandcastle) and Ocean Beach surf on the outer shore; three Painted
+  Ladies with full three-floor interiors (teal one has a corner
+  turret), the North Point row (CAFE, READ with the shop cat, PIZZA
+  with a live oven — flats above each), the Ferry Building market hall
+  with mezzanine offices and a four-faced clock tower, the Transamerica
+  Pyramid (X-truss lobby, two office floors, beacon at y65), Coit Tower
+  on Telegraph Hill with WPA murals, exhibit floors, an open-air
+  gallery and wild parrots, reached by the Filbert garden steps; the
+  little Golden Gate across the bay mouth (walk the deck, or hop the
+  midspan rail and climb the main cable to the saddles), Alcatraz
+  mid-bay (barred cells, the escape hole, lighthouse, dock), a
+  walk-through Powell cable car with its turntable plaza, and a wharf
+  pier with a crab shack, sea lions on floats, and the sailboat
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 - **The Catalogue** (`?catalog`, or the "building catalogue" button in the
