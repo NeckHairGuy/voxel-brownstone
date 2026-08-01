@@ -6043,15 +6043,16 @@ function buildSF() {
     /* ---- exterior roof stair: climbs the north face, turns the east
        corner on a landing, and runs back west onto the roof deck ---- */
     if (roofStair) {
+      // the foot sits at the north-east corner, the end nearest the shops
       const zOut = zb + 2, zIn = zb + 1;
-      for (let i = 0; i < 15; i++)                                              // north face, west -> east
-        fillB(X0h + i, 2 + i, zOut, X0h + i, 3 + i, zOut, F.brick, { j: 0.06 });
-      fillB(X1h, 17, zIn, X1h + 1, 17, zOut, F.brick, { j: 0.06 });             // corner landing
-      for (let i = 0; i < 15; i++)                                              // back west, one row in
-        fillB(X1h - 1 - i, 18 + i, zIn, X1h - 1 - i, 18 + i, zIn, F.brick, { j: 0.06 });
-      clearB(X0h, 33, zb, X0h + 2, 33, zb);                                     // cornice gap onto the roof
-      for (let i = 2; i < 15; i += 4) V(X0h + i, 4 + i, zOut + 1, F.iron, { j: 0.02 });   // handrail dabs
-      for (let i = 2; i < 14; i += 4) V(X1h - 1 - i, 20 + i, zIn - 1, F.iron, { j: 0.02 });
+      for (let i = 0; i < 15; i++)                                              // north face, east -> west
+        fillB(X1h - i, 2 + i, zOut, X1h - i, 3 + i, zOut, F.brick, { j: 0.06 });
+      fillB(X0h - 1, 17, zIn, X0h, 17, zOut, F.brick, { j: 0.06 });             // corner landing, west end
+      for (let i = 0; i < 15; i++)                                              // back east, one row in
+        fillB(X0h + 1 + i, 18 + i, zIn, X0h + 1 + i, 18 + i, zIn, F.brick, { j: 0.06 });
+      clearB(X1h - 2, 33, zb, X1h, 33, zb);                                     // cornice gap onto the roof
+      for (let i = 2; i < 15; i += 4) V(X1h - i, 4 + i, zOut + 1, F.iron, { j: 0.02 });   // handrail dabs
+      for (let i = 2; i < 14; i += 4) V(X0h + 1 + i, 20 + i, zIn - 1, F.iron, { j: 0.02 });
     }
     /* ---- front garden: picket fence + flower bed ---- */
     for (let z = z0; z <= z0 + 10; z++) {
