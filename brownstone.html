@@ -5738,7 +5738,7 @@ function buildSF() {
     { body: 0xc98a9a, bodyLt: 0xd297a5, trim: 0xbcd8c8, accent: 0x2a4a8a, sash: 0x6e3a48, kind: 'office' },
     { body: 0xd8a83a, bodyLt: 0xe0b448, trim: 0xf2efe6, accent: 0x2e5444, sash: 0x5a4020, kind: 'music' },
   ];
-  function lady(z0, C, turret) {
+  function lady(z0, C, turret, roofStair) {
     const X0h = -45, X1h = -30, zb = z0 + 17;
     const DY = flattenPad(X0h - 1, z0 - 1, X1h + 3, zb + 1, terrainTop(X1h + 3, z0 + 8)) - 2;
     const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
@@ -6040,6 +6040,19 @@ function buildSF() {
       fillB(X1h - 1, 22, z0 - 2, X1h + 1, 22, z0, 0xa87848, { j: 0.05 });
       V(X1h, 13, z0 - 1, 0x8a6a4a, { j: 0.05 }); V(X1h, 23, z0 - 1, 0x8a6a4a, { j: 0.05 });
     }
+    /* ---- exterior roof stair: climbs the north face, turns the east
+       corner on a landing, and runs back west onto the roof deck ---- */
+    if (roofStair) {
+      const zOut = zb + 2, zIn = zb + 1;
+      for (let i = 0; i < 15; i++)                                              // north face, west -> east
+        fillB(X0h + i, 2 + i, zOut, X0h + i, 3 + i, zOut, F.brick, { j: 0.06 });
+      fillB(X1h, 17, zIn, X1h + 1, 17, zOut, F.brick, { j: 0.06 });             // corner landing
+      for (let i = 0; i < 15; i++)                                              // back west, one row in
+        fillB(X1h - 1 - i, 18 + i, zIn, X1h - 1 - i, 18 + i, zIn, F.brick, { j: 0.06 });
+      clearB(X0h, 33, zb, X0h + 2, 33, zb);                                     // cornice gap onto the roof
+      for (let i = 2; i < 15; i += 4) V(X0h + i, 4 + i, zOut + 1, F.iron, { j: 0.02 });   // handrail dabs
+      for (let i = 2; i < 14; i += 4) V(X1h - 1 - i, 20 + i, zIn - 1, F.iron, { j: 0.02 });
+    }
     /* ---- front garden: picket fence + flower bed ---- */
     for (let z = z0; z <= z0 + 10; z++) {
       if (z >= z0 + 3 && z <= z0 + 7) continue;                                  // driveway
@@ -6077,7 +6090,7 @@ function buildSF() {
   }
   lady(-34, LADY[0], true);
   lady(-14, LADY[1], false);
-  lady(6, LADY[2], false);
+  lady(6, LADY[2], false, true);
   // side paths + hedges in the gaps between houses
   for (const gz of [-16, 4]) {
     fillB(-45, 2, gz, -30, 2, gz, 0x9a9a96, { j: 0.05 });
@@ -7063,7 +7076,7 @@ function buildSF() {
     }
     /* main cables along the rail lines (z -54 and -46) */
     for (const cz of [ZA - 2, ZB + 2]) {
-      for (let x = 5; x <= 55; x++) {
+      for (let x = 16; x <= 44; x++) {
         const cy = cableY(x);
         V(x, cy, cz, F.orange, { j: 0.03 });
         const cyPrev = cableY(x - 1);
@@ -7163,9 +7176,6 @@ function buildSF() {
     fillB(41, 7, -33, 41, 8, -32, F.woodDk, { j: 0.04 });                        // guard desk
     V(41, 9, -33, 0xc9a227, { t: 2, j: 0 });                                     // the key ring
     V(34, 14, -32, F.lampWhite, { t: 3, j: 0 });
-    // an exterior stair up the south face to the cell-block roof
-    for (let i = 0; i < 9; i++) { fillB(33 + i, 1, -26, 33 + i, 3 + i, -26, F.rockA, { j: 0.05 }); noteTop(33 + i, -26, 3 + i); }
-    for (let i = 0; i < 4; i++) { fillB(41 - i, 1, -27, 41 - i, 12 + i, -27, F.rockA, { j: 0.05 }); noteTop(41 - i, -27, 12 + i); }
     /* lighthouse on the southwest shoulder */
     { const b = groundAt(33, -38) || 2;
       fillB(32, b + 1, -39, 33, b + 15, -38, F.white, { j: 0.03 });
