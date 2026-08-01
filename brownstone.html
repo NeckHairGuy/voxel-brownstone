@@ -5469,23 +5469,24 @@ function buildSF() {
 
   // the 3x3 font at any cell size, laid right-to-left so it reads the
   // right way round from the street (which looks back along -z)
-  function signFace(word, x0, y0, z, sx, sy, color, t = 3) {
+  function signFace(word, x0, y0, z, sx, sy, color, t = 3, sp = 0, flip = true) {
     const glyphs = [...word].map(c => FONT[c]);
-    const total = glyphs.reduce((a, g) => a + g[0].length, 0) * sx;
+    const total = glyphs.reduce((a, g) => a + g[0].length * sx + sp, 0) - sp;
     let lx = 0;
     for (const rows of glyphs) {
       const w = rows[0].length;
       for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < w; cx++)
         if (rows[ry][cx] === '#') {
-          const px = x0 + total - sx - (lx + cx * sx);
+          const px = flip ? x0 + total - sx - (lx + cx * sx) : x0 + lx + cx * sx;
           fillB(px, y0 + (2 - ry) * sy, z, px + sx - 1, y0 + (2 - ry) * sy + sy - 1, z, color, { t, j: 0 });
         }
-      lx += w * sx;
+      lx += w * sx + sp;
     }
   }
 
   // un-shifted aliases, so a section can be built through an offset frame
   const V0 = V, fillB0 = fillB, clearB0 = clearB, markDoor0 = markDoor, sign0 = sign, gull0 = gull;
+  const bstair0 = bstair, bperson0 = bperson, flattenPad0 = flattenPad, stampLand0 = stampLand, groundAt0 = groundAt;
 
   /* ---- the horseshoe shape function ---- */
   const CXc = 30, CZc = -14, AXc = 0.62;
@@ -5623,7 +5624,7 @@ function buildSF() {
   // the Embarcadero promenade: straight along the beach, then curving
   // southeast around the Ferry Building to the pyramid plaza
   paveLine([[-20, 19], [42, 19]], 5.5);
-  paveLine([[42, 19], [50, 22], [58, 26], [68, 28], [78, 27]], 5.5);
+  paveLine([[42, 19], [50, 21], [58, 22], [72, 24], [80, 26]], 4);
   // east arm street: hugs the bay shore INSIDE the pyramid and Telegraph
   // Hill, then bends west along the tip to the bridge ramp
   paveLine([[78, 27], [82, 16], [81, 2], [80, -14], [80, -30]], 4.5);
@@ -6061,13 +6062,13 @@ function buildSF() {
      feet 13..21, sign bands with channel letters, parapet
      variety, service alley behind. */
   {
-    flattenPad(-13, 25, 29, 43);
-    for (let x = -12; x <= 28; x++) for (let z = 25; z <= 26; z++)
+    flattenPad(-15, 25, 46, 43);
+    for (let x = -14; x <= 45; x++) for (let z = 25; z <= 26; z++)
       V(x, 2, z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
     const SHOP = [
-      { x0: -12, x1: 1,  body: 0x8a9a8a, trim: 0xf2efe6, sign: 0x2e5444, name: 'CAFE',  sx: 1, kind: 'cafe' },
-      { x0: 2,   x1: 14, body: 0x6a7a9a, trim: 0xe8e0cc, sign: 0x1d3a52, name: 'READ',  sx: 0, kind: 'books' },
-      { x0: 15,  x1: 28, body: 0xb8927a, trim: 0xf2efe6, sign: 0x6e2a20, name: 'PIZZA', sx: 0, kind: 'pizza' },
+      { x0: -14, x1: 5,  body: 0x8a9a8a, trim: 0xf2efe6, sign: 0x2e5444, name: 'CAFE',  kind: 'cafe' },
+      { x0: 6,   x1: 25, body: 0x6a7a9a, trim: 0xe8e0cc, sign: 0x1d3a52, name: 'READ',  kind: 'books' },
+      { x0: 26,  x1: 45, body: 0xb8927a, trim: 0xf2efe6, sign: 0x6e2a20, name: 'PIZZA', kind: 'pizza' },
     ];
     for (const S of SHOP) {
       const { x0, x1 } = S, zf = 27, zr = 41;
@@ -6100,7 +6101,7 @@ function buildSF() {
       fillB(x0 + 1, 10, zf, x1 - 1, 10, zf, F.glass, { t: 1, j: 0.02 });        // transom
       fillB(x0, 11, zf, x1, 11, zf, S.trim, { j: 0.04 });                       // storefront cornice
       fillB(x0, 12, zf - 1, x1, 14, zf - 1, S.sign, { j: 0.03 });               // sign band
-      signFace(S.name, x0 + S.sx, 12, zf - 2, 1, 1, 0xf2e8c8, 3);
+      { const wd = S.name.length * 4 - 1; signFace(S.name, x0 + ((x1 - x0 + 1 - wd) >> 1), 12, zf - 2, 1, 1, 0xf2e8c8, 3, 1); }
       /* awning over the walk */
       for (let x = x0 + 1; x <= x1 - 1; x++) {
         const st = (x % 4 < 2);
@@ -6136,6 +6137,10 @@ function buildSF() {
     }
     /* ---- CAFE interior + flat ---- */
     {
+      const DX = -2;
+      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
       fillB(-11, 3, 32, -11, 5, 37, 0x2e5444, { j: 0.04 });                      // counter base
       fillB(-11, 6, 32, -10, 6, 37, 0x9a6a3a, { j: 0.04 });                      // counter top
       fillB(-11, 7, 33, -10, 8, 34, 0x8a8e94, { j: 0.04 });                      // espresso machine
@@ -6165,13 +6170,17 @@ function buildSF() {
       V(-11, 16, 39, 0x8a8e94, { j: 0.03 });
       fillB(-3, 13, 32, -3, 13, 35, 0xa05a32, { j: 0.06 });                      // sofa
       fillB(-4, 14, 32, -4, 15, 35, 0xa05a32, { j: 0.06 });
-      fillB(0, 14, 33, 0, 16, 35, 0x0c0c10, { j: 0.02 });                        // tv
+      fillB(-11, 14, 33, -11, 16, 35, 0x0c0c10, { j: 0.02 });                     // tv on the party wall
       fillB(-8, 12, 32, -4, 12, 37, 0x4a5e6e, { j: 0.05 });                      // rug
       V(-6, 20, 34, F.lampWhite, { t: 3, j: 0 }); V(-6, 21, 34, F.iron, { j: 0 });
       V(-10, 11, 29, F.lampWarm, { t: 3, j: 0 });
     }
     /* ---- READ interior + garret ---- */
     {
+      const DX = 4;
+      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
       const r = mulberry(1953);
       for (const sz of [31, 35]) {                                               // tall double stacks
         fillB(4, 3, sz, 11, 9, sz, 0x4a3220, { j: 0.04 });
@@ -6206,6 +6215,10 @@ function buildSF() {
     }
     /* ---- PIZZA interior + loft ---- */
     {
+      const DX = 11;
+      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
       // the oven on the west party wall: tall brick dome, fire, chimney
       fillB(16, 3, 33, 17, 8, 37, F.brick, { j: 0.06 });
       fillB(16, 9, 34, 17, 9, 36, F.brick, { j: 0.06 });
@@ -6246,33 +6259,34 @@ function buildSF() {
       V(22, 20, 33, F.lampWhite, { t: 3, j: 0 }); V(22, 21, 33, F.iron, { j: 0 });
     }
     /* ---- roofline variety + alley ---- */
-    for (const [px, pw] of [[-9, 8]]) {                                          // cafe: rounded parapet
+    for (const [px, pw] of [[-11, 13]]) {                                        // cafe: rounded parapet
       fillB(px, 24, 27, px + pw, 24, 27, 0x8a9a8a, { j: 0.04 });
       fillB(px + 2, 25, 27, px + pw - 2, 25, 27, 0x8a9a8a, { j: 0.04 });
       fillB(px + 3, 26, 27, px + pw - 3, 26, 27, 0xf2efe6, { j: 0.03 });
     }
-    fillB(4, 24, 27, 12, 24, 27, 0x6a7a9a, { j: 0.04 });                         // books: stepped
-    fillB(6, 25, 27, 10, 25, 27, 0x6a7a9a, { j: 0.04 });
-    fillB(7, 26, 27, 9, 26, 27, 0xe8e0cc, { j: 0.03 });
-    for (let i = 0; i < 3; i++) fillB(18 + i, 24 + i, 27, 25 - i, 24 + i, 27, 0xb8927a, { j: 0.04 });
-    V(21, 27, 27, 0xf2efe6, { j: 0 }); V(22, 27, 27, 0xf2efe6, { j: 0 });
+    fillB(9, 24, 27, 21, 24, 27, 0x6a7a9a, { j: 0.04 });                         // books: stepped
+    fillB(12, 25, 27, 18, 25, 27, 0x6a7a9a, { j: 0.04 });
+    fillB(14, 26, 27, 16, 26, 27, 0xe8e0cc, { j: 0.03 });
+    for (let i = 0; i < 3; i++) fillB(29 + i, 24 + i, 27, 42 - i, 24 + i, 27, 0xb8927a, { j: 0.04 });
+    V(35, 27, 27, 0xf2efe6, { j: 0 }); V(36, 27, 27, 0xf2efe6, { j: 0 });
     // each shop carries a big rooftop sign on iron posts
-    for (const [w, cx, bc, lc] of [['CAFE', -8, 0x2e5444, 0xf2e8c8], ['READ', 7, 0x1d3a52, 0xf2e8c8], ['PIZZA', 21, 0x6e2a20, 0xffb84a]]) {
-      const wide = w.length * 3, bx0 = cx - (wide >> 1) - 1, bx1 = bx0 + wide + 1;
+    for (const [w, cx, bc, lc] of [['CAFE', -4, 0x2e5444, 0xf2e8c8], ['READ', 15, 0x1d3a52, 0xf2e8c8], ['PIZZA', 35, 0x6e2a20, 0xffb84a]]) {
+      const wide = w.length * 4 - 1, bx0 = cx - (wide >> 1) - 1, bx1 = bx0 + wide + 1;
       for (const px of [bx0, bx1]) fillB(px, 23, 27, px, 26, 27, F.iron, { j: 0.02 });
       fillB(bx0, 27, 27, bx1, 34, 27, bc, { j: 0.03 });
-      signFace(w, bx0 + 1, 28, 26, 1, 2, lc, 3);
+      signFace(w, bx0 + 1, 28, 26, 1, 2, lc, 3, 1, true);    // street side
+      signFace(w, bx0 + 1, 28, 28, 1, 2, lc, 3, 1, false);   // bay side
     }
-    flattenPad(-12, 42, 28, 43);
-    for (let x = -12; x <= 28; x++) V(x, 2, 42, 0x3e3e44, { j: 0.06 });
+    flattenPad(-14, 42, 45, 43);
+    for (let x = -14; x <= 45; x++) V(x, 2, 42, 0x3e3e44, { j: 0.06 });
     fillB(-8, 3, 42, -5, 4, 43, 0x2e5a34, { j: 0.06 });                          // dumpsters
     fillB(-8, 5, 42, -5, 5, 43, 0x1d2024, { j: 0.04 });
-    fillB(8, 3, 42, 10, 4, 43, 0x2a4a7a, { j: 0.06 });
-    fillB(20, 3, 42, 21, 4, 42, 0x8a6a3a, { j: 0.08 });
-    V(20, 5, 42, 0x8a6a3a, { j: 0.08 });
-    V(14, 3, 43, 0x17171a, { j: 0.05 }); V(14, 4, 43, 0x2a2a2c, { j: 0.05 });    // alley cat
-    for (const vx of [-2, 13, 26]) { V(vx, 23, 38, 0x808488, { j: 0.04 }); V(vx, 24, 38, 0x808488, { j: 0.04 }); }
-    pigeon(0, 24, 27); pigeon(8, 27, 27);
+    fillB(14, 3, 42, 16, 4, 43, 0x2a4a7a, { j: 0.06 });
+    fillB(34, 3, 42, 35, 4, 42, 0x8a6a3a, { j: 0.08 });
+    V(34, 5, 42, 0x8a6a3a, { j: 0.08 });
+    V(24, 3, 43, 0x17171a, { j: 0.05 }); V(24, 4, 43, 0x2a2a2c, { j: 0.05 });    // alley cat
+    for (const vx of [-4, 15, 35]) { V(vx, 23, 38, 0x808488, { j: 0.04 }); V(vx, 24, 38, 0x808488, { j: 0.04 }); }
+    pigeon(0, 24, 27); pigeon(15, 27, 27);
   }
 
   /* ============ 5. THE CITY BEACH (sand cove below the promenade) ============ */
@@ -6630,6 +6644,18 @@ function buildSF() {
      office floors, the executive floor and a sky deck — linked
      by four switchback stairs, no two ever stacked. */
   {
+    // built through a frame: the tower now stands behind the ferry
+    // terminal, next to the shop row, on made ground at the water's edge
+    const DX = -38, DZ = 23;
+    const V = (x, y, z, c, o) => V0(x + DX, y, z + DZ, c, o);
+    const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0 + DZ, x1 + DX, y1, z1 + DZ, c, o);
+    const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0 + DZ, x1 + DX, y1, z1 + DZ);
+    const markDoor = (x0, y0, z0, x1, y1, z1) => markDoor0(x0 + DX, y0, z0 + DZ, x1 + DX, y1, z1 + DZ);
+    const bstair = (a, b, c, d, e) => bstair0(a, b, c + DX, d + DZ, e);
+    const bperson = (x, y, z, a, b) => bperson0(x + DX, y, z + DZ, a, b);
+    const flattenPad = (a, b, c, d) => flattenPad0(a + DX, b + DZ, c + DX, d + DZ);
+    const stampLand = (x, z) => stampLand0(x + DX, z + DZ);
+    const groundAt = (x, z) => groundAt0(x + DX, z + DZ);
     const CXp = 99, CZp = 15, PHW = 11;
     const hwAt = y => Math.max(1, PHW - Math.round((y - 14) * 0.14));
     flattenPad(85, 1, 113, 29);
@@ -6970,8 +6996,8 @@ function buildSF() {
     for (let x = 5; x <= 55; x++) {
       V(x, 14, ZA, 0xb2aca0, { j: 0.05 }); V(x, 14, ZB, 0xb2aca0, { j: 0.05 }); // sidewalks
       if (x % 4 < 2) V(x, 14, -50, 0xc8a02a, { j: 0.04 });                      // lane dash
-      V(x, 15, ZA - 1, F.orangeDk, { j: 0.03 }); V(x, 15, ZB + 1, F.orangeDk, { j: 0.03 });  // rail posts
-      V(x, 16, ZA - 1, F.orange, { j: 0.03 }); V(x, 16, ZB + 1, F.orange, { j: 0.03 });      // rail top / cable line
+      if (x % 2 === 0) { V(x, 15, ZA - 1, F.orangeDk, { j: 0.03 }); V(x, 15, ZB + 1, F.orangeDk, { j: 0.03 }); }  // rail posts
+      V(x, 16, ZA - 1, F.orange, { j: 0.03 }); V(x, 16, ZB + 1, F.orange, { j: 0.03 });      // continuous top rail
       fillB(x, 13, ZA, x, 13, ZB, F.orangeDk, { j: 0.04 });                     // stiffening truss
       if (x % 6 === 0) fillB(x, 12, ZA, x, 12, ZB, F.orangeDk, { j: 0.04 });
     }
@@ -6991,14 +7017,14 @@ function buildSF() {
       gull(tx + 2, 35, ZB + 2);
     }
     /* main cables along the rail lines (z -54 and -46) */
-    for (const cz of [ZA - 1, ZB + 1]) {
+    for (const cz of [ZA - 2, ZB + 2]) {
       for (let x = 5; x <= 55; x++) {
         const cy = cableY(x);
         if (cy > 16) {
           V(x, cy, cz, F.orange, { j: 0.03 });
           const cyPrev = cableY(x - 1);
           if (cy > cyPrev) V(x, cy - 1, cz, F.orange, { j: 0.03 });             // fill the ascending step
-          if (x % 3 === 0 && cy > 18) fillB(x, 17, cz, x, cy - 1, cz, F.orangeDk, { j: 0.03 });  // suspender
+          if (x % 3 === 0 && cy > 18) fillB(x, 15, cz, x, cy - 1, cz, F.orangeDk, { j: 0.03 });  // suspender to the deck
         }
       }
       // backstays diving to the anchorages (2 per step, face-connected)
@@ -7024,9 +7050,9 @@ function buildSF() {
     }
     // saddle steps: notch the legs' inner faces so the cable climb tops out on the beam
     for (const tx of [12, 45]) for (let x = tx; x <= tx + 3; x++)
-      for (const cz of [ZA - 1, ZB + 1]) clearB(x, cableY(x) + 1, cz, x, 34, cz);
+      for (const cz of [ZA - 2, ZB + 2]) clearB(x, cableY(x) + 1, cz, x, 34, cz);
     /* midspan cable mount: hop from the sidewalk onto the rail line */
-    for (const cz of [ZA, ZB]) fillB(29, 15, cz, 31, 15, cz, F.orangeDk, { j: 0.04 });
+    for (const cz of [ZA - 1, ZB + 1]) fillB(29, 17, cz, 31, 18, cz, F.orangeDk, { j: 0.04 });   // midspan cable mount
     gull(33, 17, ZB + 1);
   }
 
@@ -7190,7 +7216,7 @@ function buildSF() {
   zoox(-24, -8, false);
   zoox(76, -6, false);
   /* palms along the promenade + arms */
-  for (const [px, pz] of [[-13, 11], [-4, 27], [32, 11], [44, 27], [-13, 27], [34, 27], [52, 33], [72, 33], [88, 30], [-27, 30]])
+  for (const [px, pz] of [[-13, 11], [-4, 27], [32, 11], [44, 27], [-13, 27], [34, 27], [20, 11], [40, 11], [88, 30], [-27, 30]])
     palm(px, pz, 10 + ((px * 7 + pz) & 3) * 2);
   /* park trees + street trees */
   sfTree(-14, -22, 21, 14); sfTree(-8, -4, 22, 13); sfTree(-13, 8, 23, 14);
@@ -12752,16 +12778,16 @@ const sfLights = [
   roomLight(-37, 17, -6, 70, 0xffd9a0, 10),     // lady B parlor
   roomLight(-37, 17, 14, 70, 0xffd9a0, 10),     // lady C parlor
   roomLight(-38, 27, -29, 60, 0xffd9a0, 8),     // lady A upstairs
-  roomLight(-6, 7, 33, 70, 0xffd9a0, 10),       // the cafe
-  roomLight(7, 7, 33, 70, 0xffd9a0, 10),        // the bookshop
-  roomLight(21, 7, 34, 70, 0xffd9a0, 10),       // the pizza joint
-  roomLight(18, 5, 35, 60, 0xff8c2a, 10),       // pizza-oven glow
+  roomLight(-5, 7, 33, 80, 0xffd9a0, 12),       // the cafe
+  roomLight(15, 7, 33, 80, 0xffd9a0, 12),       // the bookshop
+  roomLight(35, 7, 34, 80, 0xffd9a0, 12),       // the pizza joint
+  roomLight(28, 5, 35, 60, 0xff8c2a, 10),       // pizza-oven glow
   roomLight(62, 10, 6, 110, 0xffe8b8, 16),      // ferry market hall
-  roomLight(99, 8, 15, 120, 0xfff4e0, 18),      // pyramid lobby
-  roomLight(99, 19, 15, 95, 0xcfe8ff, 12),      // pyramid F2
-  roomLight(99, 29, 15, 95, 0xcfe8ff, 12),      // pyramid F3
-  roomLight(99, 39, 15, 95, 0xffd9a0, 12),      // pyramid exec floor
-  roomLight(99, 49, 15, 95, 0xcfe8ff, 14),      // pyramid sky deck
+  roomLight(61, 8, 38, 120, 0xfff4e0, 18),      // pyramid lobby
+  roomLight(61, 19, 38, 95, 0xcfe8ff, 12),      // pyramid F2
+  roomLight(61, 29, 38, 95, 0xcfe8ff, 12),      // pyramid F3
+  roomLight(61, 39, 38, 95, 0xffd9a0, 12),      // pyramid exec floor
+  roomLight(61, 49, 38, 95, 0xcfe8ff, 14),      // pyramid sky deck
   roomLight(99, 20, -30, 80, 0xffd9a0, 10),     // coit lobby murals
   roomLight(99, 45, -30, 80, 0xffd9a0, 10),     // coit gallery
   roomLight(29, 7, 22, 60, 0xfff4e0, 9),        // cable car
@@ -13347,9 +13373,9 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'paintedladya', name: 'Painted Lady (teal)',   scene: 'sf', box: [-55, -26, -38, -15], walls: true },
   { id: 'paintedladyb', name: 'Painted Lady (rose)',   scene: 'sf', box: [-55, -26, -17, 5],   walls: true },
   { id: 'paintedladyc', name: 'Painted Lady (gold)',   scene: 'sf', box: [-55, -26, 3, 25],    walls: true },
-  { id: 'northpoint',  name: 'North Point Row',        scene: 'sf', box: [-13, 29, 24, 44],    walls: true },
+  { id: 'northpoint',  name: 'North Point Row',        scene: 'sf', box: [-16, 47, 24, 44],    walls: true },
   { id: 'ferrybldg',   name: 'The Ferry Building',     scene: 'sf', box: [44, 80, -18, 19],    walls: true },
-  { id: 'transamerica', name: 'Transamerica Pyramid',  scene: 'sf', box: [84, 114, 0, 30],     walls: true },
+  { id: 'transamerica', name: 'Transamerica Pyramid',  scene: 'sf', box: [46, 76, 23, 53],     walls: true },
   { id: 'coittower',   name: 'Coit Tower',             scene: 'sf', box: [84, 112, -44, -16],  walls: true },
   { id: 'goldengate',  name: 'The Little Golden Gate', scene: 'sf', box: [-8, 68, -58, -42],   walls: false },
   { id: 'cablecar',    name: 'Cable Car 61',           scene: 'sf', box: [17, 42, 17, 28],     walls: false },
