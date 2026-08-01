@@ -5487,6 +5487,7 @@ function buildSF() {
   // un-shifted aliases, so a section can be built through an offset frame
   const V0 = V, fillB0 = fillB, clearB0 = clearB, markDoor0 = markDoor, sign0 = sign, gull0 = gull;
   const bstair0 = bstair, bperson0 = bperson, flattenPad0 = flattenPad, stampLand0 = stampLand, groundAt0 = groundAt;
+  const signFace0 = signFace;
 
   /* ---- the horseshoe shape function ---- */
   const CXc = 30, CZc = -14, AXc = 0.62;
@@ -5513,6 +5514,19 @@ function buildSF() {
     if (dT < 20) {
       const t = Math.max(0, Math.min(1, 1 - (dT - 5) / 15));
       h = Math.round(14 * t * t * (3 - 2 * t) + (h3(x, 77, z) - 0.5) * (dT > 6 ? 1.6 : 0));
+    }
+    // the city hill: rises to a crest at the corner where the shop row
+    // meets the Painted Ladies, so both step up it like a ladder
+    const dC = Math.hypot(x + 22, z - 26);
+    if (dC < 52) {
+      const t = Math.max(0, Math.min(1, 1 - (dC - 8) / 44));
+      h = Math.max(h, Math.round(14 * t * t * (3 - 2 * t) + (h3(x, 33, z) - 0.5) * (dC > 10 ? 1.6 : 0)));
+    }
+    // the headland behind Coit, filling the map's north-east corner
+    const dB = Math.hypot(x - 114, z + 48);
+    if (dB < 26) {
+      const t = Math.max(0, Math.min(1, 1 - (dB - 5) / 21));
+      h = Math.max(h, Math.round(18 * t * t * (3 - 2 * t) + (h3(x, 51, z) - 0.5) * (dB > 7 ? 2 : 0)));
     }
     // the little park knoll behind the Painted Ladies
     const dA = Math.hypot(x + 48, z + 8);
@@ -5558,16 +5572,22 @@ function buildSF() {
     V(x, 0, z, c, { j: 0.05 });
     noteTop(x, z, 0);
   }
-  // flatten a column to plain land at y2 (for streets and building pads)
-  function stampLand(x, z) {
+  // the natural ground height at a column — hills included
+  const terrainTop = (x, z) => 2 + hillH(x, z);
+  // level one column to a given top; streets and pads ride the hillside
+  function stampLandTo(x, z, top) {
     const t = groundAt(x, z);
-    if (t !== undefined && t > 2) clearB(x, 3, z, x, t, z);
-    fillB(x, -2, z, x, 1, z, ((x * 3 + z) % 11 === 0) ? F.rockB : F.rockA, { j: 0.06 });
-    V(x, 2, z, h3(x, 5, z) < 0.4 ? F.grass : F.grassLt, { j: 0.1 });
-    noteTop(x, z, 2);
+    if (t !== undefined && t > top) clearB(x, top + 1, z, x, t, z);
+    fillB(x, -2, z, x, top - 1, z, ((x * 3 + z) % 11 === 0) ? F.rockB : F.rockA, { j: 0.06 });
+    V(x, top, z, h3(x, 5, z) < 0.4 ? F.grass : F.grassLt, { j: 0.1 });
+    noteTop(x, z, top);
   }
-  function flattenPad(x0, z0, x1, z1) {
-    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) stampLand(x, z);
+  function stampLand(x, z) { stampLandTo(x, z, terrainTop(x, z)); }
+  // a building pad is cut flat at the height of its own centre
+  function flattenPad(x0, z0, x1, z1, top) {
+    const y = top !== undefined ? top : terrainTop((x0 + x1) >> 1, (z0 + z1) >> 1);
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) stampLandTo(x, z, y);
+    return y;
   }
 
   /* ============ 1. TERRAIN: the horseshoe, bay, beaches ============ */
@@ -5624,7 +5644,7 @@ function buildSF() {
   // the Embarcadero promenade: straight along the beach, then curving
   // southeast around the Ferry Building to the pyramid plaza
   paveLine([[-20, 19], [42, 19]], 5.5);
-  paveLine([[42, 19], [50, 21], [58, 22], [72, 24], [80, 26]], 4);
+  paveLine([[42, 19], [50, 20], [58, 20], [72, 23], [80, 26]], 5);
   // east arm street: hugs the bay shore INSIDE the pyramid and Telegraph
   // Hill, then bends west along the tip to the bridge ramp
   paveLine([[78, 27], [82, 16], [81, 2], [80, -14], [80, -30]], 4.5);
@@ -5646,18 +5666,26 @@ function buildSF() {
   for (const cx of [8, 9, 12, 13, 16, 17]) fillB(cx, 2, 14, cx, 2, 24, 0xc4c4c0, { j: 0.1 });
   // cable-car track down the promenade straight (slot line + two rails)
   for (let x = -8; x <= 45; x++) {
-    V(x, 2, 21, F.steel, { j: 0.03 }); V(x, 2, 23, F.steel, { j: 0.03 });
-    V(x, 2, 22, 0x2a2a2c, { j: 0.03 });
-    if (x % 2 === 0) { V(x, 2, 20, 0x323236, { j: 0.04 }); V(x, 2, 24, 0x323236, { j: 0.04 }); }
+    const ty = groundAt(x, 22);
+    if (ty === undefined) continue;
+    V(x, ty, 21, F.steel, { j: 0.03 }); V(x, ty, 23, F.steel, { j: 0.03 });
+    V(x, ty, 22, 0x2a2a2c, { j: 0.03 });
+    if (x % 2 === 0) { V(x, ty, 20, 0x323236, { j: 0.04 }); V(x, ty, 24, 0x323236, { j: 0.04 }); }
   }
 
   /* ---- the cable-car turntable (west end of the line) ---- */
   {
     const TX = -10, TZ = 19;
+    const DY = terrainTop(TX, TZ) - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const bstair = (yF, yT, xa, zb2, sd) => bstair0(yF + DY, yT + DY, xa, zb2, sd);
     for (let x = TX - 8; x <= TX + 8; x++) for (let z = TZ - 8; z <= TZ + 8; z++) {
       const dd = Math.hypot(x - TX, z - TZ);
       if (dd > 7.4) continue;
-      stampLand(x, z);
+      stampLandTo(x, z, 2 + DY);
       if (dd > 4.6) V(x, 2, z, ((x + z) % 2 === 0) ? F.brickPav : 0x7a4634, { j: 0.06 });
       else V(x, 2, z, (x % 2 === 0) ? F.plank : F.plankDk, { j: 0.06 });
     }
@@ -5670,12 +5698,12 @@ function buildSF() {
       const ang = a / 20 * Math.PI * 2;
       const px = TX + Math.round(Math.cos(ang) * 6.6), pz = TZ + Math.round(Math.sin(ang) * 6.6);
       if (px > TX + 3 && pz >= TZ - 2 && pz <= TZ + 2) continue;   // track mouth
-      if (groundAt(px, pz) !== 2) continue;
+      if (groundAt(px, pz) !== 2 + DY) continue;
       V(px, 3, pz, F.iron, { j: 0.02 });
       V(px, 4, pz, 0xc9922e, { j: 0.02 });
     }
     // operator's hut on the south plaza edge
-    flattenPad(TX - 3, TZ + 7, TX + 1, TZ + 10);
+    flattenPad(TX - 3, TZ + 7, TX + 1, TZ + 10, 2 + DY);
     fillB(TX - 3, 3, TZ + 7, TX + 1, 8, TZ + 10, F.cream, { j: 0.04 });
     clearB(TX - 2, 3, TZ + 8, TX, 7, TZ + 9);
     clearB(TX - 3, 3, TZ + 8, TX - 3, 7, TZ + 8);                       // door west
@@ -5712,7 +5740,12 @@ function buildSF() {
   ];
   function lady(z0, C, turret) {
     const X0h = -45, X1h = -30, zb = z0 + 17;
-    flattenPad(X0h - 1, z0 - 1, X1h + 3, zb + 1);
+    const DY = flattenPad(X0h - 1, z0 - 1, X1h + 3, zb + 1) - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const bstair = (yF, yT, xa, zb2, sd) => bstair0(yF + DY, yT + DY, xa, zb2, sd);
     /* ---- shell: banded siding + trim quoins ---- */
     for (let y = 3; y <= 31; y++) {
       const c = (y % 2 === 0) ? C.body : C.bodyLt;
@@ -6021,7 +6054,7 @@ function buildSF() {
         if (r() < 0.6) V(x, 4, z, [0xd86a8a, 0xe0d05a, 0xd4523a][Math.floor(r() * 3)], { j: 0.1 });
       } }
     /* ---- backyard: fence, lemon tree, veg beds, clothesline, path ---- */
-    flattenPad(-53, z0, X0h - 1, zb);
+    flattenPad(-53, z0, X0h - 1, zb, 2 + DY);
     for (let z = z0; z <= zb; z++) { V(-53, 3, z, 0x6b5640, { j: 0.08 }); if (z % 4 === 0) V(-53, 4, z, 0x6b5640, { j: 0.06 }); }
     for (let x = -53; x <= X0h; x++) {
       V(x, 3, z0, 0x6b5640, { j: 0.08 }); V(x, 3, zb, 0x6b5640, { j: 0.08 });
@@ -6058,20 +6091,27 @@ function buildSF() {
 
   /* ============ 4. NORTH POINT ROW (x -12..28, faces the beach) ============
      Three Victorian storefronts at full scale: CAFE, READ and
-     PIZZA. Shops feet 3..11 behind six-tall glass, flats at
+     PIES. Shops feet 3..11 behind six-tall glass, flats at
      feet 13..21, sign bands with channel letters, parapet
      variety, service alley behind. */
   {
-    flattenPad(-15, 25, 46, 43);
-    for (let x = -14; x <= 45; x++) for (let z = 25; z <= 26; z++)
-      V(x, 2, z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
+    const shopDY = {};
     const SHOP = [
       { x0: -14, x1: 5,  body: 0x8a9a8a, trim: 0xf2efe6, sign: 0x2e5444, name: 'CAFE',  kind: 'cafe' },
       { x0: 6,   x1: 25, body: 0x6a7a9a, trim: 0xe8e0cc, sign: 0x1d3a52, name: 'READ',  kind: 'books' },
-      { x0: 26,  x1: 45, body: 0xb8927a, trim: 0xf2efe6, sign: 0x6e2a20, name: 'PIZZA', kind: 'pizza' },
+      { x0: 26,  x1: 45, body: 0xb8927a, trim: 0xf2efe6, sign: 0x6e2a20, name: 'PIES', kind: 'pizza' },
     ];
     for (const S of SHOP) {
       const { x0, x1 } = S, zf = 27, zr = 41;
+      const DY = flattenPad(x0 - 1, zf - 4, x1 + 1, zr + 3) - 2;
+      shopDY[S.name] = DY;
+      const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+      const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+      const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+      const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+      const signFace = (w, x, y, z, sx, sy, c, t, sp, fl) => signFace0(w, x, y + DY, z, sx, sy, c, t, sp, fl);
+      for (let x = x0 - 1; x <= x1 + 1; x++) for (let z = 25; z <= 26; z++)
+        V(x, 2, z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
       /* shell + slabs */
       for (let y = 3; y <= 21; y++) {
         const c = (y % 2 === 0) ? S.body : S.body + 0x060606;
@@ -6137,10 +6177,10 @@ function buildSF() {
     }
     /* ---- CAFE interior + flat ---- */
     {
-      const DX = -2;
-      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
-      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
-      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
+      const DX = -2, DY = shopDY['CAFE'] || 0;
+      const V = (x, y, z, c, o) => V0(x + DX, y + DY, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1);
       fillB(-11, 3, 32, -11, 5, 37, 0x2e5444, { j: 0.04 });                      // counter base
       fillB(-11, 6, 32, -10, 6, 37, 0x9a6a3a, { j: 0.04 });                      // counter top
       fillB(-11, 7, 33, -10, 8, 34, 0x8a8e94, { j: 0.04 });                      // espresso machine
@@ -6177,10 +6217,10 @@ function buildSF() {
     }
     /* ---- READ interior + garret ---- */
     {
-      const DX = 4;
-      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
-      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
-      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
+      const DX = 4, DY = shopDY['READ'] || 0;
+      const V = (x, y, z, c, o) => V0(x + DX, y + DY, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1);
       const r = mulberry(1953);
       for (const sz of [31, 35]) {                                               // tall double stacks
         fillB(4, 3, sz, 11, 9, sz, 0x4a3220, { j: 0.04 });
@@ -6213,12 +6253,12 @@ function buildSF() {
       V(10, 15, 41, 0xc03030, { j: 0 }); V(9, 16, 41, 0x30608a, { j: 0 });
       V(8, 20, 33, F.lampWhite, { t: 3, j: 0 }); V(8, 21, 33, F.iron, { j: 0 });
     }
-    /* ---- PIZZA interior + loft ---- */
+    /* ---- PIES interior + loft ---- */
     {
-      const DX = 11;
-      const V = (x, y, z, c, o) => V0(x + DX, y, z, c, o);
-      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0, z0, x1 + DX, y1, z1, c, o);
-      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0, z0, x1 + DX, y1, z1);
+      const DX = 11, DY = shopDY['PIES'] || 0;
+      const V = (x, y, z, c, o) => V0(x + DX, y + DY, z, c, o);
+      const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1, c, o);
+      const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0 + DX, y0 + DY, z0, x1 + DX, y1 + DY, z1);
       // the oven on the west party wall: tall brick dome, fire, chimney
       fillB(16, 3, 33, 17, 8, 37, F.brick, { j: 0.06 });
       fillB(16, 9, 34, 17, 9, 36, F.brick, { j: 0.06 });
@@ -6259,23 +6299,27 @@ function buildSF() {
       V(22, 20, 33, F.lampWhite, { t: 3, j: 0 }); V(22, 21, 33, F.iron, { j: 0 });
     }
     /* ---- roofline variety + alley ---- */
+    { const DY = shopDY['CAFE'] || 0;
     for (const [px, pw] of [[-11, 13]]) {                                        // cafe: rounded parapet
-      fillB(px, 24, 27, px + pw, 24, 27, 0x8a9a8a, { j: 0.04 });
-      fillB(px + 2, 25, 27, px + pw - 2, 25, 27, 0x8a9a8a, { j: 0.04 });
-      fillB(px + 3, 26, 27, px + pw - 3, 26, 27, 0xf2efe6, { j: 0.03 });
-    }
-    fillB(9, 24, 27, 21, 24, 27, 0x6a7a9a, { j: 0.04 });                         // books: stepped
-    fillB(12, 25, 27, 18, 25, 27, 0x6a7a9a, { j: 0.04 });
-    fillB(14, 26, 27, 16, 26, 27, 0xe8e0cc, { j: 0.03 });
-    for (let i = 0; i < 3; i++) fillB(29 + i, 24 + i, 27, 42 - i, 24 + i, 27, 0xb8927a, { j: 0.04 });
-    V(35, 27, 27, 0xf2efe6, { j: 0 }); V(36, 27, 27, 0xf2efe6, { j: 0 });
+      fillB(px, 24 + DY, 27, px + pw, 24 + DY, 27, 0x8a9a8a, { j: 0.04 });
+      fillB(px + 2, 25 + DY, 27, px + pw - 2, 25 + DY, 27, 0x8a9a8a, { j: 0.04 });
+      fillB(px + 3, 26 + DY, 27, px + pw - 3, 26 + DY, 27, 0xf2efe6, { j: 0.03 });
+    } }
+    { const DY = shopDY['READ'] || 0;                                            // books: stepped
+    fillB(9, 24 + DY, 27, 21, 24 + DY, 27, 0x6a7a9a, { j: 0.04 });
+    fillB(12, 25 + DY, 27, 18, 25 + DY, 27, 0x6a7a9a, { j: 0.04 });
+    fillB(14, 26 + DY, 27, 16, 26 + DY, 27, 0xe8e0cc, { j: 0.03 }); }
+    { const DY = shopDY['PIES'] || 0;
+    for (let i = 0; i < 3; i++) fillB(29 + i, 24 + i + DY, 27, 42 - i, 24 + i + DY, 27, 0xb8927a, { j: 0.04 });
+    V(35, 27 + DY, 27, 0xf2efe6, { j: 0 }); V(36, 27 + DY, 27, 0xf2efe6, { j: 0 }); }
     // each shop carries a big rooftop sign on iron posts
-    for (const [w, cx, bc, lc] of [['CAFE', -4, 0x2e5444, 0xf2e8c8], ['READ', 15, 0x1d3a52, 0xf2e8c8], ['PIZZA', 35, 0x6e2a20, 0xffb84a]]) {
+    for (const [w, cx, bc, lc] of [['CAFE', -4, 0x2e5444, 0xf2e8c8], ['READ', 15, 0x1d3a52, 0xf2e8c8], ['PIES', 35, 0x6e2a20, 0xffb84a]]) {
       const wide = w.length * 4 - 1, bx0 = cx - (wide >> 1) - 1, bx1 = bx0 + wide + 1;
-      for (const px of [bx0, bx1]) fillB(px, 23, 27, px, 26, 27, F.iron, { j: 0.02 });
-      fillB(bx0, 27, 27, bx1, 34, 27, bc, { j: 0.03 });
-      signFace(w, bx0 + 1, 28, 26, 1, 2, lc, 3, 1, true);    // street side
-      signFace(w, bx0 + 1, 28, 28, 1, 2, lc, 3, 1, false);   // bay side
+      const DY = shopDY[w] || 0;
+      for (const px of [bx0, bx1]) fillB(px, 23 + DY, 27, px, 26 + DY, 27, F.iron, { j: 0.02 });
+      fillB(bx0, 27 + DY, 27, bx1, 34 + DY, 27, bc, { j: 0.03 });
+      signFace(w, bx0 + 1, 28 + DY, 26, 1, 2, lc, 3, 1, true);    // street side
+      signFace(w, bx0 + 1, 28 + DY, 28, 1, 2, lc, 3, 1, false);   // bay side
     }
     flattenPad(-14, 42, 45, 43);
     for (let x = -14; x <= 45; x++) V(x, 2, 42, 0x3e3e44, { j: 0.06 });
@@ -6285,8 +6329,8 @@ function buildSF() {
     fillB(34, 3, 42, 35, 4, 42, 0x8a6a3a, { j: 0.08 });
     V(34, 5, 42, 0x8a6a3a, { j: 0.08 });
     V(24, 3, 43, 0x17171a, { j: 0.05 }); V(24, 4, 43, 0x2a2a2c, { j: 0.05 });    // alley cat
-    for (const vx of [-4, 15, 35]) { V(vx, 23, 38, 0x808488, { j: 0.04 }); V(vx, 24, 38, 0x808488, { j: 0.04 }); }
-    pigeon(0, 24, 27); pigeon(15, 27, 27);
+    for (const [vx, vn] of [[-4, 'CAFE'], [15, 'READ'], [35, 'PIES']]) { const d = shopDY[vn] || 0; V(vx, 23 + d, 38, 0x808488, { j: 0.04 }); V(vx, 24 + d, 38, 0x808488, { j: 0.04 }); }
+    pigeon(0, 24 + (shopDY['CAFE'] || 0), 27); pigeon(15, 27 + (shopDY['READ'] || 0), 27);
   }
 
   /* ============ 5. THE CITY BEACH (sand cove below the promenade) ============ */
@@ -6476,7 +6520,7 @@ function buildSF() {
      clock tower over the south doors, ferry slip out back. */
   {
     // built through a frame: the whole terminal sits 8 north, on the shore
-    const DZ = -8;
+    const DZ = -12;
     const V = (x, y, z, c, o) => V0(x, y, z + DZ, c, o);
     const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0, y0, z0 + DZ, x1, y1, z1 + DZ, c, o);
     const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0, y0, z0 + DZ, x1, y1, z1 + DZ);
@@ -7020,12 +7064,10 @@ function buildSF() {
     for (const cz of [ZA - 2, ZB + 2]) {
       for (let x = 5; x <= 55; x++) {
         const cy = cableY(x);
-        if (cy > 16) {
-          V(x, cy, cz, F.orange, { j: 0.03 });
-          const cyPrev = cableY(x - 1);
-          if (cy > cyPrev) V(x, cy - 1, cz, F.orange, { j: 0.03 });             // fill the ascending step
-          if (x % 3 === 0 && cy > 18) fillB(x, 15, cz, x, cy - 1, cz, F.orangeDk, { j: 0.03 });  // suspender to the deck
-        }
+        V(x, cy, cz, F.orange, { j: 0.03 });
+        const cyPrev = cableY(x - 1);
+        if (cy > cyPrev) V(x, cy - 1, cz, F.orange, { j: 0.03 });               // fill the ascending step
+        if (x % 3 === 0 && cy > 18) fillB(x, 15, cz, x, cy - 1, cz, F.orangeDk, { j: 0.03 });    // suspender to the deck
       }
       // backstays diving to the anchorages (2 per step, face-connected)
       for (let x = 11; x >= 5; x--) {
@@ -11425,7 +11467,7 @@ let playXMin = X0 + 0.5, playZMin = -55.5;
 // safe sidewalk per scene, for un-burying the player after resets
 const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
   : sceneId === 'sanjose' ? [76.5, 4, 2.5]
-  : sceneId === 'sf' ? [14.5, 4, 24.5]
+  : sceneId === 'sf' ? [25.5, 3, 16.5]
   : sceneId === 'seattlelong' ? [29.5, 4, 0.5]
   : sceneId === 'seattle' ? [45.5, 11, 14.5] : [21.5, 2, 17.5];
 
