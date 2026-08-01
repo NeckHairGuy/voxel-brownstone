@@ -5467,6 +5467,26 @@ function buildSF() {
     blob(tx, b + h + 2, tz, 4);
   }
 
+  // the 3x3 font at any cell size, laid right-to-left so it reads the
+  // right way round from the street (which looks back along -z)
+  function signFace(word, x0, y0, z, sx, sy, color, t = 3) {
+    const glyphs = [...word].map(c => FONT[c]);
+    const total = glyphs.reduce((a, g) => a + g[0].length, 0) * sx;
+    let lx = 0;
+    for (const rows of glyphs) {
+      const w = rows[0].length;
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < w; cx++)
+        if (rows[ry][cx] === '#') {
+          const px = x0 + total - sx - (lx + cx * sx);
+          fillB(px, y0 + (2 - ry) * sy, z, px + sx - 1, y0 + (2 - ry) * sy + sy - 1, z, color, { t, j: 0 });
+        }
+      lx += w * sx;
+    }
+  }
+
+  // un-shifted aliases, so a section can be built through an offset frame
+  const V0 = V, fillB0 = fillB, clearB0 = clearB, markDoor0 = markDoor, sign0 = sign, gull0 = gull;
+
   /* ---- the horseshoe shape function ---- */
   const CXc = 30, CZc = -14, AXc = 0.62;
   const RX0 = -64, RX1 = 124, RZ0 = -72, RZ1 = 56;
@@ -5487,11 +5507,11 @@ function buildSF() {
   /* ---- hills (only raise columns that are already land) ---- */
   function hillH(x, z) {
     // Telegraph Hill under Coit, with a flat summit plateau
-    const dT = Math.hypot(x - 90, z + 28);
+    const dT = Math.hypot(x - 99, z + 30);
     let h = 0;
-    if (dT < 12.5) {
-      const t = Math.max(0, Math.min(1, 1 - (dT - 4.5) / 8));
-      h = Math.round(14 * t * t * (3 - 2 * t) + (h3(x, 77, z) - 0.5) * (dT > 5 ? 1.6 : 0));
+    if (dT < 20) {
+      const t = Math.max(0, Math.min(1, 1 - (dT - 5) / 15));
+      h = Math.round(14 * t * t * (3 - 2 * t) + (h3(x, 77, z) - 0.5) * (dT > 6 ? 1.6 : 0));
     }
     // the little park knoll behind the Painted Ladies
     const dA = Math.hypot(x + 48, z + 8);
@@ -5602,14 +5622,14 @@ function buildSF() {
   }
   // the Embarcadero promenade: straight along the beach, then curving
   // southeast around the Ferry Building to the pyramid plaza
-  paveLine([[-22, 19], [42, 19]], 3.5);
-  paveLine([[42, 19], [48, 22], [55, 27], [63, 30], [74, 31], [86, 30]], 3.5);
-  // east arm street: up past the pyramid, between Telegraph Hill and the
-  // coast, then west along the tip to the bridge ramp
-  paveLine([[86, 30], [96, 26], [102, 18], [105, 8], [105, -12]], 2.5);
-  paveLine([[105, -12], [104, -24], [100, -36], [92, -44], [82, -49], [70, -50]], 2.5);
+  paveLine([[-20, 19], [42, 19]], 5.5);
+  paveLine([[42, 19], [50, 22], [58, 26], [68, 28], [78, 27]], 5.5);
+  // east arm street: hugs the bay shore INSIDE the pyramid and Telegraph
+  // Hill, then bends west along the tip to the bridge ramp
+  paveLine([[78, 27], [82, 16], [81, 2], [80, -14], [80, -30]], 4.5);
+  paveLine([[80, -30], [78, -40], [72, -47], [66, -50]], 4.5);
   // west arm street: past the Painted Ladies, curving to the west ramp
-  paveLine([[-22, 22], [-22, -30], [-19, -37], [-13, -42], [-6, -46], [2, -48]], 2.5);
+  paveLine([[-20, 22], [-20, -30], [-18, -38], [-12, -44], [-4, -48]], 4.5);
   for (const k of roadSet) {
     const [x, z] = k.split('|').map(Number);
     stampLand(x, z);
@@ -5622,12 +5642,12 @@ function buildSF() {
     V(x, 2, z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
   }
   // crosswalk at the turntable plaza and mid-beach
-  for (const cx of [8, 9, 12, 13, 16, 17]) fillB(cx, 2, 16, cx, 2, 22, 0xc4c4c0, { j: 0.1 });
+  for (const cx of [8, 9, 12, 13, 16, 17]) fillB(cx, 2, 14, cx, 2, 24, 0xc4c4c0, { j: 0.1 });
   // cable-car track down the promenade straight (slot line + two rails)
-  for (let x = -8; x <= 41; x++) {
-    V(x, 2, 17, F.steel, { j: 0.03 }); V(x, 2, 19, F.steel, { j: 0.03 });
-    V(x, 2, 18, 0x2a2a2c, { j: 0.03 });
-    if (x % 2 === 0) { V(x, 2, 16, 0x323236, { j: 0.04 }); V(x, 2, 20, 0x323236, { j: 0.04 }); }
+  for (let x = -8; x <= 45; x++) {
+    V(x, 2, 21, F.steel, { j: 0.03 }); V(x, 2, 23, F.steel, { j: 0.03 });
+    V(x, 2, 22, 0x2a2a2c, { j: 0.03 });
+    if (x % 2 === 0) { V(x, 2, 20, 0x323236, { j: 0.04 }); V(x, 2, 24, 0x323236, { j: 0.04 }); }
   }
 
   /* ---- the cable-car turntable (west end of the line) ---- */
@@ -5665,11 +5685,11 @@ function buildSF() {
     V(TX - 1, 3, TZ + 9, F.iron, { j: 0 }); V(TX - 1, 4, TZ + 9, 0xc03028, { j: 0 });  // the lever
     V(TX, 3, TZ + 9, 0x6e4a28, { j: 0.04 });                            // stool
     // cable-car stop sign + queue rope posts along the north walk
-    fillB(6, 3, 14, 6, 8, 14, 0x7a2230, { j: 0.03 });
-    fillB(5, 6, 14, 7, 8, 14, 0xf2efe6, { j: 0.02 });
-    V(6, 7, 14, 0x7a2230, { j: 0 });
+    fillB(6, 3, 27, 6, 8, 27, 0x7a2230, { j: 0.03 });
+    fillB(5, 6, 27, 7, 8, 27, 0xf2efe6, { j: 0.02 });
+    V(6, 7, 27, 0x7a2230, { j: 0 });
     for (const qx of [-4, 0, 4]) {
-      V(qx, 3, 14, F.iron, { j: 0.02 }); V(qx, 4, 14, 0xc9922e, { j: 0.02 });
+      V(qx, 3, 26, F.iron, { j: 0.02 }); V(qx, 4, 26, 0xc9922e, { j: 0.02 });
     }
   }
 
@@ -5863,8 +5883,7 @@ function buildSF() {
     fillB(-37, 13, z0 + 5, -35, 13, z0 + 5, F.woodDk, { j: 0.03 });             // coffee base
     fillB(-37, 14, z0 + 5, -35, 14, z0 + 5, F.wood, { j: 0.04 });
     V(-36, 15, z0 + 5, 0xb04a3a, { j: 0.05 });                                   // book
-    fillB(-32, 13, z0 + 4, -31, 14, z0 + 4, 0x8a4a2e, { j: 0.05 });             // armchair pair
-    fillB(-32, 13, z0 + 6, -31, 14, z0 + 6, 0x8a4a2e, { j: 0.05 });
+    fillB(-31, 13, z0 + 4, -31, 14, z0 + 4, 0x8a4a2e, { j: 0.05 });             // one armchair by the bay
     for (let y = 13; y <= 19; y++) V(-31, y, z0 + 8, [0x8a2020, 0x2a4a8a, 0x2e5444, 0xc9922e, 0x5a3a22, 0x8a2020, 0x2a4a8a][y - 13], { j: 0.05 });
     fillB(-31, 13, z0 + 2, -31, 17, z0 + 2, F.iron, { j: 0 });                  // floor lamp
     V(-31, 18, z0 + 2, F.lampWarm, { t: 3, j: 0 });
@@ -5872,17 +5891,15 @@ function buildSF() {
     V(-35, 20, z0 + 5, F.lampWarm, { t: 3, j: 0 }); V(-35, 21, z0 + 5, F.iron, { j: 0 });   // living light
     // entry: console + mirror + runner
     fillB(-33, 12, z0 + 11, -31, 12, z0 + 13, 0x8e3a3a, { j: 0.05 });           // runner rug
-    V(-31, 13, z0 + 10, F.woodDk, { j: 0.04 }); V(-31, 14, z0 + 10, 0xc9922e, { j: 0.03 });
-    fillB(-31, 15, z0 + 10, -31, 16, z0 + 10, 0xbdd2da, { j: 0.02 });           // mirror
+    fillB(-31, 15, z0 + 10, -31, 16, z0 + 10, 0xbdd2da, { j: 0.02 });           // hall mirror, no console           // mirror
     // dining west of the entry
     fillB(-39, 13, z0 + 11, -37, 13, z0 + 12, F.woodDk, { j: 0.03 });
     fillB(-39, 14, z0 + 11, -37, 14, z0 + 12, F.wood, { j: 0.04 });
-    for (const [cx2, cz2] of [[-40, z0 + 11], [-36, z0 + 12], [-38, z0 + 10], [-38, z0 + 13]])
-      V(cx2, 13, cz2, C.accent, { j: 0.05 });
+    for (const [cx2, cz2] of [[-40, z0 + 11], [-36, z0 + 12]]) V(cx2, 13, cz2, C.accent, { j: 0.05 });
     V(-38, 20, z0 + 11, F.lampWarm, { t: 3, j: 0 }); V(-38, 21, z0 + 11, F.iron, { j: 0 });
     // kitchen along the north wall: counters, island, range, fridge
-    fillB(-39, 13, zb - 1, -33, 14, zb - 1, 0x5a6e5a, { j: 0.04 });             // base cabinets
-    fillB(-39, 15, zb - 1, -33, 15, zb - 1, 0xd9d4c8, { j: 0.03 });             // counter top
+    fillB(-39, 13, zb - 1, -35, 14, zb - 1, 0x5a6e5a, { j: 0.04 });             // base cabinets
+    fillB(-39, 15, zb - 1, -35, 15, zb - 1, 0xd9d4c8, { j: 0.03 });             // counter top
     V(-38, 15, zb - 2, 0xa8b0b6, { j: 0.03 });                                   // sink
     fillB(-36, 13, zb - 1, -35, 15, zb - 1, 0x2e2e30, { j: 0.03 });             // range
     fillB(-36, 18, zb - 1, -35, 19, zb - 1, 0x9aa0a6, { j: 0.04 });             // hood
@@ -6033,9 +6050,9 @@ function buildSF() {
     fillB(-45, 3, gz + 1, -31, 4, gz + 1, 0x2e4a26, { j: 0.12 });
   }
   // lawn benches across the street, facing the row
-  for (const bz of [-26, -6, 14]) {
-    fillB(-16, 3, bz, -16, 3, bz + 2, F.wood, { j: 0.05 });
-    fillB(-15, 4, bz, -15, 4, bz + 2, F.woodDk, { j: 0.05 });
+  for (const bz of [-26, -6, 10]) {
+    fillB(-13, 3, bz, -13, 3, bz + 2, F.wood, { j: 0.05 });
+    fillB(-12, 4, bz, -12, 4, bz + 2, F.woodDk, { j: 0.05 });
   }
 
   /* ============ 4. NORTH POINT ROW (x -12..28, faces the beach) ============
@@ -6083,14 +6100,13 @@ function buildSF() {
       fillB(x0 + 1, 10, zf, x1 - 1, 10, zf, F.glass, { t: 1, j: 0.02 });        // transom
       fillB(x0, 11, zf, x1, 11, zf, S.trim, { j: 0.04 });                       // storefront cornice
       fillB(x0, 12, zf - 1, x1, 14, zf - 1, S.sign, { j: 0.03 });               // sign band
-      sign(S.name, x0 + S.sx, 12, zf - 2, 1, 0xf2e8c8, 3, 0);
+      signFace(S.name, x0 + S.sx, 12, zf - 2, 1, 1, 0xf2e8c8, 3);
       /* awning over the walk */
       for (let x = x0 + 1; x <= x1 - 1; x++) {
         const st = (x % 4 < 2);
-        V(x, 10, zf - 1, st ? S.trim : S.sign, { j: 0.04 });
-        V(x, 9, zf - 2, st ? S.trim : S.sign, { j: 0.04 });
-        V(x, 8, zf - 3, st ? S.trim : S.sign, { j: 0.04 });
-        V(x, 7, zf - 3, st ? S.sign : S.trim, { j: 0.04 });                     // valance
+        V(x, 11, zf - 1, st ? S.trim : S.sign, { j: 0.04 });
+        V(x, 10, zf - 2, st ? S.trim : S.sign, { j: 0.04 });
+        V(x, 9, zf - 2, st ? S.sign : S.trim, { j: 0.04 });                     // valance
       }
       /* flat windows above the sign band */
       for (const wx of [x0 + 2, x0 + 6, x1 - 3]) {
@@ -6120,15 +6136,15 @@ function buildSF() {
     }
     /* ---- CAFE interior + flat ---- */
     {
-      fillB(-11, 3, 31, -11, 5, 37, 0x2e5444, { j: 0.04 });                      // counter base
-      fillB(-11, 6, 30, -10, 6, 37, 0x9a6a3a, { j: 0.04 });                      // counter top
+      fillB(-11, 3, 32, -11, 5, 37, 0x2e5444, { j: 0.04 });                      // counter base
+      fillB(-11, 6, 32, -10, 6, 37, 0x9a6a3a, { j: 0.04 });                      // counter top
       fillB(-11, 7, 33, -10, 8, 34, 0x8a8e94, { j: 0.04 });                      // espresso machine
       V(-11, 7, 31, 0x2a2a2e, { j: 0 }); V(-11, 8, 31, 0x3a3a3e, { j: 0 });      // register
       fillB(-11, 7, 36, -10, 8, 37, F.glass, { t: 1, j: 0.02 });                 // pastry case
       V(-11, 7, 37, 0xc9923a, { j: 0.05 }); V(-10, 7, 36, 0xe0d05a, { j: 0.05 });
       fillB(-11, 9, 31, -11, 11, 37, 0x1d3a2e, { j: 0.03 });                     // menu board
       { const r = mulberry(414); for (let z = 32; z <= 36; z++) if (r() < 0.7) V(-11, 9 + Math.floor(r() * 3), z, 0xffb84a, { t: 2, j: 0 }); }
-      for (const [tx, tz] of [[-6, 31], [-3, 35], [-6, 38]]) {                   // cafe tables
+      for (const [tx, tz] of [[-6, 32], [-5, 38]]) {                            // cafe tables
         fillB(tx, 3, tz, tx, 4, tz, 0x2a2a2e, { j: 0 });
         fillB(tx - 1, 5, tz - 1, tx + 1, 5, tz + 1, 0x9a6a3a, { j: 0.05 });
         V(tx - 2, 3, tz, 0x2a2a2e, { j: 0 }); V(tx - 2, 4, tz, 0x6e4a28, { j: 0.05 });
@@ -6199,8 +6215,8 @@ function buildSF() {
       fillB(16, 10, 35, 17, 23, 36, F.brick, { j: 0.05 });                       // chimney
       fillB(16, 24, 35, 17, 24, 36, 0x6a6a6e, { j: 0.04 });
       // counter facing the door, slice case, register
-      fillB(19, 3, 31, 24, 5, 31, 0x6e2a20, { j: 0.04 });
-      fillB(19, 6, 31, 24, 6, 32, 0xd9d4c8, { j: 0.03 });
+      fillB(19, 3, 31, 23, 5, 31, 0x6e2a20, { j: 0.04 });
+      fillB(19, 6, 31, 23, 6, 32, 0xd9d4c8, { j: 0.03 });
       V(20, 7, 31, 0x2a2a2e, { j: 0 });
       fillB(22, 7, 31, 24, 8, 31, F.glass, { t: 1, j: 0.02 });                   // slice case
       V(23, 7, 32, 0xe0b040, { j: 0.05 });
@@ -6209,7 +6225,7 @@ function buildSF() {
       V(19, 6, 34, 0xf2efe6, { j: 0.02 }); V(20, 6, 35, 0xf2efe6, { j: 0.02 });  // dough
       fillB(19, 3, 37, 20, 4, 37, 0xe8e4da, { j: 0.03 });                        // flour sacks
       V(19, 5, 37, 0xe8e4da, { j: 0.03 });
-      for (const bz of [29, 32]) {                                               // window booths
+      for (const bz of [30]) {                                                   // one window booth
         fillB(24, 3, bz, 27, 3, bz, 0x6e2a20, { j: 0.05 });
         fillB(24, 4, bz - 1, 27, 5, bz - 1, 0x6e2a20, { j: 0.05 });
         fillB(24, 4, bz + 1, 27, 5, bz + 1, 0x9a6a3a, { j: 0.05 });
@@ -6240,9 +6256,13 @@ function buildSF() {
     fillB(7, 26, 27, 9, 26, 27, 0xe8e0cc, { j: 0.03 });
     for (let i = 0; i < 3; i++) fillB(18 + i, 24 + i, 27, 25 - i, 24 + i, 27, 0xb8927a, { j: 0.04 });
     V(21, 27, 27, 0xf2efe6, { j: 0 }); V(22, 27, 27, 0xf2efe6, { j: 0 });
-    for (const px of [19, 25]) fillB(px, 23, 34, px, 25, 34, F.iron, { j: 0.02 });
-    fillB(18, 26, 34, 26, 28, 34, 0x1d2024, { j: 0.03 });                        // rooftop PIE sign
-    sign('PIE', 18, 26, 35, 1, 0xffb84a, 3, 1);
+    // each shop carries a big rooftop sign on iron posts
+    for (const [w, cx, bc, lc] of [['CAFE', -8, 0x2e5444, 0xf2e8c8], ['READ', 7, 0x1d3a52, 0xf2e8c8], ['PIZZA', 21, 0x6e2a20, 0xffb84a]]) {
+      const wide = w.length * 3, bx0 = cx - (wide >> 1) - 1, bx1 = bx0 + wide + 1;
+      for (const px of [bx0, bx1]) fillB(px, 23, 27, px, 26, 27, F.iron, { j: 0.02 });
+      fillB(bx0, 27, 27, bx1, 34, 27, bc, { j: 0.03 });
+      signFace(w, bx0 + 1, 28, 26, 1, 2, lc, 3);
+    }
     flattenPad(-12, 42, 28, 43);
     for (let x = -12; x <= 28; x++) V(x, 2, 42, 0x3e3e44, { j: 0.06 });
     fillB(-8, 3, 42, -5, 4, 43, 0x2e5a34, { j: 0.06 });                          // dumpsters
@@ -6395,7 +6415,7 @@ function buildSF() {
      headlamp. Floor y3 (feet 4), ceiling y10. */
   {
     const M = 0x7a2230, CR = 0xe8e0cc, G = 0xc9922e;
-    const x0 = 20, x1 = 39, za = 16, zb = 21;
+    const x0 = 20, x1 = 39, za = 20, zb = 25;
     fillB(x0, 3, za, x1, 3, zb, F.wood, { j: 0.05 });                            // deck (feet 4)
     /* open grip section x0..x0+9 */
     for (const px of [x0, x0 + 5, x0 + 9]) for (const pz of [za, zb])
@@ -6441,8 +6461,17 @@ function buildSF() {
      offices reached by an open hall stair, the four-faced
      clock tower over the south doors, ferry slip out back. */
   {
+    // built through a frame: the whole terminal sits 8 north, on the shore
+    const DZ = -8;
+    const V = (x, y, z, c, o) => V0(x, y, z + DZ, c, o);
+    const fillB = (x0, y0, z0, x1, y1, z1, c, o) => fillB0(x0, y0, z0 + DZ, x1, y1, z1 + DZ, c, o);
+    const clearB = (x0, y0, z0, x1, y1, z1) => clearB0(x0, y0, z0 + DZ, x1, y1, z1 + DZ);
+    const markDoor = (x0, y0, z0, x1, y1, z1) => markDoor0(x0, y0, z0 + DZ, x1, y1, z1 + DZ);
+    const sign = (w, x0, y0, z, sc, c, t, sp) => sign0(w, x0, y0, z + DZ, sc, c, t, sp);
+    const gull = (x, y, z) => gull0(x, y, z + DZ);
+    const noteTopF = (x, z, y) => noteTop(x, z + DZ, y);
     const B = { stone: 0xd9cfb4, stoneDk: 0xc9bfa2, trim: 0xf2efe6, roof: 0x7a8a8e, sign: 0x1d3a2e };
-    flattenPad(45, 5, 79, 26);
+    flattenPad(45, 5 + DZ, 79, 26 + DZ);
     for (let x = 45; x <= 79; x++) for (let z = 20; z <= 26; z++)
       V(x, 2, z, ((x + z) % 2 === 0) ? 0xd8d4c8 : 0xc9c4b8, { j: 0.03 });
     /* ---- nave shell x 46..78, z 8..20, walls to y17 ---- */
@@ -6569,10 +6598,10 @@ function buildSF() {
     fillB(61, 45, 21, 62, 45, 22, B.roof, { j: 0.04 });
     V(61, 46, 21, 0xc9a227, { t: 2, j: 0 }); V(61, 47, 21, 0xc9a227, { t: 2, j: 0 });
     /* ---- rear ferry deck, slip + the little launch ---- */
-    for (let x = 52; x <= 72; x++) for (let z = 4; z <= 7; z++) { V(x, 2, z, F.plank, { j: 0.06 }); noteTop(x, z, 2); }
+    for (let x = 52; x <= 72; x++) for (let z = 4; z <= 7; z++) { V(x, 2, z, F.plank, { j: 0.06 }); noteTopF(x, z, 2); }
     for (let x = 54; x <= 70; x += 4) fillB(x, -1, 4, x, 1, 4, F.plankDk, { j: 0.05 });
     for (let x = 52; x <= 72; x++) if (x < 60 || x > 64) { if (x % 3 === 0) V(x, 3, 4, F.plankDk, { j: 0.04 }); V(x, 4, 4, 0x6b5640, { j: 0.05 }); }
-    for (let z = -8; z <= 3; z++) for (let x = 60; x <= 64; x++) { V(x, 2, z, F.plank, { j: 0.06 }); noteTop(x, z, 2); }
+    for (let z = -8; z <= 3; z++) for (let x = 60; x <= 64; x++) { V(x, 2, z, F.plank, { j: 0.06 }); noteTopF(x, z, 2); }
     for (let z = -7; z <= 2; z += 3) for (const px of [60, 64]) fillB(px, -1, z, px, 1, z, F.plankDk, { j: 0.05 });
     for (const [px, pz] of [[59, -8], [65, -8], [59, -2], [65, -2]]) {
       fillB(px, -1, pz, px, 3, pz, F.plankDk, { j: 0.05 });
@@ -6594,162 +6623,192 @@ function buildSF() {
     V(54, 1, -1, 0x9a6a3a, { j: 0.05 }); V(55, 2, 0, F.wood, { j: 0.04 });
   }
 
-  /* ============ 9. TRANSAMERICA PYRAMID (x 82..104, taper from y15) ============
-     Grand glass podium with the X-trusses, then the quartz
-     taper to a beacon at y74. Three walkable floors: lobby
-     (feet 3..13, double height), offices (feet 15..23),
-     executive (feet 25..33). Separate west and east stairs. */
+  /* ============ 9. TRANSAMERICA PYRAMID (x 88..110, spire to y99) ============
+     A slender tower on the east arm's seaward side: a glass
+     podium with the signature X-trusses, then the quartz taper
+     climbing 85 voxels. Five walkable floors — lobby, two open
+     office floors, the executive floor and a sky deck — linked
+     by four switchback stairs, no two ever stacked. */
   {
-    const CXp = 93, CZp = 15;
-    const hwAt = y => Math.max(1, 11 - Math.round((y - 14) * 0.26));
-    flattenPad(80, 2, 106, 30);
-    for (let x = 80; x <= 106; x++) for (let z = 0; z <= 32; z++) {
-      const s2 = shapeAt(x, z);
-      if (!(s2.d >= s2.rIn && s2.d <= s2.rOut) && z < 2) continue;
-      if (x >= 82 && x <= 104 && z >= 4 && z <= 26) continue;
+    const CXp = 99, CZp = 15, PHW = 11;
+    const hwAt = y => Math.max(1, PHW - Math.round((y - 14) * 0.14));
+    flattenPad(85, 1, 113, 29);
+    for (let x = 85; x <= 113; x++) for (let z = 1; z <= 29; z++) {
+      if (x >= 88 && x <= 110 && z >= 4 && z <= 26) continue;
       stampLand(x, z);
       V(x, 2, z, ((x + z) % 2 === 0) ? 0xd8d4c8 : 0xc9c4b8, { j: 0.03 });
     }
-    /* podium y3..14: glass curtain + white X-trusses + corner piers */
+    /* ---- podium y3..14: glass curtain, X-trusses, corner piers ---- */
     for (let y = 3; y <= 14; y++) {
-      for (let x = 82; x <= 104; x++) {
-        const ph = ((x - 82) % 8), truss = ph === (y - 3) % 8 || ph === 7 - ((y - 3) % 8);
-        V(x, y, 4, truss || y === 14 ? F.quartz : F.glass, truss || y === 14 ? { j: 0.03 } : { t: 1, j: 0.02 });
-        V(x, y, 26, truss || y === 14 ? F.quartz : F.glass, truss || y === 14 ? { j: 0.03 } : { t: 1, j: 0.02 });
+      for (let x = 88; x <= 110; x++) {
+        const ph = (x - 88) % 8, truss = ph === (y - 3) % 8 || ph === 7 - ((y - 3) % 8);
+        const sol = truss || y === 14;
+        V(x, y, 4, sol ? F.quartz : F.glass, sol ? { j: 0.03 } : { t: 1, j: 0.02 });
+        V(x, y, 26, sol ? F.quartz : F.glass, sol ? { j: 0.03 } : { t: 1, j: 0.02 });
       }
       for (let z = 4; z <= 26; z++) {
-        const ph = ((z - 4) % 8), truss = ph === (y - 3) % 8 || ph === 7 - ((y - 3) % 8);
-        V(82, y, z, truss || y === 14 ? F.quartz : F.glass, truss || y === 14 ? { j: 0.03 } : { t: 1, j: 0.02 });
-        V(104, y, z, truss || y === 14 ? F.quartz : F.glass, truss || y === 14 ? { j: 0.03 } : { t: 1, j: 0.02 });
+        const ph = (z - 4) % 8, truss = ph === (y - 3) % 8 || ph === 7 - ((y - 3) % 8);
+        const sol = truss || y === 14;
+        V(88, y, z, sol ? F.quartz : F.glass, sol ? { j: 0.03 } : { t: 1, j: 0.02 });
+        V(110, y, z, sol ? F.quartz : F.glass, sol ? { j: 0.03 } : { t: 1, j: 0.02 });
       }
-      for (const [cx, cz] of [[82, 4], [82, 26], [104, 4], [104, 26]]) {
+      for (const [cx, cz] of [[88, 4], [88, 26], [110, 4], [110, 26]]) {
         V(cx, y, cz, F.quartz, { j: 0.03 });
-        V(cx === 82 ? 83 : 103, y, cz, F.quartz, { j: 0.03 });
+        V(cx === 88 ? 89 : 109, y, cz, F.quartz, { j: 0.03 });
         V(cx, y, cz === 4 ? 5 : 25, F.quartz, { j: 0.03 });
       }
     }
-    /* lobby floor + tall doors north and south + canopies */
-    for (let x = 83; x <= 103; x++) for (let z = 5; z <= 25; z++)
+    /* ---- lobby floor + tall doors north and south ---- */
+    for (let x = 89; x <= 109; x++) for (let z = 5; z <= 25; z++)
       V(x, 2, z, ((x % 4 < 2) === (z % 4 < 2)) ? 0xe4e0d4 : 0x8a8478, { j: 0.03 });
-    clearB(91, 3, 26, 95, 8, 26);
-    fillB(91, 3, 26, 95, 7, 26, 0x2a2e32, { j: 0.03 });
-    fillB(92, 4, 26, 94, 7, 26, F.glass, { t: 1, j: 0.02 });
-    markDoor(91, 3, 26, 95, 8, 27);
-    fillB(90, 9, 27, 96, 9, 28, F.quartz, { j: 0.03 });
-    clearB(91, 3, 4, 95, 8, 4);
-    fillB(91, 3, 4, 95, 7, 4, 0x2a2e32, { j: 0.03 });
-    fillB(92, 4, 4, 94, 7, 4, F.glass, { t: 1, j: 0.02 });
-    markDoor(91, 3, 3, 95, 8, 4);
-    fillB(90, 9, 2, 96, 9, 3, F.quartz, { j: 0.03 });
-    /* lobby: reception, turnstiles, elevator core, lounge, model, heart */
-    fillB(90, 3, 21, 96, 5, 22, F.woodDk, { j: 0.04 });                          // reception
-    fillB(90, 6, 21, 96, 6, 22, 0xd9d4c8, { j: 0.03 });
-    V(93, 7, 22, 0xc9922e, { t: 2, j: 0 });
-    bperson(94, 3, 20, 0x2a3a55, 0x23262a);                                      // security
-    for (const tx of [88, 91, 95, 98]) fillB(tx, 3, 18, tx, 5, 18, F.steel, { j: 0.02 });   // turnstiles
-    for (const gx of [89, 96]) V(gx, 5, 18, 0x40e080, { t: 2, j: 0 });
-    fillB(91, 3, 10, 97, 13, 14, 0x3a4048, { j: 0.03 });                         // elevator core
-    for (const ex of [92, 94, 96]) fillB(ex, 3, 14, ex, 7, 14, 0xc9922e, { j: 0.02 });
-    for (const ex of [92, 94, 96]) V(ex, 8, 14, 0xffa028, { t: 2, j: 0 });
-    fillB(84, 2, 19, 87, 2, 24, 0x7a3b30, { j: 0.05 });                          // lounge rug
-    fillB(84, 3, 24, 87, 5, 24, 0x2f5f5a, { j: 0.05 });                          // sofas
-    fillB(84, 3, 19, 87, 5, 19, 0x2f5f5a, { j: 0.05 });
-    fillB(85, 3, 21, 86, 4, 22, F.wood, { j: 0.04 });
-    for (const [px, pz] of [[84, 6], [100, 6], [100, 24]]) {
+    for (const [dz, out] of [[26, 27], [4, 3]]) {
+      clearB(96, 3, dz, 102, 9, dz);
+      fillB(96, 3, dz, 102, 8, dz, 0x2a2e32, { j: 0.03 });
+      fillB(97, 4, dz, 101, 8, dz, F.glass, { t: 1, j: 0.02 });
+      markDoor(96, 3, Math.min(dz, out), 102, 8, Math.max(dz, out));
+      fillB(95, 10, out, 103, 10, out + (out > dz ? 1 : -1), F.quartz, { j: 0.03 });
+    }
+    /* ---- lobby: reception, turnstiles, core, lounge, model, heart ---- */
+    fillB(96, 3, 21, 102, 5, 22, F.woodDk, { j: 0.04 });                        // reception
+    fillB(96, 6, 21, 102, 6, 22, 0xd9d4c8, { j: 0.03 });
+    V(99, 7, 22, 0xc9922e, { t: 2, j: 0 });
+    bperson(100, 3, 20, 0x2a3a55, 0x23262a);
+    for (const tx of [94, 97, 101, 104]) fillB(tx, 3, 18, tx, 5, 18, F.steel, { j: 0.02 });
+    for (const gx of [95, 102]) V(gx, 5, 18, 0x40e080, { t: 2, j: 0 });
+    fillB(97, 3, 10, 103, 13, 14, 0x3a4048, { j: 0.03 });                       // elevator core
+    for (const ex of [98, 100, 102]) { fillB(ex, 3, 14, ex, 7, 14, 0xc9922e, { j: 0.02 }); V(ex, 8, 14, 0xffa028, { t: 2, j: 0 }); }
+    fillB(90, 2, 19, 94, 2, 24, 0x7a3b30, { j: 0.05 });                         // lounge rug
+    fillB(90, 3, 24, 94, 5, 24, 0x2f5f5a, { j: 0.05 });
+    fillB(90, 3, 19, 94, 5, 19, 0x2f5f5a, { j: 0.05 });
+    fillB(91, 3, 21, 93, 4, 22, F.wood, { j: 0.04 });
+    for (const [px, pz] of [[90, 6], [107, 6], [107, 24], [90, 15]]) {
       V(px, 3, pz, 0xb06a3c, { j: 0.05 });
       fillB(px, 4, pz, px, 7, pz, 0x3a5c30, { j: 0.14 });
     }
-    fillB(100, 3, 19, 102, 4, 21, F.woodDk, { j: 0.04 });                        // model pedestal
-    fillB(101, 5, 20, 101, 7, 20, F.quartz, { j: 0 });                           // the mini pyramid
-    fillB(100, 5, 19, 102, 8, 21, F.glass, { t: 1, j: 0.02 });
-    fillB(98, 3, 24, 99, 6, 25, 0x8a2020, { j: 0.05 });                          // heart sculpture
-    V(98, 6, 24, 0x8a2020, { j: 0.05 }); V(99, 6, 25, 0x8a2020, { j: 0.05 });
-    /* stairs: lobby->F2 on the west, F2->F3 on the east (never stacked) */
-    bstair(2, 14, 86, 8, 1);
-    fillB(86, 3, 15, 89, 7, 16, 0x8a8478, { j: 0.05 });                          // seal under west landing
-    fillB(86, 3, 14, 89, 5, 14, 0x8a8478, { j: 0.05 });
-    bstair(14, 24, 96, 8, 1);
-    fillB(96, 15, 14, 99, 18, 15, 0x8a8478, { j: 0.05 });                        // seal under east landing
-    /* F2 slab (feet 15..23) + open-plan office */
-    for (let x = 83; x <= 103; x++) for (let z = 5; z <= 25; z++)
-      V(x, 14, z, ((x + (z >> 2)) % 2 === 0) ? 0x9a9a96 : 0x8e8e8a, { j: 0.04 });
-    clearB(86, 14, 13, 87, 14, 16); clearB(88, 14, 11, 89, 14, 16);              // reopen west stairwell
-    fillB(86, 15, 17, 89, 16, 17, F.quartz, { j: 0.04 });                        // rails
-    fillB(90, 15, 9, 90, 16, 16, F.quartz, { j: 0.04 });
-    fillB(91, 15, 11, 95, 23, 13, 0x3a4048, { j: 0.03 });                        // core stub
-    for (const ex of [92, 94]) fillB(ex, 15, 13, ex, 19, 13, 0xc9922e, { j: 0.02 });
-    for (const [dx2, dz2] of [[95, 6], [95, 17], [95, 21], [100, 6], [100, 17], [100, 21]]) {   // desk pods
-      for (const lx of [dx2, dx2 + 3]) for (const lz of [dz2, dz2 + 1]) V(lx, 15, lz, F.steel, { j: 0.02 });
-      fillB(dx2, 16, dz2, dx2 + 3, 16, dz2 + 1, F.white, { j: 0.03 });
-      V(dx2 + 1, 17, dz2, 0x17171a, { j: 0 }); V(dx2 + 1, 18, dz2, 0x40c8e0, { t: 2, j: 0 });
-      V(dx2 + 2, 17, dz2 + 1, 0x17171a, { j: 0 }); V(dx2 + 2, 18, dz2 + 1, 0x9fd8ff, { t: 2, j: 0 });
-      V(dx2 + 1, 15, dz2 - 1, 0x2a4a8a, { j: 0.04 }); V(dx2 + 2, 15, dz2 + 2, 0x2a4a8a, { j: 0.04 });
-    }
-    fillB(84, 15, 5, 84, 19, 8, F.glass, { t: 1, j: 0.02 });                     // meeting box NW
-    fillB(88, 15, 5, 88, 19, 8, F.glass, { t: 1, j: 0.02 });
-    fillB(85, 15, 5, 87, 15, 5, F.glass, { t: 1, j: 0.02 });
-    fillB(85, 17, 5, 87, 18, 5, 0xf2efe6, { j: 0.02 });                          // whiteboard on the box
-    fillB(85, 15, 6, 87, 16, 7, F.wood, { j: 0.05 });                            // meeting table
-    fillB(84, 15, 22, 86, 16, 23, 0xdcdcd4, { j: 0.04 });                        // breakroom counter
-    V(84, 17, 22, 0x8a8e94, { j: 0.04 });
-    fillB(84, 15, 25, 85, 18, 25, 0xb8bcc2, { j: 0.02 });                        // fridge
-    V(88, 15, 24, 0x2a5a9a, { j: 0.04 }); V(88, 16, 24, 0xdfe8f0, { j: 0.03 });  // watercooler
-    V(83, 15, 12, 0xb06a3c, { j: 0.05 }); fillB(83, 16, 12, 83, 17, 12, 0x3a5c30, { j: 0.14 });
-    for (const lz of [8, 16, 24]) { V(93, 22, lz, F.lampWhite, { t: 3, j: 0 }); V(93, 23, lz, F.iron, { j: 0 }); }
-    /* F3 slab (feet 25..33) + executive floor */
-    for (let x = 84; x <= 102; x++) for (let z = 6; z <= 24; z++)
-      V(x, 24, z, ((x + (z >> 2)) % 2 === 0) ? 0x8a6a4a : 0x7d5f40, { j: 0.04 });
-    clearB(96, 24, 12, 97, 24, 15); clearB(98, 24, 11, 99, 24, 15);              // reopen east stairwell
-    fillB(96, 25, 16, 99, 26, 16, F.quartz, { j: 0.04 });                        // rail on the well's south lip
-    fillB(90, 25, 11, 94, 33, 13, 0x3a4048, { j: 0.03 });                        // core stub
-    for (const ex of [91, 93]) fillB(ex, 25, 13, ex, 29, 13, 0xc9922e, { j: 0.02 });
-    fillB(87, 25, 7, 92, 26, 8, F.woodDk, { j: 0.04 });                          // boardroom table
-    for (const cz of [6, 9]) for (let cx = 87; cx <= 92; cx += 2) V(cx, 25, cz, 0x2a4a8a, { j: 0.05 });
-    fillB(86, 25, 5, 86, 29, 10, F.glass, { t: 1, j: 0.02 });                    // boardroom glass
-    fillB(87, 25, 10, 93, 29, 10, F.glass, { t: 1, j: 0.02 });
-    fillB(93, 25, 5, 93, 29, 9, F.glass, { t: 1, j: 0.02 });
-    fillB(99, 25, 6, 101, 26, 7, F.woodDk, { j: 0.04 });                         // corner desk
-    V(100, 27, 6, 0x40c8e0, { t: 2, j: 0 });
-    V(100, 25, 8, 0x2a4a8a, { j: 0.05 });
-    for (let y = 25; y <= 29; y++) V(102, y, 10, [0x8a2020, 0x2e5444, 0xc9922e, 0x2a4a8a, 0x7a4a8a][y - 25], { j: 0.05 });
-    V(102, 25, 12, 0x3a2e22, { j: 0 }); V(102, 26, 12, 0x4a7aa0, { j: 0.08 });   // globe
-    fillB(84, 24, 17, 90, 24, 23, 0x2f4858, { j: 0.05 });                        // lounge rug
-    fillB(84, 25, 23, 88, 26, 23, 0x8a4a2e, { j: 0.05 });                        // sofas
-    fillB(84, 25, 17, 88, 26, 17, 0x8a4a2e, { j: 0.05 });
-    fillB(86, 25, 19, 87, 25, 21, F.wood, { j: 0.04 });
-    V(90, 25, 18, 0xc9922e, { j: 0.03 }); V(90, 26, 18, 0xdfe8f0, { j: 0.03 });  // bar cart
-    fillB(97, 25, 20, 101, 27, 20, 0x2a4a8a, { j: 0.05 });                       // wall map
-    fillB(98, 26, 20, 99, 26, 20, 0x3a7a4a, { j: 0.05 });
-    fillB(97, 25, 23, 98, 25, 24, 0xdcdcd4, { j: 0.03 });                        // award shelf
-    V(97, 26, 23, 0xc9a227, { t: 2, j: 0 });
-    for (const lz of [9, 21]) { V(90, 31, lz, F.lampWarm, { t: 3, j: 0 }); V(90, 32, lz, F.iron, { j: 0 }); }
-    /* the taper: quartz piers + glass slits, diaphragms, wings, crown */
-    for (let y = 15; y <= 62; y++) {
+    fillB(106, 3, 19, 108, 4, 21, F.woodDk, { j: 0.04 });                       // the lobby model
+    fillB(107, 5, 20, 107, 7, 20, F.quartz, { j: 0 });
+    fillB(106, 5, 19, 108, 8, 21, F.glass, { t: 1, j: 0.02 });
+    fillB(104, 3, 24, 105, 6, 25, 0x8a2020, { j: 0.05 });                       // the heart
+    V(104, 6, 24, 0x8a2020, { j: 0.05 }); V(105, 6, 25, 0x8a2020, { j: 0.05 });
+    /* ---- the four stairs: SW, NE, SW-high, NE-high — never stacked ---- */
+    bstair(2, 14, 90, 6, 1);                                                    // lobby -> F2
+    fillB(90, 3, 13, 93, 7, 14, 0x8a8478, { j: 0.05 });                         // seal under its landing
+    bstair(14, 24, 105, 6, 1);                                                  // F2 -> F3
+    bstair(24, 34, 92, 22, -1);                                                 // F3 -> F4
+    bstair(34, 44, 101, 9, 1);                                                  // F4 -> F5
+    /* ---- the taper: quartz piers + glass slits ---- */
+    for (let y = 15; y <= 85; y++) {
       const hw = hwAt(y);
       for (let x = CXp - hw; x <= CXp + hw; x++) for (const z of [CZp - hw, CZp + hw])
         V(x, y, z, ((x + y) % 2 === 0) ? F.quartz : F.glass, ((x + y) % 2 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 });
       for (let z = CZp - hw + 1; z <= CZp + hw - 1; z++) for (const x of [CXp - hw, CXp + hw])
         V(x, y, z, ((z + y) % 2 === 0) ? F.quartz : F.glass, ((z + y) % 2 === 0) ? { j: 0.03 } : { t: 1, j: 0.02 });
     }
-    fillB(CXp - hwAt(34), 34, CZp - hwAt(34), CXp + hwAt(34), 34, CZp + hwAt(34), F.quartz, { j: 0.03 });   // seal over F3
-    { let prevHw = hwAt(34);
-      for (let y = 35; y <= 62; y++) {
-        const hw = hwAt(y);
-        if (hw < prevHw) fillB(CXp - hw, y, CZp - hw, CXp + hw, y, CZp + hw, F.quartz, { j: 0.03 });
-        prevHw = hw;
-      } }
-    for (let y = 40; y <= 58; y++) {                                             // the two wings
+    /* ---- floor slabs (the taper narrows as it climbs) ---- */
+    const slabAt = y => {
+      const hw = hwAt(y);
+      for (let x = CXp - hw + 1; x <= CXp + hw - 1; x++) for (let z = CZp - hw + 1; z <= CZp + hw - 1; z++)
+        V(x, y, z, ((x + (z >> 2)) % 2 === 0) ? 0x9a9a96 : 0x8e8e8a, { j: 0.04 });
+    };
+    slabAt(14); slabAt(24); slabAt(34); slabAt(44);
+    // the slabs just paved over every stairwell — recut them from the
+    // same geometry bstair() uses, so the openings can never drift
+    const reopen = (yF, yT, xa, zb, sd) => {
+      const H = yT - yF, hA = Math.ceil(H / 2), hB = H - hA, zi = i => zb + sd * i;
+      clearB(xa, yT, zi(hA - 1), xa + 1, yT, zi(hA + 2));
+      clearB(xa + 2, yT, zi(hA + 3 - hB), xa + 3, yT, zi(hA + 2));
+    };
+    reopen(2, 14, 90, 6, 1); reopen(14, 24, 105, 6, 1);
+    reopen(24, 34, 92, 22, -1); reopen(34, 44, 101, 9, 1);
+    /* ---- F2 (feet 15..23): open-plan office, perimeter desks ---- */
+    fillB(97, 15, 11, 103, 23, 13, 0x3a4048, { j: 0.03 });                      // core stub
+    for (const ex of [99, 101]) fillB(ex, 15, 13, ex, 19, 13, 0xc9922e, { j: 0.02 });
+    for (const [dx2, dz2] of [[95, 6], [91, 20], [100, 20], [91, 15]]) {
+      for (const lx of [dx2, dx2 + 3]) for (const lz of [dz2, dz2 + 1]) V(lx, 15, lz, F.steel, { j: 0.02 });
+      fillB(dx2, 16, dz2, dx2 + 3, 16, dz2 + 1, F.white, { j: 0.03 });
+      V(dx2 + 1, 17, dz2, 0x17171a, { j: 0 }); V(dx2 + 1, 18, dz2, 0x40c8e0, { t: 2, j: 0 });
+      V(dx2 + 2, 17, dz2 + 1, 0x17171a, { j: 0 }); V(dx2 + 2, 18, dz2 + 1, 0x9fd8ff, { t: 2, j: 0 });
+    }
+    fillB(90, 15, 15, 90, 19, 18, F.glass, { t: 1, j: 0.02 });                  // meeting box, west wall
+    fillB(91, 15, 18, 94, 19, 18, F.glass, { t: 1, j: 0.02 });
+    fillB(94, 15, 15, 94, 19, 17, F.glass, { t: 1, j: 0.02 });
+    fillB(91, 15, 16, 93, 16, 17, F.wood, { j: 0.05 });                         // meeting table
+    fillB(91, 17, 15, 93, 18, 15, 0xf2efe6, { j: 0.02 });                       // whiteboard
+    fillB(105, 15, 15, 108, 16, 16, 0xdcdcd4, { j: 0.04 });                     // breakroom counter
+    V(105, 17, 15, 0x8a8e94, { j: 0.04 });
+    fillB(108, 15, 18, 108, 18, 19, 0xb8bcc2, { j: 0.02 });                     // fridge
+    V(105, 15, 19, 0x2a5a9a, { j: 0.04 }); V(105, 16, 19, 0xdfe8f0, { j: 0.03 });
+    for (const lz of [8, 15, 22]) { V(99, 22, lz, F.lampWhite, { t: 3, j: 0 }); V(99, 23, lz, F.iron, { j: 0 }); }
+    /* ---- F3 (feet 25..33): studio floor, long benches + glass rooms ---- */
+    fillB(97, 25, 11, 103, 33, 13, 0x3a4048, { j: 0.03 });
+    for (const ex of [99, 101]) fillB(ex, 25, 13, ex, 29, 13, 0xc9922e, { j: 0.02 });
+    for (const [bx0, bz] of [[99, 7], [97, 15]]) {                              // long work benches
+      fillB(bx0, 25, bz, bx0, 25, bz + 1, F.steel, { j: 0.02 });
+      fillB(bx0 + 6, 25, bz, bx0 + 6, 25, bz + 1, F.steel, { j: 0.02 });
+      fillB(bx0, 26, bz, bx0 + 6, 26, bz + 1, F.white, { j: 0.03 });
+      for (const mx of [bx0 + 1, bx0 + 4]) { V(mx, 27, bz, 0x17171a, { j: 0 }); V(mx, 28, bz, 0x40c8e0, { t: 2, j: 0 }); }
+    }
+    // two glass rooms on the WEST side — the stair lands in the open
+    // north-east corner, and each room gets its own doorway
+    // glass rooms tucked into the two corners the stairs don't use
+    fillB(96, 25, 6, 96, 30, 12, F.glass, { t: 1, j: 0.02 });
+    fillB(90, 25, 12, 96, 30, 12, F.glass, { t: 1, j: 0.02 });
+    clearB(93, 25, 12, 94, 29, 12);
+    fillB(91, 25, 8, 94, 26, 10, F.wood, { j: 0.05 });
+    fillB(102, 25, 22, 106, 26, 23, F.wood, { j: 0.05 });                       // open lounge table
+    V(105, 25, 15, 0xb06a3c, { j: 0.05 }); fillB(105, 26, 15, 105, 28, 15, 0x3a5c30, { j: 0.14 });
+    for (const lz of [9, 15, 21]) { V(99, 32, lz, F.lampWhite, { t: 3, j: 0 }); V(99, 33, lz, F.iron, { j: 0 }); }
+    /* ---- F4 (feet 35..43): the executive floor ---- */
+    fillB(95, 35, 12, 99, 43, 13, 0x3a4048, { j: 0.03 });
+    for (const ex of [96, 98]) fillB(ex, 35, 13, ex, 39, 13, 0xc9922e, { j: 0.02 });
+    fillB(93, 35, 8, 98, 36, 9, F.woodDk, { j: 0.04 });                        // boardroom table
+    for (const cz of [7, 10]) for (let cx = 93; cx <= 98; cx += 2) V(cx, 35, cz, 0x2a4a8a, { j: 0.05 });
+    fillB(92, 35, 6, 92, 39, 11, F.glass, { t: 1, j: 0.02 });                   // boardroom glass
+    fillB(93, 35, 11, 99, 39, 11, F.glass, { t: 1, j: 0.02 });
+    fillB(99, 35, 6, 99, 39, 10, F.glass, { t: 1, j: 0.02 });
+    fillB(98, 34, 17, 104, 34, 22, 0x2f4858, { j: 0.05 });                      // lounge rug
+    fillB(98, 35, 22, 102, 36, 22, 0x8a4a2e, { j: 0.05 });                      // leather sofas
+    fillB(98, 35, 17, 102, 36, 17, 0x8a4a2e, { j: 0.05 });
+    fillB(99, 35, 19, 101, 35, 20, F.wood, { j: 0.04 });
+    V(104, 35, 21, 0xc9922e, { j: 0.03 }); V(104, 36, 21, 0xdfe8f0, { j: 0.03 }); // bar cart
+    fillB(93, 35, 21, 96, 37, 21, 0x2a4a8a, { j: 0.05 });                       // wall map
+    fillB(94, 36, 21, 95, 36, 21, 0x3a7a4a, { j: 0.05 });
+    V(93, 35, 12, 0x3a2e22, { j: 0 }); V(93, 36, 12, 0x4a7aa0, { j: 0.08 });    // globe
+    for (const lz of [10, 20]) { V(99, 42, lz, F.lampWarm, { t: 3, j: 0 }); V(99, 43, lz, F.iron, { j: 0 }); }
+    /* ---- F5 (feet 45..53): the sky deck ---- */
+    fillB(94, 45, 10, 96, 45, 10, F.wood, { j: 0.05 });                         // viewing benches
+    fillB(102, 45, 20, 104, 45, 20, F.wood, { j: 0.05 });
+    for (const [tx, tz] of [[95, 15], [103, 19]]) {                             // tower binoculars
+      fillB(tx, 45, tz, tx, 47, tz, F.iron, { j: 0 });
+      V(tx, 48, tz, 0x2a2a2e, { j: 0.03 });
+    }
+    fillB(95, 45, 14, 99, 46, 16, 0x3a4048, { j: 0.03 });                       // core head + hatch
+    V(97, 47, 15, 0xffa028, { t: 2, j: 0 });
+
+    V(99, 52, 15, F.lampWhite, { t: 3, j: 0 }); V(99, 53, 15, F.iron, { j: 0 });
+    fillB(CXp - hwAt(54), 54, CZp - hwAt(54), CXp + hwAt(54), 54, CZp + hwAt(54), F.quartz, { j: 0.03 });   // cap the deck
+    /* ---- the two wings, crown, spire ---- */
+    for (let y = 56; y <= 82; y++) {
       const hw = hwAt(y);
       fillB(CXp - hw - 1, y, CZp - 1, CXp - hw - 1, y, CZp + 1, F.quartz, { j: 0.03 });
       fillB(CXp + hw + 1, y, CZp - 1, CXp + hw + 1, y, CZp + 1, F.quartz, { j: 0.03 });
       if (y % 4 === 0) { V(CXp - hw - 1, y, CZp, 0x9fd8ff, { t: 3, j: 0 }); V(CXp + hw + 1, y, CZp, 0x9fd8ff, { t: 3, j: 0 }); }
     }
-    fillB(CXp - 1, 63, CZp - 1, CXp + 1, 65, CZp + 1, F.quartz, { j: 0.03 });    // crown
-    fillB(CXp, 66, CZp, CXp, 73, CZp, F.bone, { j: 0.02 });                      // spire
-    V(CXp, 74, CZp, 0xff3030, { t: 2, j: 0 });                                   // beacon
-    /* redwood grove pocket park on the plaza's east edge */
-    for (const [tx, tz] of [[106, 8], [106, 14], [106, 21]]) sfTree(tx, tz, 40 + tx + tz, 13);
-    for (const [bx2, bz2] of [[102, 2], [86, 29]]) {
+    fillB(CXp - 1, 86, CZp - 1, CXp + 1, 88, CZp + 1, F.quartz, { j: 0.03 });   // crown
+    fillB(CXp, 89, CZp, CXp, 98, CZp, F.bone, { j: 0.02 });                     // spire
+    V(CXp, 99, CZp, 0xff3030, { t: 2, j: 0 });                                  // beacon
+    /* ---- redwood grove + benches on the plaza ---- */
+    for (const [tx, tz] of [[113, 7], [113, 15], [113, 23], [85, 7], [85, 15], [85, 23]]) {
+      const b = groundAt(tx, tz);
+      if (b === undefined) continue;
+      fillB(tx, b + 1, tz, tx, b + 4, tz, 0x5a4028, { j: 0.1 });
+      for (let i = 0; i < 7; i++) {
+        const rr = i < 5 ? 1 : 0;
+        for (let dx = -rr; dx <= rr; dx++) for (let dz = -rr; dz <= rr; dz++)
+          if (Math.abs(dx) + Math.abs(dz) <= rr) V(tx + dx, b + 5 + i, tz + dz, [F.cypA, F.cypB, F.cypC][i % 3], { j: 0.1 });
+      }
+    }
+    for (const [bx2, bz2] of [[92, 1], [104, 1], [92, 28], [104, 28]]) {
       fillB(bx2, 3, bz2, bx2 + 2, 3, bz2, F.wood, { j: 0.05 });
       fillB(bx2, 4, bz2 + (bz2 < 15 ? -1 : 1), bx2 + 2, 4, bz2 + (bz2 < 15 ? -1 : 1), F.woodDk, { j: 0.05 });
     }
@@ -6761,7 +6820,7 @@ function buildSF() {
      raise the fluted tower: mural lobby, two exhibit floors,
      open-air gallery under the cap. Wild parrots included. */
   {
-    const HX = 90, HZ = -28;
+    const HX = 99, HZ = -30;
     // summit plaza: pave the crown at y16
     for (let x = HX - 8; x <= HX + 8; x++) for (let z = HZ - 8; z <= HZ + 8; z++) {
       const dd = Math.hypot(x - HX, z - HZ);
@@ -6773,22 +6832,26 @@ function buildSF() {
       noteTop(x, z, 16);
     }
     /* Filbert Steps: a straight garden stair up the west slope */
+    // the Filbert Steps climb the west flank on a long diagonal — a 1:1
+    // run, three treads wide, cut clear of the hillside above
     for (let i = 0; i <= 13; i++) {
-      const sx = 74 + i, top = 3 + i;
-      fillB(sx, 2, HZ - 1, sx, top, HZ, 0x8a8478, { j: 0.05 });
-      clearB(sx, top + 1, HZ - 1, sx, top + 5, HZ);
-      noteTop(sx, HZ - 1, top); noteTop(sx, HZ, top);
+      const sx = HX - 14 + (i >> 1), sz = HZ - 14 + i, top = 3 + i;
+      fillB(sx, 2, sz, sx + 2, top, sz, 0x8a8478, { j: 0.05 });
+      clearB(sx, top + 1, sz, sx + 2, top + 8, sz);
+      for (let d = 0; d <= 2; d++) noteTop(sx + d, sz, top);
       // flower terraces flanking the run
       if (i % 2 === 0 && i < 12) {
-        const gy = Math.min(16, top + 1);
-        V(sx, gy, HZ - 2, [0xd86a8a, 0xe0d05a, 0x7a4a8a][i % 3], { j: 0.1 });
-        V(sx, gy, HZ + 1, [0xe0d05a, 0xd4523a, 0xd86a8a][(i + 1) % 3], { j: 0.1 });
+        V(sx - 1, top, sz, [0xd86a8a, 0xe0d05a, 0x7a4a8a][i % 3], { j: 0.1 });
+        V(sx + 3, top, sz, [0xe0d05a, 0xd4523a, 0xd86a8a][(i + 1) % 3], { j: 0.1 });
       }
     }
-    fillB(73, 1, HZ - 1, 73, 2, HZ, F.rockA, { j: 0.05 });                      // lead riser off the sand
-    noteTop(73, HZ - 1, 2); noteTop(73, HZ, 2);
-    fillB(74, 2, HZ - 2, 87, 2, HZ - 2, 0x6e665c, { j: 0.06 });                 // low cheek walls
-    fillB(74, 2, HZ + 1, 87, 2, HZ + 1, 0x6e665c, { j: 0.06 });
+    // a landing shelf where the steps meet the hilltop
+    fillB(HX - 8, 2, HZ - 1, HX - 6, 16, HZ + 1, 0x8a8478, { j: 0.05 });
+    clearB(HX - 8, 17, HZ - 1, HX - 6, 24, HZ + 1);
+    for (let d = 0; d <= 2; d++) for (let e = -1; e <= 1; e++) noteTop(HX - 8 + d, HZ + e, 16);
+    fillB(HX - 15, 1, HZ - 14, HX - 13, 2, HZ - 14, F.rockA, { j: 0.05 });      // lead riser off the street
+    for (let d = -2; d <= 0; d++) noteTop(HX - 13 + d, HZ - 14, 2);
+
     /* the tower: fluted shaft y17..43, arches y44..46, cap + beacon */
     for (let y = 17; y <= 47; y++)
       for (let x = HX - 6; x <= HX + 6; x++) for (let z = HZ - 6; z <= HZ + 6; z++) {
@@ -6798,11 +6861,11 @@ function buildSF() {
         if (y >= 44 && y <= 46 && ((ang % 2) + 2) % 2 === 0) continue;          // open gallery arches
         V(x, y, z, (((ang % 2) + 2) % 2 === 0) ? F.white : F.bone, { j: 0.03 });
       }
-    clearB(84, 14, HZ - 1, 84, 18, HZ);                                         // west arch for the steps
-    clearB(85, 15, HZ - 1, 85, 18, HZ);
+    clearB(HX - 6, 14, HZ - 1, HX - 6, 18, HZ);                                 // west arch for the steps
+    clearB(HX - 5, 15, HZ - 1, HX - 5, 18, HZ);
     for (let x = HX - 7; x <= HX + 7; x++) for (let z = HZ - 7; z <= HZ + 7; z++) {
       const dd = Math.hypot(x - HX, z - HZ);
-      if (dd < 7.4 && dd >= 4.6 && !(x <= 85 && x >= 84 && z >= HZ - 1 && z <= HZ)) { V(x, 17, z, F.bone, { j: 0.04 }); V(x, 18, z, F.bone, { j: 0.04 }); }
+      if (dd < 7.4 && dd >= 4.6 && !(x <= HX - 5 && x >= HX - 6 && z >= HZ - 1 && z <= HZ)) { V(x, 17, z, F.bone, { j: 0.04 }); V(x, 18, z, F.bone, { j: 0.04 }); }
       if (dd < 4.6) {
         V(x, 25, z, F.woodDk, { j: 0.04 });                                     // exhibit floor 1
         V(x, 34, z, F.woodDk, { j: 0.04 });                                     // exhibit floor 2
@@ -6825,7 +6888,7 @@ function buildSF() {
     /* lobby: mural band, ticket desk, postcard rack, donation box */
     for (let x = HX - 4; x <= HX + 4; x++) for (let z = HZ - 5; z <= HZ + 4; z++)
       if (Math.hypot(x - HX, z - HZ) < 4.6) { V(x, 16, z, ((x + z) % 2 === 0) ? 0xc9c4b8 : 0xb2aca0, { j: 0.04 }); noteTop(x, z, 16); }
-    clearB(86, 16, HZ - 1, 86, 16, HZ);                                          // arch threshold tread
+    clearB(HX - 4, 16, HZ - 1, HX - 4, 16, HZ);                                  // arch threshold tread
     for (let a = 0; a < 28; a++) {                                              // WPA mural ring
       const mx = HX + Math.round(Math.cos(a / 28 * Math.PI * 2) * 4.4);
       const mz = HZ + Math.round(Math.sin(a / 28 * Math.PI * 2) * 4.4);
@@ -6875,9 +6938,9 @@ function buildSF() {
           if (Math.abs(dx) + Math.abs(dz) <= rr) V(x + dx, b + 4 + i, z + dz, [F.cypA, F.cypB, F.cypC][i % 3], { j: 0.1 });
       }
     };
-    cypress(HX - 8, HZ - 6); cypress(HX + 8, HZ + 4); cypress(80, -40); cypress(97, -18);
+    cypress(HX - 8, HZ - 6); cypress(HX + 8, HZ + 4); cypress(89, -42); cypress(106, -20);
     const parrot = (x, y, z) => { V(x, y, z, 0x3aa03a, { j: 0.04 }); V(x, y + 1, z, 0xd83a2a, { j: 0.03 }); };
-    parrot(HX - 5, 48, HZ); parrot(HX - 7, 18, HZ + 3); parrot(80, 10, HZ - 1);
+    parrot(HX - 5, 48, HZ); parrot(HX - 7, 18, HZ + 3); parrot(HX - 13, 10, HZ - 1);
     gull(HX + 5, 48, HZ + 2);
   }
 
@@ -6991,16 +7054,16 @@ function buildSF() {
     for (let y = 7; y <= 14; y++) {
       const c = (y % 3 === 0) ? CHD : CH;
       fillB(32, y, -36, 42, y, -36, c, { j: 0.05 });
-      fillB(32, y, -29, 42, y, -29, c, { j: 0.05 });
-      fillB(32, y, -35, 32, y, -30, c, { j: 0.05 });
-      fillB(42, y, -35, 42, y, -30, c, { j: 0.05 });
+      fillB(32, y, -28, 42, y, -28, c, { j: 0.05 });
+      fillB(32, y, -35, 32, y, -29, c, { j: 0.05 });
+      fillB(42, y, -35, 42, y, -29, c, { j: 0.05 });
     }
-    fillB(32, 15, -36, 42, 15, -29, 0x8a8478, { j: 0.05 });                     // roof
+    fillB(32, 15, -36, 42, 15, -28, 0x8a8478, { j: 0.05 });                     // roof
     for (let x = 33; x <= 41; x += 3) {                                          // barred slits
-      for (const zf of [-36, -29]) {
+      for (const zf of [-36, -28]) {
         clearB(x, 9, zf, x, 13, zf);
         fillB(x, 9, zf, x, 13, zf, F.glass, { t: 1, j: 0.02 });
-        V(x, 11, zf === -36 ? -37 : -28, F.iron, { j: 0.03 });
+        V(x, 11, zf === -36 ? -37 : -27, F.iron, { j: 0.03 });
       }
     }
     clearB(32, 7, -33, 32, 11, -32);                                             // west door
@@ -7010,24 +7073,24 @@ function buildSF() {
     fillB(32, 12, -34, 32, 14, -31, 0xe8e4d8, { j: 0.06 });
     V(32, 12, -33, 0x8a8478, { j: 0.08 }); V(32, 13, -32, 0x8a8478, { j: 0.08 });
     /* interior: corridor + cells with 1-gap bars, the escape cell */
-    for (let x = 33; x <= 41; x++) for (let z = -35; z <= -30; z++) V(x, 6, z, 0x8e8e8a, { j: 0.04 });
-    for (const cz of [-35, -30]) {                                               // cots + fittings per cell
+    for (let x = 33; x <= 41; x++) for (let z = -35; z <= -29; z++) V(x, 6, z, 0x8e8e8a, { j: 0.04 });
+    for (const cz of [-35, -29]) {                                               // cots + fittings per cell
       for (const cx of [34, 37, 40]) {
         fillB(cx, 7, cz, cx + 1, 7, cz, 0x8a8e94, { j: 0.04 });                  // cot frame
         V(cx, 8, cz, 0xe8e4da, { j: 0.03 });                                     // pillow
-        V(cx + 1, 7, cz === -35 ? -34 : -31, 0xf2efe6, { j: 0.02 });             // steel sink
+        V(cx + 1, 7, cz === -35 ? -34 : -30, 0xf2efe6, { j: 0.02 });             // steel sink
       }
     }
-    for (const [wx1, wz0, wz1] of [[36, -36, -34], [39, -36, -34], [36, -31, -29], [39, -31, -29]])
+    for (const [wx1, wz0, wz1] of [[36, -36, -34], [39, -36, -34], [36, -30, -28], [39, -30, -28]])
       fillB(wx1, 7, wz0, wx1, 14, wz1, CH, { j: 0.05 });                         // cell partitions
     for (const cx of [33, 35, 37, 39, 41]) {                                     // bar fronts on the corridor
       fillB(cx, 7, -34, cx, 12, -34, F.iron, { j: 0.02 });
-      if (cx !== 37) fillB(cx, 7, -31, cx, 12, -31, F.iron, { j: 0.02 });        // cell 37-south stands open
+      if (cx !== 37) fillB(cx, 7, -30, cx, 12, -30, F.iron, { j: 0.02 });        // cell 37-south stands open
     }
     // the escape: a crawl hole out the south wall, dummy head on the cot
-    clearB(37, 7, -29, 38, 9, -29);
-    V(37, 8, -30, 0xd9a47e, { j: 0.03 });                                        // the papier-mache head
-    V(38, 7, -30, 0x8a8e94, { j: 0.03 });                                        // the spoon
+    clearB(37, 7, -28, 38, 9, -28);
+    V(37, 8, -29, 0xd9a47e, { j: 0.03 });                                        // the papier-mache head
+    V(38, 7, -29, 0x8a8e94, { j: 0.03 });                                        // the spoon
     fillB(41, 7, -33, 41, 8, -32, F.woodDk, { j: 0.04 });                        // guard desk
     V(41, 9, -33, 0xc9a227, { t: 2, j: 0 });                                     // the key ring
     V(34, 14, -32, F.lampWhite, { t: 3, j: 0 });
@@ -7053,11 +7116,12 @@ function buildSF() {
     // rock steps from the dock up the south shoulder
     fillB(36, 1, -26, 37, 2, -26, F.rockA, { j: 0.05 }); noteTop(36, -26, 2); noteTop(37, -26, 2);
     fillB(36, 1, -27, 37, 3, -27, F.rockA, { j: 0.05 }); noteTop(36, -27, 3); noteTop(37, -27, 3);
-    fillB(36, 1, -28, 37, 4, -28, F.rockA, { j: 0.05 }); noteTop(36, -28, 4); noteTop(37, -28, 4);
-    // shoulder path west round to the door, then the entry stair
-    for (const [px, pz, pt] of [[35, -28, 4], [34, -28, 4], [33, -28, 5], [32, -28, 5], [31, -28, 5]]) {
+    // shoulder path runs south of the cell block, then west to the door
+    for (const [px, pz, pt] of [[36, -27, 4], [35, -27, 4], [34, -27, 4], [33, -27, 5], [32, -27, 5], [31, -27, 5]]) {
       fillB(px, 1, pz, px, pt, pz, F.rockA, { j: 0.05 }); noteTop(px, pz, pt);
     }
+    fillB(30, 1, -28, 31, 5, -27, F.rockA, { j: 0.05 });                         // bend up to the landing
+    for (let z = -28; z <= -27; z++) { noteTop(30, z, 5); noteTop(31, z, 5); }
     fillB(30, 1, -30, 31, 5, -29, F.rockA, { j: 0.05 });
     for (const [px, pz] of [[30, -29], [30, -30], [31, -29], [31, -30]]) noteTop(px, pz, 5);
     fillB(30, 1, -33, 31, 5, -31, F.rockA, { j: 0.05 });                         // door landing (top y5)
@@ -7120,13 +7184,13 @@ function buildSF() {
     const [t1x, t1z] = px(0, 2), [t2x, t2z] = px(L, 2);
     V(t1x, 5, t1z, 0x18b0a8, { t: 2, j: 0 }); V(t2x, 5, t2z, 0x18b0a8, { t: 2, j: 0 });
   }
-  waymo(-4, 16);
-  waymo(60, 27);
-  zoox(44, 17, true);
+  waymo(-4, 14);          // north lane, clear of the cable-car track
+  waymo(58, 21);
+  zoox(46, 14, true);
   zoox(-24, -8, false);
-  zoox(103, -6, false);
+  zoox(76, -6, false);
   /* palms along the promenade + arms */
-  for (const [px, pz] of [[-16, 14], [-4, 14], [32, 14], [44, 14], [-16, 24], [34, 24], [48, 25], [76, 25], [98, 32], [-27, 30]])
+  for (const [px, pz] of [[-13, 11], [-4, 27], [32, 11], [44, 27], [-13, 27], [34, 27], [52, 33], [72, 33], [88, 30], [-27, 30]])
     palm(px, pz, 10 + ((px * 7 + pz) & 3) * 2);
   /* park trees + street trees */
   sfTree(-14, -22, 21, 14); sfTree(-8, -4, 22, 13); sfTree(-13, 8, 23, 14);
@@ -7139,24 +7203,24 @@ function buildSF() {
     V(x, 9, z, F.lampWarm, { t: 3, j: 0 });
     V(x, 10, z, 0x24262a, { j: 0.03 });
   };
-  sflamp(-14, 14); sflamp(2, 24); sflamp(20, 14); sflamp(38, 24); sflamp(52, 26);
-  sflamp(70, 36); sflamp(96, 20); sflamp(104, 0); sflamp(-20, 0); sflamp(-20, -24);
-  sflamp(102, -26); sflamp(88, -46); sflamp(-16, -40);
+  sflamp(-13, 12); sflamp(2, 27); sflamp(20, 12); sflamp(38, 27); sflamp(56, 33);
+  sflamp(74, 33); sflamp(87, 20); sflamp(86, 0); sflamp(-14, 0); sflamp(-14, -24);
+  sflamp(86, -26); sflamp(70, -44); sflamp(-11, -40);
   /* hydrants: the gold one at the turntable, red elsewhere */
-  V(-16, 3, 24, 0xc9a227, { j: 0.04 }); V(-16, 4, 24, 0xc9a227, { j: 0.04 }); V(-15, 3, 24, 0xd8b437, { j: 0.04 });
-  for (const [hx, hz] of [[80, 33], [-20, 8]]) {
+  V(-13, 3, 25, 0xc9a227, { j: 0.04 }); V(-13, 4, 25, 0xc9a227, { j: 0.04 }); V(-12, 3, 25, 0xd8b437, { j: 0.04 });
+  for (const [hx, hz] of [[64, 33], [-14, 8]]) {
     fillB(hx, 3, hz, hx, 4, hz, 0xb52a20, { j: 0.05 }); V(hx, 5, hz, 0xd8d8da, { j: 0.04 });
   }
   /* mailbox + news boxes by the row */
-  fillB(-15, 3, 25, -14, 5, 26, 0x2a4f8a, { j: 0.05 });
-  V(4, 3, 24, 0xc03028, { j: 0.05 }); V(5, 3, 24, 0xe0b040, { j: 0.05 }); V(6, 3, 24, 0x2a5a9a, { j: 0.05 });
+  fillB(-12, 3, 27, -11, 5, 28, 0x2a4f8a, { j: 0.05 });
+  V(4, 3, 26, 0xc03028, { j: 0.05 }); V(5, 3, 26, 0xe0b040, { j: 0.05 }); V(6, 3, 26, 0x2a5a9a, { j: 0.05 });
   /* people about town */
-  bperson(-8, 3, 18, 0x8a3030, 0x2a3038);                                        // turntable queue
-  bperson(-6, 3, 16, 0x2e5444, 0x23262a);
-  bperson(-16, 3, -8, 0x30608a, 0x2a2018);                                       // admiring the ladies
-  bperson(58, 3, 27, 0x7a4a8a, 0x3a3a3e);                                        // ferry plaza
-  bperson(81, 3, 29, 0xe07020, 0x2a3038);                                        // pyramid plaza
-  pigeon(-12, 3, 22); pigeon(-11, 3, 23); pigeon(62, 3, 26);
+  bperson(-8, 3, 26, 0x8a3030, 0x2a3038);                                        // turntable queue
+  bperson(-6, 3, 27, 0x2e5444, 0x23262a);
+  bperson(-12, 2, -8, 0x30608a, 0x2a2018);                                       // admiring the ladies (on sand)
+  bperson(56, 3, 33, 0x7a4a8a, 0x3a3a3e);                                        // ferry plaza
+  bperson(92, 3, 30, 0xe07020, 0x2a3038);                                        // pyramid plaza
+  pigeon(-12, 3, 28); pigeon(-11, 3, 29); pigeon(62, 3, 34);
   /* channel + bay buoys (each stacked on the water, never floating) */
   for (const [bx, bz, c] of [[24, -44, 0xc03028], [40, -44, 0x2a8a5a], [12, -20, 0xc03028], [58, -18, 0x2a8a5a]]) {
     V(bx, 1, bz, c, { j: 0.04 }); V(bx, 2, bz, c, { j: 0.04 }); V(bx, 3, bz, 0x1f2226, { j: 0 });
@@ -12692,13 +12756,15 @@ const sfLights = [
   roomLight(7, 7, 33, 70, 0xffd9a0, 10),        // the bookshop
   roomLight(21, 7, 34, 70, 0xffd9a0, 10),       // the pizza joint
   roomLight(18, 5, 35, 60, 0xff8c2a, 10),       // pizza-oven glow
-  roomLight(62, 10, 14, 110, 0xffe8b8, 16),     // ferry market hall
-  roomLight(93, 8, 15, 110, 0xfff4e0, 16),      // pyramid lobby
-  roomLight(93, 19, 15, 90, 0xcfe8ff, 12),      // pyramid offices
-  roomLight(93, 29, 15, 90, 0xffd9a0, 12),      // pyramid exec floor
-  roomLight(90, 20, -28, 80, 0xffd9a0, 10),     // coit lobby murals
-  roomLight(90, 45, -28, 80, 0xffd9a0, 10),     // coit gallery
-  roomLight(29, 7, 18, 60, 0xfff4e0, 9),        // cable car
+  roomLight(62, 10, 6, 110, 0xffe8b8, 16),      // ferry market hall
+  roomLight(99, 8, 15, 120, 0xfff4e0, 18),      // pyramid lobby
+  roomLight(99, 19, 15, 95, 0xcfe8ff, 12),      // pyramid F2
+  roomLight(99, 29, 15, 95, 0xcfe8ff, 12),      // pyramid F3
+  roomLight(99, 39, 15, 95, 0xffd9a0, 12),      // pyramid exec floor
+  roomLight(99, 49, 15, 95, 0xcfe8ff, 14),      // pyramid sky deck
+  roomLight(99, 20, -30, 80, 0xffd9a0, 10),     // coit lobby murals
+  roomLight(99, 45, -30, 80, 0xffd9a0, 10),     // coit gallery
+  roomLight(29, 7, 22, 60, 0xfff4e0, 9),        // cable car
   roomLight(7, 6, -6, 60, 0xffd9a0, 9),         // crab shack
   roomLight(37, 10, -32, 70, 0xfff4e0, 9),      // alcatraz cellhouse
   roomLight(-11, 6, 27, 50, 0xffd9a0, 7),       // turntable hut
@@ -13282,11 +13348,11 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'paintedladyb', name: 'Painted Lady (rose)',   scene: 'sf', box: [-55, -26, -17, 5],   walls: true },
   { id: 'paintedladyc', name: 'Painted Lady (gold)',   scene: 'sf', box: [-55, -26, 3, 25],    walls: true },
   { id: 'northpoint',  name: 'North Point Row',        scene: 'sf', box: [-13, 29, 24, 44],    walls: true },
-  { id: 'ferrybldg',   name: 'The Ferry Building',     scene: 'sf', box: [44, 80, -10, 27],    walls: true },
-  { id: 'transamerica', name: 'Transamerica Pyramid',  scene: 'sf', box: [80, 108, 0, 32],     walls: true },
-  { id: 'coittower',   name: 'Coit Tower',             scene: 'sf', box: [72, 98, -37, -19],   walls: true },
+  { id: 'ferrybldg',   name: 'The Ferry Building',     scene: 'sf', box: [44, 80, -18, 19],    walls: true },
+  { id: 'transamerica', name: 'Transamerica Pyramid',  scene: 'sf', box: [84, 114, 0, 30],     walls: true },
+  { id: 'coittower',   name: 'Coit Tower',             scene: 'sf', box: [84, 112, -44, -16],  walls: true },
   { id: 'goldengate',  name: 'The Little Golden Gate', scene: 'sf', box: [-8, 68, -58, -42],   walls: false },
-  { id: 'cablecar',    name: 'Cable Car 61',           scene: 'sf', box: [17, 42, 13, 24],     walls: false },
+  { id: 'cablecar',    name: 'Cable Car 61',           scene: 'sf', box: [17, 42, 17, 28],     walls: false },
   { id: 'turntable',   name: 'The Powell Turntable',   scene: 'sf', box: [-19, 0, 10, 31],     walls: false },
   { id: 'wharf',       name: 'The Wharf + Sea Lions',  scene: 'sf', box: [-4, 22, -12, 14],    walls: false },
   { id: 'alcatraz',    name: 'Alcatraz',               scene: 'sf', box: [28, 46, -41, -20],   walls: true },
