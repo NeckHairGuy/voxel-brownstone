@@ -5654,16 +5654,16 @@ function buildSF() {
   for (const k of roadSet) {
     const [x, z] = k.split('|').map(Number);
     stampLand(x, z);
-    V(x, 2, z, h3(x, 8, z) < 0.06 ? 0x2e2e32 : F.road, { j: 0.05 });
+    V(x, groundAt(x, z), z, h3(x, 8, z) < 0.06 ? 0x2e2e32 : F.road, { j: 0.05 });
   }
   for (const k of walkSet) {
     if (roadSet.has(k)) continue;
     const [x, z] = k.split('|').map(Number);
     stampLand(x, z);
-    V(x, 2, z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
+    V(x, groundAt(x, z), z, (x % 6 === 0 || z % 6 === 0) ? F.walkJt : F.walk, { j: 0.06 });
   }
   // crosswalk at the turntable plaza and mid-beach
-  for (const cx of [8, 9, 12, 13, 16, 17]) fillB(cx, 2, 14, cx, 2, 24, 0xc4c4c0, { j: 0.1 });
+  for (const cx of [8, 9, 12, 13, 16, 17]) for (let z = 14; z <= 24; z++) { const ty = groundAt(cx, z); if (ty !== undefined) V(cx, ty, z, 0xc4c4c0, { j: 0.1 }); }
   // cable-car track down the promenade straight (slot line + two rails)
   for (let x = -8; x <= 45; x++) {
     const ty = groundAt(x, 22);
@@ -5740,7 +5740,7 @@ function buildSF() {
   ];
   function lady(z0, C, turret) {
     const X0h = -45, X1h = -30, zb = z0 + 17;
-    const DY = flattenPad(X0h - 1, z0 - 1, X1h + 3, zb + 1) - 2;
+    const DY = flattenPad(X0h - 1, z0 - 1, X1h + 3, zb + 1, terrainTop(X1h + 3, z0 + 8)) - 2;
     const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
     const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
     const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
@@ -6103,7 +6103,7 @@ function buildSF() {
     ];
     for (const S of SHOP) {
       const { x0, x1 } = S, zf = 27, zr = 41;
-      const DY = flattenPad(x0 - 1, zf - 4, x1 + 1, zr + 3) - 2;
+      const DY = flattenPad(x0 - 1, zf - 4, x1 + 1, zr + 3, terrainTop((x0 + x1) >> 1, zf - 2)) - 2;
       shopDY[S.name] = DY;
       const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
       const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
@@ -7056,7 +7056,8 @@ function buildSF() {
       fillB(tx, 14, ZA, tx + 3, 14, ZB, F.road, { j: 0.05 });                    // redeck through the portal
       for (let x = tx; x <= tx + 3; x++) { if (x % 4 < 2) V(x, 14, -50, 0xc8a02a, { j: 0.04 }); }
       fillB(tx, 27, ZA, tx + 3, 28, ZB, F.orange, { j: 0.04 });                 // upper portal strut
-      fillB(tx, 33, ZA - 2, tx + 3, 34, ZB + 2, F.orange, { j: 0.04 });         // saddle beam
+      for (const tz of [ZA - 1, ZB + 1]) fillB(tx, 33, tz - 1, tx + 3, 34, tz, F.orange, { j: 0.04 });   // a saddle over each leg
+      fillB(tx + 1, 33, ZA, tx + 2, 34, ZB, F.orange, { j: 0.04 });            // slim tie beam between them
       V(tx + 1, 35, -50, 0xff3030, { t: 2, j: 0 });                             // beacon
       gull(tx + 2, 35, ZB + 2);
     }
@@ -7162,6 +7163,9 @@ function buildSF() {
     fillB(41, 7, -33, 41, 8, -32, F.woodDk, { j: 0.04 });                        // guard desk
     V(41, 9, -33, 0xc9a227, { t: 2, j: 0 });                                     // the key ring
     V(34, 14, -32, F.lampWhite, { t: 3, j: 0 });
+    // an exterior stair up the south face to the cell-block roof
+    for (let i = 0; i < 9; i++) { fillB(33 + i, 1, -26, 33 + i, 3 + i, -26, F.rockA, { j: 0.05 }); noteTop(33 + i, -26, 3 + i); }
+    for (let i = 0; i < 4; i++) { fillB(41 - i, 1, -27, 41 - i, 12 + i, -27, F.rockA, { j: 0.05 }); noteTop(41 - i, -27, 12 + i); }
     /* lighthouse on the southwest shoulder */
     { const b = groundAt(33, -38) || 2;
       fillB(32, b + 1, -39, 33, b + 15, -38, F.white, { j: 0.03 });
@@ -12878,9 +12882,34 @@ function stepRain(dt) {
 }
 
 /* ---- SF: the sea runs to the horizon (a single quad under the voxel water) ---- */
+let seaTex = null;
+function seaTexture() {   // one cell per world voxel, in the deep-water palette
+  if (seaTex) return seaTex;
+  const N = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const g = cv.getContext('2d');
+  const deep = [[0x22, 0x4a, 0x63], [0x28, 0x53, 0x6e], [0x2e, 0x5e, 0x7e]];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let c = deep[(h3(x, 7, y) < 0.32) ? 1 : 0];
+    if (h3(x >> 3, 2, y >> 3) < 0.3) c = deep[2];              // broad swell patches
+    const gl = h3(x, 0, y);
+    if (gl < 0.045) c = [0x6f, 0xa3, 0xb8];                    // sun glints
+    else if (gl > 0.994) c = [0xb8, 0xd0, 0xd8];               // whitecaps
+    g.fillStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    g.fillRect(x, y, 1, 1);
+  }
+  seaTex = new THREE.CanvasTexture(cv);
+  seaTex.colorSpace = THREE.SRGBColorSpace;
+  seaTex.wrapS = seaTex.wrapT = THREE.RepeatWrapping;
+  seaTex.magFilter = seaTex.minFilter = THREE.NearestFilter;
+  seaTex.generateMipmaps = false;
+  seaTex.repeat.set(3000 / N, 3000 / N);
+  return seaTex;
+}
 const sfSea = new THREE.Mesh(
   new THREE.BoxGeometry(3000, 1.2, 3000),
-  new THREE.MeshLambertMaterial({ color: 0x22485f }));
+  new THREE.MeshLambertMaterial({ map: seaTexture() }));
 sfSea.position.set(30, 0.35, -8);
 sfSea.visible = false;
 scene.add(sfSea);

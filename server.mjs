@@ -168,9 +168,9 @@ let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
 const PICKUP_SPOTS = {
   sf: [
-    { kind: 'sticker', name: 'sailboat cabin', x: 20.5, y: 6, z: -17.5 },
-    { kind: 'sticker', name: 'bridge east saddle', x: 58.5, y: 42, z: -55.5 },
-    { kind: 'tshirt', name: 'coit gallery', x: 84.5, y: 43, z: -39.5 },
+    { kind: 'sticker', name: 'painted lady parlour', x: -37.5, y: 14.5, z: -25.5 },
+    { kind: 'sticker', name: 'alcatraz roof', x: 37.5, y: 16.5, z: -32.5 },
+    { kind: 'tshirt', name: 'coit gallery', x: 99.5, y: 44.5, z: -30.5 },
   ],
   sanjose: [
     { kind: 'sticker', name: 'basilica dome', x: 63.5, y: 27, z: -22.5 },
