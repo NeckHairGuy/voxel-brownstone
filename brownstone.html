@@ -538,7 +538,16 @@ function h3(x, y, z) {
 }
 
 const _c = new THREE.Color();
+let palmRec = null;                    // while set, V records every voxel it writes
+const palmReg = [], palmIndex = new Map();
+function palmRegister(cells) {
+  if (!cells || !cells.length) return;
+  const id = palmReg.length;
+  palmReg.push(cells);
+  for (const k of cells) palmIndex.set(k, id);
+}
 function V(x, y, z, hex, o = {}) {
+  if (palmRec) palmRec.push(x + '|' + y + '|' + z);
   _c.set(hex);
   const j = o.j !== undefined ? o.j : 0.06;
   const f = 1 + (h3(x, y, z) - 0.5) * 2 * j;
@@ -4113,6 +4122,7 @@ function buildSanJose() {
   function palm(x, z, h) {
     const base = groundAt(x, z);
     if (base === undefined) return;
+    palmRec = [];
     const tall = h >= 10;
     let px = x;
     for (let i = 1; i <= h; i++) {
@@ -4135,6 +4145,7 @@ function buildSanJose() {
         V(px + dx * 2, cy, z + dz * 2, SJ.frondB, { j: 0.12 });
       }
     }
+    palmRegister(palmRec); palmRec = null;
   }
   function bush(x, z) {
     const b = groundAt(x, z);
@@ -5426,6 +5437,7 @@ function buildSF() {
   function palm(x, z, h) {
     const base = groundAt(x, z);
     if (base === undefined) return;
+    palmRec = [];
     let px = x;
     for (let i = 1; i <= h; i++) {
       if (h >= 10 && (i === Math.floor(h / 2) || i === Math.floor(h * 5 / 6))) px += 1;
@@ -5437,6 +5449,7 @@ function buildSF() {
       V(px + dx, cy + 1, z + dz, F.frondA, { j: 0.12 });
       V(px + dx * 2, cy, z + dz * 2, F.frondB, { j: 0.12 });
     }
+    palmRegister(palmRec); palmRec = null;
   }
   function sfTree(x, z, seed, h) {   // Brooklyn-class: wandering trunk, branches, blob crowns
     const r = mulberry(7100 + seed * 131);
@@ -7550,6 +7563,7 @@ function buildLA() {
   function palm(x, z, h) {
     const b = groundAt(x, z);
     if (b === undefined) return;
+    palmRec = [];
     let px = x;
     for (let i = 1; i <= h; i++) {
       if (i > 4 && i % 7 === 0) px += (h3(x, i, z) < 0.5 ? 1 : -1);
@@ -7563,6 +7577,7 @@ function buildLA() {
       if ((dx + dz) % 2 === 0) V(px + dx * 3, cy - 1, z + dz * 3, L.frondB, { j: 0.14 });
     }
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) V(px + dx, cy - 1, z + dz, L.frondC, { j: 0.12 });
+    palmRegister(palmRec); palmRec = null;
   }
   function bush(x, z) {
     const b = groundAt(x, z);
@@ -7647,11 +7662,12 @@ function buildLA() {
           V(legx, g + 7, -42, L.iron, { j: 0.03 });
         }
       } }
-    // ...and the O itself: level and unbroken on the plateau band just
-    // north of its slot, the east arc hanging out over the drop
+    // ...and the O itself: level and unbroken, with the standing letters'
+    // proportions (9 wide, 15 long), lying north with its top rows jutting
+    // out over the summit edge
     {
       const tops = [];
-      for (let x = 65; x <= 73; x++) for (let z = -49; z <= -41; z++) {
+      for (let x = 65; x <= 73; x++) for (let z = -54; z <= -40; z++) {
         const t = groundAt(x, z);
         if (t !== undefined) tops.push(t);
       }
@@ -7660,7 +7676,7 @@ function buildLA() {
       const rows = FONT['O'];
       for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < 3; cx++)
         if (rows[ry][cx] === '#')
-          fillB(65 + cx * 3, base, -49 + ry * 3, 67 + cx * 3, base + 1, -47 + ry * 3, L.white, { j: 0.02 });
+          fillB(65 + cx * 3, base, -54 + ry * 5, 67 + cx * 3, base + 1, -50 + ry * 5, L.white, { j: 0.02 });
     }
     // lower row: WORLD, one bench down — W is wide, so gaps stay real
     { let lx = 19;
@@ -8773,6 +8789,7 @@ function buildLA() {
   function leanPalm(x, z, h, dx, dz) {
     const b = groundAt(x, z);
     if (b === undefined) return;
+    palmRec = [];
     let px = x, pz = z;
     for (let i = 1; i <= h; i++) {
       px = x + Math.round(dx * i / h); pz = z + Math.round(dz * i / h);
@@ -8783,6 +8800,7 @@ function buildLA() {
     for (const [ox, oz] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) V(px + ox, cy + 1, pz + oz, L.frondA, { j: 0.12 });
     for (const [ox, oz] of [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2]]) V(px + ox, cy, pz + oz, L.frondB, { j: 0.12 });
     for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) V(px + ox * 2, cy - 1, pz + oz * 2, L.frondC, { j: 0.14 });
+    palmRegister(palmRec); palmRec = null;
   }
   leanPalm(71, 16, 40, -2, 0);      // head over x69: two off the tower parapet
   leanPalm(59, 20, 33, 3, 0);       // head over x62: the middle hop
@@ -8859,9 +8877,9 @@ function buildLA() {
     V(lx, g + 11, lz, 0x2a2d32, { j: 0.03 });
   }
 
-  /* ---- a sailboat at anchor, far off the south-west shore ---- */
+  /* ---- a sailboat at anchor, far out in the south-west corner of the bay ---- */
   {
-    const BX = -34, BZ = 54;
+    const BX = -40, BZ = 62;
     fillB(BX - 4, 1, BZ - 1, BX + 4, 1, BZ + 1, 0xf4f2ec, { j: 0.04 });
     fillB(BX - 3, 2, BZ - 1, BX + 4, 2, BZ + 1, 0xf4f2ec, { j: 0.04 });
     V(BX + 5, 2, BZ, 0xf4f2ec, { j: 0.04 });
@@ -12741,7 +12759,27 @@ function collapseCheck(removed, dirty, quiet) {
   }
 }
 
-function detachComponent(keys, dirty, quiet) {
+// palms snap: destroying any registered palm voxel drops everything the
+// palm has above the cut, as loose debris, no matter what it still touches
+function palmCheck(removed, dirty, quiet) {
+  const hit = new Map();
+  for (const [x, y, z] of removed) {
+    const id = palmIndex.get(x + '|' + y + '|' + z);
+    if (id === undefined) continue;
+    const cur = hit.get(id);
+    if (cur === undefined || y < cur) hit.set(id, y);
+  }
+  for (const [id, cutY] of hit) {
+    const above = [];
+    for (const k of palmReg[id]) {
+      const v = vox.get(k);
+      if (v && v.y > cutY) above.push(k);
+    }
+    if (above.length) detachComponent(above, dirty, quiet, true);
+  }
+}
+
+function detachComponent(keys, dirty, quiet, forceShatter) {
   const cells = [];
   for (const k of keys) {
     const v = vox.get(k);
@@ -12757,7 +12795,7 @@ function detachComponent(keys, dirty, quiet) {
     if (free < drop) drop = free;
     if (drop === 0) break;
   }
-  const shatter = cells.length < 8 || drop >= 7;
+  const shatter = forceShatter || cells.length < 8 || drop >= 7;
   if (quiet) {   // history replay for late joiners: settle instantly, no theatrics
     if (!shatter) for (const c of cells) integrateCell(c, drop, dirty);
     return;
@@ -12832,6 +12870,7 @@ function explode(cx, cy, cz, quiet = false) {   // quiet: replaying history for 
       }
   if (!removedPts.length) return;
   if (loadBearing) collapseCheck(removedPts, dirty, quiet);
+  palmCheck(removedPts, dirty, quiet);
   if (quiet) { for (const ck of dirty) meshChunk(ck); }   // join replay: batch now
   else { for (const ck of dirty) pendingDirty.add(ck); rebuildT = 0.12; }
   if (quiet) return;
@@ -14165,6 +14204,7 @@ window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net,
 function resetWorld() {
   vox.clear();
   chunkIndex.clear();
+  palmReg.length = 0; palmIndex.clear(); palmRec = null;
   debris.length = 0;
   sparkArr.length = 0;
   pendingDirty.clear();
@@ -15063,7 +15103,7 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'turntable',   name: 'The Powell Turntable',   scene: 'sf', box: [-19, 0, 10, 31],     walls: false },
   { id: 'wharf',       name: 'The Wharf + Sea Lions',  scene: 'sf', box: [-4, 22, -12, 14],    walls: false },
   { id: 'alcatraz',    name: 'Alcatraz',               scene: 'sf', box: [28, 46, -41, -20],   walls: true },
-  { id: 'hellosign',  name: 'The HELL_ WORLD Sign',    scene: 'la', box: [17, 75, -53, -30],   walls: false },
+  { id: 'hellosign',  name: 'The HELL_ WORLD Sign',    scene: 'la', box: [17, 75, -56, -30],   walls: false },
   { id: 'lamansion2', name: 'The Stack',               scene: 'la', box: [-8, 20, -42, -12],   walls: true },
   { id: 'smpier',     name: 'Santa Monica Pier',       scene: 'la', box: [-46, 8, 6, 36],      walls: true },
   { id: 'lamotel',    name: 'The Sunset Motel',        scene: 'la', box: [12, 42, 8, 44],      walls: true },
@@ -15091,6 +15131,7 @@ function placeVoxRecord(r, dx, dy, dz) {
 let catSnap = null;
 function catWorldFor(sc) {
   vox.clear(); chunkIndex.clear(); pendingDirty.clear();
+  palmReg.length = 0; palmIndex.clear(); palmRec = null;
   debris.length = 0; sparkArr.length = 0;
   for (const g of fallingGroups) { scene.remove(g.mesh); g.mesh.dispose(); }
   fallingGroups.length = 0;
