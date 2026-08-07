@@ -314,6 +314,7 @@ if (new URLSearchParams(location.search).has('catalog'))
       <option value="seattlelong">scene: Seattle Long</option>
       <option value="sanjose">scene: San Jose</option>
       <option value="sf">scene: San Francisco</option>
+      <option value="la">scene: Los Angeles</option>
     </select>
     <div class="help">scene — swap the map (switches it for everyone online)</div>
     <div class="row">
@@ -1072,7 +1073,7 @@ function bostonSouthRow(dx, people = true) {
   }
 }
 
-if (!['boston', 'seattle', 'seattlelong', 'sanjose', 'sf'].includes(sceneId)) {   // ---- the Brooklyn base underlies every scene but the standalone maps ----
+if (!['boston', 'seattle', 'seattlelong', 'sanjose', 'sf', 'la'].includes(sceneId)) {   // ---- the Brooklyn base underlies every scene but the standalone maps ----
 // earth base
 fillB(X0, -2, -56, X1, -1, 54, 0x4a3a2a, { j: 0.05 });
 // default grass everywhere on top
@@ -2263,6 +2264,7 @@ if (sceneId === 'seattle') buildSeattle();
 if (sceneId === 'seattlelong') buildSeattle(true);
 if (sceneId === 'sanjose') buildSanJose();
 if (sceneId === 'sf') buildSF();
+if (sceneId === 'la') buildLA();
 
 /* ============================================================
    15H. BOSTON LONG — the Brooklyn block plus the Boston landmarks
@@ -7311,6 +7313,842 @@ function buildSF() {
 }
 
 
+/* ============================================================
+   LOS ANGELES — a squircle of coast with the ocean all round it.
+   The Hollywood Hills rise as a terraced sandstone mesa across
+   the north, carrying the HELL_ WORLD sign (the O of HELLO has
+   toppled and lies flat on the slope). Below the cliffs: a
+   modern glass mansion on a cut terrace with a pool, a low
+   motel round its own court, a stucco apartment block, and one
+   office tower downtown. Santa Monica pier runs west over the
+   water with a Ferris wheel and a coaster. Palms everywhere,
+   and they are very tall. Map x -46..126, z -66..66.
+   ============================================================ */
+function buildLA() {
+  const L = {
+    sand: 0xe8dcae, sandWet: 0xd2c393, dune: 0xdccfa0,
+    rockA: 0xc98f6a, rockB: 0xbb8260, rockC: 0xa96f52, rockD: 0xd7a07a,
+    scrub: 0x8f9c52, scrubDk: 0x74853f, grass: 0x7f9a4a, grassLt: 0x93ab58,
+    water: 0x35566e, waterDk: 0x2b4760, shallow: 0x4d7f96, foam: 0xcfe0e2, seabed: 0x2b3138,
+    road: 0x46464a, roadDk: 0x3c3c40, lineY: 0xdcb43a, walk: 0xc4beb0, walkJt: 0xb0aa9c,
+    stucco: 0xf0e6d2, stuccoWarm: 0xe8d2ae, stuccoPink: 0xf0c8bc, stuccoMint: 0xcfe0d2,
+    tealTrim: 0x2f8f8a, coral: 0xe4664e, cream: 0xf6efe0, white: 0xf4f2ec,
+    glass: 0x9fc6da, glassDk: 0x5f8fa8, steel: 0x6a7078, iron: 0x2a2d32,
+    wood: 0xa8763f, woodDk: 0x6b4a26, plank: 0xb08a56, plankDk: 0x8a6a3e,
+    tile: 0xc4553c, poolW: 0x49b6cf, poolWDk: 0x3a95ac,
+    palmTrunk: 0x9a7a52, palmDk: 0x836548, frondA: 0x4d8a34, frondB: 0x63a544, frondC: 0x3a6b26,
+    lampWarm: 0xffe8b8, lampWhite: 0xfff4e0, neonPink: 0xff4d8d, neonBlue: 0x49d8ff,
+  };
+  const topAt = new Map();
+  const noteTop = (x, z, y) => topAt.set(x + '|' + z, y);
+  const groundAt = (x, z) => topAt.get(x + '|' + z);
+  const RX0 = -46, RX1 = 126, RZ0 = -66, RZ1 = 66;
+  const V0 = V, fillB0 = fillB, clearB0 = clearB, markDoor0 = markDoor, sign0 = sign, bstair0 = bstair, bperson0 = bperson;
+
+  /* ---- the island: a squircle plate, nibbled at the edges ---- */
+  const shape = (x, z) => {
+    const nx = (x - 40) / 76, nz = z / 56;
+    return Math.pow(Math.abs(nx), 3.2) + Math.pow(Math.abs(nz), 3.2);
+  };
+  const isLand = (x, z) => shape(x, z) < 1 + (h3(x >> 2, 9, z >> 2) - 0.5) * 0.12;
+
+  /* ---- the Hollywood mesa: terraced sandstone across the north ---- */
+  function mesaH(x, z) {
+    const t = Math.max(0, Math.min(1, (-10 - z) / 26));          // climbs from z-10 to z-36
+    const ridge = Math.max(0, 1 - Math.abs(x - 40) / 80);        // fades away east and west
+    let h = 46 * (t * t * (3 - 2 * t)) * (ridge * ridge * (3 - 2 * ridge));
+    if (h < 1.2) return 0;
+    // quantise into strata so the cliffs read as sedimentary bands
+    const band = 3;
+    h = Math.floor(h / band) * band + (h3(x, 3, z) < 0.28 ? 1 : 0);
+    return Math.round(h);
+  }
+  const terrainTop = (x, z) => 2 + mesaH(x, z);
+
+  /* ---- column builders ---- */
+  const rockOf = (x, y, z) => {
+    const b = ((y / 3) | 0) % 4;
+    return h3(x, y, z) < 0.12 ? L.rockD : [L.rockA, L.rockB, L.rockC, L.rockA][b];
+  };
+  function landCol(x, z, hh) {
+    fillB(x, -2, z, x, 1, z, L.rockB, { j: 0.06 });
+    if (hh > 0) {
+      for (let y = 2; y <= 1 + hh; y++) V(x, y, z, rockOf(x, y, z), { j: 0.07 });
+      // scrub clings to the ledges
+      V(x, 2 + hh, z, h3(x, 5, z) < 0.42 ? L.scrub : L.scrubDk, { j: 0.12 });
+      noteTop(x, z, 2 + hh);
+    } else {
+      V(x, 2, z, h3(x, 5, z) < 0.4 ? L.grass : L.grassLt, { j: 0.1 });
+      noteTop(x, z, 2);
+    }
+  }
+  function sandCol(x, z, wet) {
+    fillB(x, -2, z, x, 0, z, L.rockB, { j: 0.05 });
+    V(x, 1, z, wet ? L.sandWet : L.sand, { j: 0.07 });
+    noteTop(x, z, 1);
+  }
+  function waterCol(x, z, d) {
+    fillB(x, -2, z, x, -1, z, L.seabed, { j: 0.05 });
+    let c = d > 0.06 ? L.water : L.shallow;
+    if (d > 0.34) c = L.waterDk;
+    if (h3(x >> 3, 2, z >> 3) < 0.3 && d > 0.1) c = L.water;
+    const g = h3(x, 0, z);
+    if (g < 0.04) c = 0x6f9fb2;
+    else if (g > 0.993 && d > 0.05) c = L.foam;
+    V(x, 0, z, c, { j: 0.05 });
+    noteTop(x, z, 0);
+  }
+  function stampLandTo(x, z, top) {
+    const t = groundAt(x, z);
+    if (t !== undefined && t > top) clearB(x, top + 1, z, x, t, z);
+    fillB(x, -2, z, x, top - 1, z, L.rockB, { j: 0.06 });
+    V(x, top, z, h3(x, 5, z) < 0.4 ? L.grass : L.grassLt, { j: 0.1 });
+    noteTop(x, z, top);
+  }
+  const stampLand = (x, z) => stampLandTo(x, z, terrainTop(x, z));
+  function flattenPad(x0, z0, x1, z1, top) {
+    const y = top !== undefined ? top : terrainTop((x0 + x1) >> 1, (z0 + z1) >> 1);
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) stampLandTo(x, z, y);
+    return y;
+  }
+
+  /* ============ 1. TERRAIN ============ */
+  for (let x = RX0; x <= RX1; x++) for (let z = RZ0; z <= RZ1; z++) {
+    const s = shape(x, z);
+    if (!isLand(x, z)) { waterCol(x, z, s - 1); continue; }
+    const hh = mesaH(x, z);
+    // the beach: the outer band on the west and south-west shore
+    const nx = (x - 40) / 76, nz = z / 56;
+    const beachy = hh === 0 && s > 0.62 && nx < 0.30 && nz > -0.45;
+    if (beachy) sandCol(x, z, s > 0.90);
+    else landCol(x, z, hh);
+  }
+
+  /* ============ 2. STREETS ============ */
+  const roadSet = new Set(), walkSet = new Set();
+  function paveLine(pts, hw) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1;
+      for (let x = Math.floor(Math.min(ax, bx) - hw - 2); x <= Math.ceil(Math.max(ax, bx) + hw + 2); x++)
+        for (let z = Math.floor(Math.min(az, bz) - hw - 2); z <= Math.ceil(Math.max(az, bz) + hw + 2); z++) {
+          const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
+          const dd = Math.hypot(x - (ax + vx * t), z - (az + vz * t));
+          const k = x + '|' + z;
+          if (dd <= hw) roadSet.add(k); else if (dd <= hw + 2) walkSet.add(k);
+        }
+    }
+  }
+  // the beachfront boulevard, then inland past the motel and downtown
+  paveLine([[-4, 44], [4, 24], [10, 4], [16, -14]], 5);
+  paveLine([[16, -14], [34, -8], [58, -6], [86, -6], [108, -2]], 5);
+  // the downtown cross street and the loop back along the south shore
+  paveLine([[62, -18], [64, 6], [66, 30], [58, 46]], 4);
+  paveLine([[58, 46], [30, 50], [4, 46], [-4, 44]], 4);
+  // the canyon road climbing to the mansion terrace
+  paveLine([[86, -6], [90, -14]], 3.5);
+  for (const k of roadSet) {
+    const [x, z] = k.split('|').map(Number);
+    stampLand(x, z);
+    V(x, groundAt(x, z), z, h3(x, 8, z) < 0.05 ? L.roadDk : L.road, { j: 0.05 });
+  }
+  for (const k of walkSet) {
+    if (roadSet.has(k)) continue;
+    const [x, z] = k.split('|').map(Number);
+    stampLand(x, z);
+    V(x, groundAt(x, z), z, (x % 6 === 0 || z % 6 === 0) ? L.walkJt : L.walk, { j: 0.06 });
+  }
+  // broken yellow centre line down the boulevard
+  for (const [pts] of [[[[-4, 44], [4, 24], [10, 4], [16, -14]]], [[[16, -14], [34, -8], [58, -6], [86, -6], [108, -2]]]]) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      const n = Math.max(Math.abs(bx - ax), Math.abs(bz - az));
+      for (let s = 0; s <= n; s++) {
+        if ((s >> 1) % 3 === 2) continue;
+        const x = Math.round(ax + (bx - ax) * s / n), z = Math.round(az + (bz - az) * s / n);
+        const g = groundAt(x, z);
+        if (g !== undefined) V(x, g, z, L.lineY, { j: 0.04 });
+      }
+    }
+  }
+
+  /* ---- very tall palms: bare trunk, a crown, and hanging dead fronds ---- */
+  function palm(x, z, h) {
+    const b = groundAt(x, z);
+    if (b === undefined) return;
+    let px = x;
+    for (let i = 1; i <= h; i++) {
+      if (i > 4 && i % 7 === 0) px += (h3(x, i, z) < 0.5 ? 1 : -1);
+      V(px, b + i, z, (i % 4 === 0) ? L.palmDk : L.palmTrunk, { j: 0.09 });
+    }
+    const cy = b + h;
+    V(px, cy + 1, z, L.frondC, { j: 0.1 });
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      V(px + dx, cy + 1, z + dz, L.frondA, { j: 0.12 });
+      V(px + dx * 2, cy, z + dz * 2, L.frondB, { j: 0.12 });
+      if ((dx + dz) % 2 === 0) V(px + dx * 3, cy - 1, z + dz * 3, L.frondB, { j: 0.14 });
+    }
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) V(px + dx, cy - 1, z + dz, L.frondC, { j: 0.12 });
+  }
+  function bush(x, z) {
+    const b = groundAt(x, z);
+    if (b === undefined) return;
+    fillB(x, b + 1, z, x + 1, b + 2, z + 1, h3(x, 1, z) < 0.5 ? L.scrub : L.scrubDk, { j: 0.16 });
+  }
+
+
+  /* ============ 3. THE HELL_ WORLD SIGN ============
+     Big block letters standing on the mesa's south face, each on
+     its own scaffold legs. The O of HELLO has come off its legs
+     and lies flat on the slope below the row. */
+  {
+    // a glyph rendered in the XY plane at fixed z, facing south
+    const bigLetter = (ch, x0, y0, z, sx, sy, c) => {
+      const rows = FONT[ch];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
+        if (rows[ry][cx] === '#')
+          fillB(x0 + cx * sx, y0 + (2 - ry) * sy, z, x0 + cx * sx + sx - 1, y0 + (2 - ry) * sy + sy - 1, z, c, { j: 0.02 });
+      return rows[0].length * sx;
+    };
+    // the same glyph laid flat on the ground, one voxel proud
+    const flatLetter = (ch, x0, z0, sx, sz, c) => {
+      const rows = FONT[ch];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < rows[ry].length; cx++)
+        if (rows[ry][cx] === '#')
+          for (let a = 0; a < sx; a++) for (let b = 0; b < sz; b++) {
+            const x = x0 + cx * sx + a, z = z0 + ry * sz + b;
+            const g = groundAt(x, z);
+            if (g !== undefined) V(x, g + 1, z, c, { j: 0.02 });
+          }
+    };
+    const SY = 4, SX = 3;                       // 9 wide, 12 tall per glyph
+    // upper row: HELL, then the gap where the O used to stand
+    let lx = -2;
+    for (const ch of 'HELL') {
+      const w = bigLetter(ch, lx, 40, -36, SX, SY, L.white);
+      // scaffold legs down to whatever the hillside is doing
+      for (const legx of [lx + 1, lx + w - 2]) {
+        const g = groundAt(legx, -35);
+        if (g !== undefined) fillB(legx, g + 1, -35, legx, 39, -35, L.steel, { j: 0.03 });
+
+      }
+      lx += w + 2;
+    }
+    // the stumps the O left behind
+    for (const legx of [lx + 1, lx + 7]) {
+      const g = groundAt(legx, -35);
+      if (g !== undefined) fillB(legx, g + 1, -35, legx, 44, -35, L.steel, { j: 0.03 });
+      V(legx, 45, -35, L.iron, { j: 0.03 });
+    }
+    // ...and the O itself, face-down on the slope below
+    flatLetter('O', 60, -30, 4, 3, L.white);
+    // lower row: WORLD, stepped down the hill
+    let wx = 2;
+    for (const ch of 'WORLD') {
+      const w = bigLetter(ch, wx, 27, -26, SX, SY, L.white);
+      for (const legx of [wx + 1, wx + w - 2]) {
+        const g = groundAt(legx, -25);
+        if (g !== undefined) fillB(legx, g + 1, -25, legx, 26, -25, L.steel, { j: 0.03 });
+
+      }
+      wx += w + 2;
+    }
+    // a service track switchbacking up to the sign, and a chain-link gate
+    for (let i = 0; i < 16; i++) {
+      const x = 54 - i, g = groundAt(x, -20);
+      if (g === undefined) continue;
+      fillB(x, g, -21, x, g, -19, 0x8a7a62, { j: 0.08 });
+    }
+    for (const gx of [50, 51, 52]) { const g = groundAt(gx, -22); if (g !== undefined) fillB(gx, g + 1, -22, gx, g + 3, -22, L.steel, { j: 0.04 }); }
+  }
+
+  /* ============ 4. SANTA MONICA PIER ============
+     Plank deck on pilings, a Ferris wheel turning over the end,
+     a coaster hump, the arcade, and a bait shop. */
+  {
+    const D = 3;                                  // deck height
+    for (let x = -42; x <= -8; x++) for (let z = 10; z <= 30; z++) {
+      if (x < -40 && (z < 14 || z > 26)) continue;
+      V(x, D, z, ((x + z) % 7 === 0) ? L.plankDk : L.plank, { j: 0.07 });
+      noteTop(x, z, D);
+    }
+    // pilings + cross bracing under the deck
+    for (let x = -40; x <= -10; x += 5) for (let z = 12; z <= 28; z += 5) {
+      fillB(x, -1, z, x, D - 1, z, L.plankDk, { j: 0.06 });
+      V(x, D - 2, z + 1, L.woodDk, { j: 0.05 });
+    }
+    // rope rail along both sides
+    for (let x = -42; x <= -8; x++) for (const rz of [10, 30]) {
+      if (x % 4 === 0) fillB(x, D + 1, rz, x, D + 2, rz, L.plankDk, { j: 0.05 });
+      V(x, D + 3, rz, L.woodDk, { j: 0.04 });
+    }
+    // the ramp up from the beach
+    for (let i = 0; i < 4; i++) {
+      const x = -7 + i;
+      fillB(x, 1, 18, x, D - i, 22, L.plank, { j: 0.06 });
+      for (let z = 18; z <= 22; z++) noteTop(x, z, D - i);
+    }
+    /* ---- the Ferris wheel: a 13-radius ring on an A-frame ---- */
+    {
+      const CX = -30, CY = 22, CZ = 20, R = 13;
+      for (const zz of [CZ - 1, CZ + 1]) {
+        for (let a = 0; a < 96; a++) {
+          const th = a / 96 * Math.PI * 2;
+          const x = CX + Math.round(Math.cos(th) * R), y = CY + Math.round(Math.sin(th) * R);
+          V(x, y, zz, L.white, { j: 0.03 });
+          if (a % 8 === 0) {                       // spokes
+            for (let r = 3; r < R; r++)
+              V(CX + Math.round(Math.cos(th) * r), CY + Math.round(Math.sin(th) * r), zz, L.steel, { j: 0.03 });
+          }
+        }
+        // gondolas hanging off the rim
+        for (let a = 0; a < 12; a++) {
+          const th = a / 12 * Math.PI * 2;
+          const x = CX + Math.round(Math.cos(th) * (R - 1)), y = CY + Math.round(Math.sin(th) * (R - 1));
+          const c = [L.coral, L.neonBlue, 0xf0d040, L.white][a % 4];
+          V(x, y - 1, zz, c, { t: 3, j: 0 });
+        }
+      }
+      fillB(CX - 1, CY - 4, CZ - 1, CX + 1, CY + 1, CZ + 1, L.steel, { j: 0.03 });   // hub down to the beam
+      for (const dz of [-3, 3]) {                  // A-frame legs to the deck
+        for (let i = 0; i <= CY - D - 1; i++) {
+          const x = CX + Math.round(i * 0.28) * (dz > 0 ? 1 : -1);
+          V(x, D + 1 + i, CZ + dz, L.white, { j: 0.03 });
+        }
+      }
+      fillB(CX - 4, CY - 4, CZ - 3, CX + 4, CY - 4, CZ + 3, L.steel, { j: 0.03 });
+    }
+    /* ---- a coaster hump running out along the pier ---- */
+    { const ry = i => D + 4 + Math.round(6 * Math.sin(i / 26 * Math.PI * 2.2));
+      for (let i = 0; i <= 26; i++) {
+        const x = -14 - i, y = ry(i), yp = ry(Math.max(0, i - 1));
+        for (const rz of [26, 28]) {
+          fillB(x, Math.min(y, yp), rz, x, Math.max(y, yp), rz, 0xe8c23a, { j: 0.04 });
+          if (i % 3 === 0) fillB(x, D + 1, rz, x, y - 1, rz, L.white, { j: 0.03 });
+        }
+        if (i % 2 === 0) fillB(x, y, 26, x, y, 28, L.steel, { j: 0.03 });
+      } }
+    /* ---- the arcade: a long shed with a striped awning ---- */
+    {
+      const x0 = -24, x1 = -12, z0 = 12, z1 = 18;
+      for (let y = D + 1; y <= D + 8; y++) {
+        fillB(x0, y, z0, x1, y, z0, L.cream, { j: 0.04 });
+        fillB(x0, y, z1, x1, y, z1, L.cream, { j: 0.04 });
+        fillB(x0, y, z0 + 1, x0, y, z1 - 1, L.cream, { j: 0.04 });
+        fillB(x1, y, z0 + 1, x1, y, z1 - 1, L.cream, { j: 0.04 });
+      }
+      fillB(x0, D + 9, z0, x1, D + 9, z1, L.coral, { j: 0.04 });
+      clearB(x0 + 4, D + 1, z1, x0 + 6, D + 5, z1);                    // doorway to the deck
+      markDoor(x0 + 4, D + 1, z1, x0 + 6, D + 5, z1 + 1);
+      for (const wx of [x0 + 1, x0 + 8, x0 + 10]) {                     // windows
+        clearB(wx, D + 3, z1, wx + 1, D + 6, z1);
+        fillB(wx, D + 3, z1, wx + 1, D + 6, z1, L.glass, { t: 1, j: 0.02 });
+      }
+      for (let x = x0; x <= x1; x++) V(x, D + 10, z1 + 1, (x % 4 < 2) ? L.coral : L.cream, { j: 0.04 });
+      sign('FUN', x0 + 4, D + 10, z1 + 2, 1, L.neonPink, 2, 1);
+      // inside: cabinets, a skee-ball lane, prize shelf, the change booth
+      for (let x = x0 + 1; x <= x1 - 1; x += 2) {
+        fillB(x, D + 1, z0 + 1, x, D + 3, z0 + 1, L.iron, { j: 0.03 });
+        V(x, D + 4, z0 + 1, [L.neonBlue, L.neonPink, 0x6ce86c][x % 3], { t: 2, j: 0 });
+      }
+      fillB(x0 + 1, D + 1, z0 + 4, x0 + 5, D + 1, z0 + 5, L.wood, { j: 0.05 });
+      fillB(x0 + 8, D + 1, z0 + 3, x0 + 10, D + 4, z0 + 3, 0x8a5e33, { j: 0.04 });
+      for (let y = D + 2; y <= D + 4; y += 2) for (let x = x0 + 8; x <= x0 + 10; x++)
+        V(x, y, z0 + 3, [0xd85a7a, 0x49d8ff, 0xf0d040][x % 3], { j: 0.1 });
+      V(x0 + 2, D + 5, z0 + 2, L.lampWarm, { t: 3, j: 0 });
+      V(x0 + 9, D + 5, z0 + 5, L.lampWarm, { t: 3, j: 0 });
+      bperson(x0 + 6, D + 1, z0 + 3, L.coral, 0x2a2d32);
+    }
+    /* ---- bait shop, benches, gulls at the pier head ---- */
+    fillB(-38, D + 1, 16, -34, D + 5, 20, L.stuccoMint, { j: 0.04 });
+    clearB(-34, D + 1, 17, -34, D + 4, 18); markDoor(-34, D + 1, 17, -34, D + 4, 18);
+    fillB(-39, D + 6, 15, -33, D + 6, 21, L.tealTrim, { j: 0.04 });
+    V(-36, D + 7, 15, L.lampWarm, { t: 3, j: 0 });
+    for (const [bx, bz] of [[-20, 24], [-28, 12], [-36, 26]]) {
+      fillB(bx, D + 1, bz, bx + 2, D + 1, bz, L.wood, { j: 0.06 });
+      fillB(bx, D + 2, bz + 1, bx + 2, D + 2, bz + 1, L.woodDk, { j: 0.06 });
+    }
+    for (const [gx, gz] of [[-41, 14], [-16, 29], [-30, 11]]) {
+      V(gx, D + 1, gz, 0xd8dce0, { j: 0.04 }); V(gx, D + 2, gz, 0xf0f4f6, { j: 0.03 });
+      V(gx + 1, D + 2, gz, 0xe08820, { j: 0 });
+    }
+    bperson(-18, D + 1, 20, 0x49d8ff, 0xf0e6d2);
+    bperson(-26, D + 1, 25, 0xf0d040, 0x2a2d32);
+  }
+
+  /* ---- beach life: towels, umbrellas, a lifeguard tower ---- */
+  {
+    for (const [tx, tz, c] of [[2, 30, L.coral], [6, 38, 0x49d8ff], [-2, 22, 0xf0d040]]) {
+      const g = groundAt(tx, tz);
+      if (g !== undefined) fillB(tx, g + 1, tz, tx + 1, g + 1, tz + 2, c, { j: 0.05 });
+    }
+    for (const [ux, uz, ca] of [[4, 34, L.coral], [0, 26, 0x49d8ff]]) {
+      const g = groundAt(ux, uz);
+      if (g === undefined) continue;
+      fillB(ux, g + 1, uz, ux, g + 5, uz, L.iron, { j: 0.02 });
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++)
+        if (Math.abs(dx) + Math.abs(dz) <= 2) V(ux + dx, g + 6, uz + dz, ((dx + dz) % 2 === 0) ? ca : L.cream, { j: 0.04 });
+    }
+    const lg = groundAt(-6, 36);
+    if (lg !== undefined) {
+      for (const [px, pz] of [[-6, 36], [-3, 36], [-6, 39], [-3, 39]]) fillB(px, lg + 1, pz, px, lg + 4, pz, L.plankDk, { j: 0.05 });
+      fillB(-6, lg + 5, 36, -3, lg + 5, 39, L.plank, { j: 0.05 });
+      fillB(-6, lg + 6, 36, -3, lg + 9, 36, L.cream, { j: 0.03 });
+      fillB(-6, lg + 6, 39, -6, lg + 9, 39, L.cream, { j: 0.03 });
+      fillB(-7, lg + 10, 35, -2, lg + 10, 40, L.coral, { j: 0.04 });
+      V(-4, lg + 6, 38, L.coral, { j: 0 }); V(-5, lg + 6, 38, 0xe8641e, { j: 0.05 });
+    }
+    bperson(8, 2, 42, L.neonPink, 0x2a2d32);
+    bperson(-1, 2, 31, 0xf6efe0, 0x49d8ff);
+  }
+
+
+  /* ============ 5. THE SUNSET MOTEL ============
+     Two flat storeys wrapped round a courtyard pool, rooms off an
+     open walkway, a stair at each end and a neon sign on the roof.
+     Ground rooms feet 3..10, upper feet 12..19, roof y20. */
+  {
+    const x0 = 14, x1 = 38, z0 = 14, z1 = 34, DY = flattenPad(x0 - 2, z0 - 2, x1 + 2, z1 + 2) - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const sign = (w, a, b, c, s, col, t, sp) => sign0(w, a, b + DY, c, s, col, t, sp);
+    const bperson = (a, b, c, d, e) => bperson0(a, b + DY, c, d, e);
+    /* the two wings: north block (z0..z0+7) and east block (x1-7..x1) */
+    const wing = (ax0, az0, ax1, az1) => {
+      for (const [fy, cy] of [[3, 10], [12, 19]]) {
+        for (let y = fy; y <= cy; y++) {
+          fillB(ax0, y, az0, ax1, y, az0, L.stucco, { j: 0.04 });
+          fillB(ax0, y, az1, ax1, y, az1, L.stucco, { j: 0.04 });
+          fillB(ax0, y, az0 + 1, ax0, y, az1 - 1, L.stucco, { j: 0.04 });
+          fillB(ax1, y, az0 + 1, ax1, y, az1 - 1, L.stucco, { j: 0.04 });
+        }
+        fillB(ax0, fy - 1, az0, ax1, fy - 1, az1, 0xb6ada0, { j: 0.05 });   // slab
+      }
+      fillB(ax0, 20, az0, ax1, 20, az1, 0xd8d2c4, { j: 0.04 });            // flat roof
+      fillB(ax0, 21, az0, ax1, 21, az0, L.stuccoWarm, { j: 0.04 });        // parapet
+      fillB(ax0, 21, az1, ax1, 21, az1, L.stuccoWarm, { j: 0.04 });
+      fillB(ax0, 21, az0, ax0, 21, az1, L.stuccoWarm, { j: 0.04 });
+      fillB(ax1, 21, az0, ax1, 21, az1, L.stuccoWarm, { j: 0.04 });
+    };
+    wing(x0, z0, x1, z0 + 7);
+    // courtyard-facing walkway on both levels, carried on posts
+    for (const wy of [11, 20]) fillB(x0, wy, z0 + 8, x1, wy, z0 + 10, 0xbdb4a4, { j: 0.05 });
+    for (let x = x0; x <= x1; x += 4) fillB(x, 3, z0 + 10, x, 10, z0 + 10, L.stuccoWarm, { j: 0.04 });
+    for (let x = x0; x <= x1; x++) { V(x, 21, z0 + 10, L.tealTrim, { j: 0.04 }); if (x % 2 === 0 && x < x1 - 4) V(x, 12, z0 + 10, L.tealTrim, { j: 0.04 }); }
+    for (let x = x0; x <= x1 - 5; x++) V(x, 13, z0 + 10, L.tealTrim, { j: 0.04 });   // upper rail, open at the stair
+    /* doors and windows: six rooms per floor onto the walkway */
+    for (let i = 0; i < 6; i++) {
+      const dx = x0 + 2 + i * 4;
+      for (const [fy, ty] of [[3, 7], [12, 16]]) {
+        clearB(dx, fy, z0 + 7, dx + 1, ty, z0 + 7);
+        fillB(dx, fy, z0 + 7, dx + 1, ty, z0 + 7, L.tealTrim, { j: 0.04 });
+        V(dx + 1, fy + 2, z0 + 8, 0xd8b437, { t: 2, j: 0 });
+        markDoor(dx, fy, z0 + 7, dx + 1, ty, z0 + 8);
+        clearB(dx + 2, fy + 1, z0 + 7, dx + 3, ty - 1, z0 + 7);
+        fillB(dx + 2, fy + 1, z0 + 7, dx + 3, ty - 1, z0 + 7, L.glass, { t: 1, j: 0.02 });
+        V(dx, fy + 5, z0 + 8, L.lampWarm, { t: 3, j: 0 });                       // door light
+      }
+      // rear windows onto the street
+      for (const fy of [4, 13]) {
+        clearB(dx + 1, fy, z0, dx + 2, fy + 2, z0);
+        fillB(dx + 1, fy, z0, dx + 2, fy + 2, z0, L.glass, { t: 1, j: 0.02 });
+      }
+    }
+    /* room interiors: bed, side table, TV, a strip of bathroom */
+    for (let i = 0; i < 6; i++) {
+      const rx = x0 + 2 + i * 4;
+      for (const fy of [3, 12]) {
+        if (i < 5) fillB(rx + 4, fy, z0 + 1, rx + 4, fy + 6, z0 + 6, L.stucco, { j: 0.03 });   // party wall
+        fillB(rx, fy, z0 + 1, rx + 2, fy, z0 + 3, 0x8a5e33, { j: 0.05 });        // bed base
+        fillB(rx, fy + 1, z0 + 1, rx + 2, fy + 1, z0 + 3, [0xd85a7a, 0x49d8ff, 0xf0d040][i % 3], { j: 0.06 });
+        V(rx, fy + 2, z0 + 1, 0xf2eee4, { j: 0 });
+        V(rx + 3, fy, z0 + 1, L.woodDk, { j: 0.04 }); V(rx + 3, fy + 1, z0 + 1, L.lampWarm, { t: 3, j: 0 });
+        fillB(rx + 3, fy + 2, z0 + 5, rx + 3, fy + 4, z0 + 5, 0x0c0c10, { j: 0.02 });  // wall TV
+        fillB(rx, fy, z0 + 5, rx, fy + 1, z0 + 6, 0xe8e8e2, { j: 0.02 });        // bathroom fittings
+        V(rx + 1, fy, z0 + 6, 0xf2efe6, { j: 0.02 });
+        V(rx + 2, fy + 7, z0 + 3, L.lampWhite, { t: 3, j: 0 });
+      }
+    }
+    /* stairs at both ends of the walkway */
+    for (let i = 0; i < 9; i++) {                                                // stair to the walkway
+      fillB(x1 - 9 + i, 2, z0 + 11, x1 - 9 + i, 3 + i, z0 + 12, L.stuccoWarm, { j: 0.04 });
+      if (i % 3 === 0) V(x1 - 9 + i, 4 + i, z0 + 13, L.tealTrim, { j: 0.04 });
+    }
+    /* the courtyard: kidney pool, loungers, a diving board */
+    for (let x = x0 + 4; x <= x1 - 4; x++) for (let z = z0 + 13; z <= z1 - 2; z++) {
+      const dd = Math.hypot((x - (x0 + x1) / 2) / 8, (z - (z0 + 13 + z1 - 2) / 2) / 3.2);
+      if (dd > 1) continue;
+      clearB(x, 2, z, x, 2, z);
+      fillB(x, 0, z, x, 1, z, 0x9fd6e0, { j: 0.03 });
+      V(x, 2, z, dd > 0.7 ? L.poolW : L.poolWDk, { t: 1, j: 0.03 });
+    }
+    for (let x = x0 + 2; x <= x1 - 2; x++) for (let z = z0 + 11; z <= z1; z++)
+      if (groundAt(x, z + 0) !== undefined && !(getV(x, 2 + DY, z) && getV(x, 2 + DY, z).t === 1))
+        V(x, 2, z, ((x + z) % 2 === 0) ? 0xdcd6c6 : 0xcfc8b6, { j: 0.04 });
+    for (const [lx, lz] of [[x0 + 3, z1 - 1], [x0 + 7, z1 - 1], [x1 - 6, z0 + 12]]) {
+      fillB(lx, 3, lz, lx + 2, 3, lz, L.white, { j: 0.04 });
+      fillB(lx, 4, lz, lx, 4, lz, L.white, { j: 0.04 });
+    }
+    fillB(x1 - 3, 3, z1 - 3, x1 - 2, 3, z1 - 3, L.white, { j: 0.03 });
+    /* the neon sign on the roof, facing the boulevard */
+    for (const px of [x0 + 3, x0 + 21]) fillB(px, 22, z0 + 1, px, 27, z0 + 1, L.iron, { j: 0.03 });
+    fillB(x0 + 2, 28, z0 + 1, x0 + 22, 33, z0 + 1, 0x2a2226, { j: 0.03 });
+    sign('MOTEL', x0 + 3, 29, z0, 1, L.neonPink, 2, 1);
+    for (let x = x0 + 2; x <= x0 + 22; x += 3) V(x, 34, z0 + 1, L.neonBlue, { t: 2, j: 0 });
+    /* the office, an ice machine and a parked car */
+    fillB(x1 - 3, 3, z0 + 2, x1 - 1, 4, z0 + 4, L.wood, { j: 0.05 });
+    V(x1 - 2, 5, z0 + 3, 0x2a2a2e, { j: 0 });
+    bperson(x1 - 2, 3, z0 + 5, L.stuccoPink, 0x2a2d32);
+    fillB(x0 + 1, 3, z0 + 11, x0 + 1, 5, z0 + 12, L.steel, { j: 0.03 });
+    V(x0 + 1, 6, z0 + 11, L.lampWhite, { t: 3, j: 0 });
+  }
+
+  /* ============ 6. THE APARTMENT BLOCK ============
+     A flat stucco slab on stilts over its carport, three storeys
+     of units with balconies, and an outside stair. */
+  {
+    const x0 = 44, x1 = 58, z0 = 14, z1 = 32, DY = flattenPad(x0 - 2, z0 - 2, x1 + 2, z1 + 2) - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const sign = (w, a, b, c, s, col, t, sp) => sign0(w, a, b + DY, c, s, col, t, sp);
+    const bperson = (a, b, c, d, e) => bperson0(a, b + DY, c, d, e);
+    /* carport: the block stands on piers, cars tuck underneath */
+    for (const [px, pz] of [[x0, z0], [x0, z1], [x1, z0], [x1, z1], [x0 + 7, z0], [x0 + 7, z1]])
+      fillB(px, 2, pz, px, 8, pz, L.stucco, { j: 0.04 });
+    fillB(x0, 9, z0, x1, 9, z1, 0xb6ada0, { j: 0.05 });
+    for (let x = x0 + 1; x <= x1 - 1; x++) for (let z = z0 + 1; z <= z1 - 1; z++)
+      V(x, 2, z, ((x + z) % 2 === 0) ? 0x9a9a96 : 0x8e8e8a, { j: 0.04 });
+    /* three storeys: feet 10..16, 18..24, 26..32 */
+    for (const fy of [10, 18, 26]) {
+      for (let y = fy; y <= fy + 6; y++) {
+        fillB(x0, y, z0, x1, y, z0, (y % 2 === 0) ? L.stucco : L.stuccoWarm, { j: 0.04 });
+        fillB(x0, y, z1, x1, y, z1, (y % 2 === 0) ? L.stucco : L.stuccoWarm, { j: 0.04 });
+        fillB(x0, y, z0 + 1, x0, y, z1 - 1, L.stucco, { j: 0.04 });
+        fillB(x1, y, z0 + 1, x1, y, z1 - 1, L.stucco, { j: 0.04 });
+      }
+      fillB(x0, fy + 7, z0, x1, fy + 7, z1, 0xb6ada0, { j: 0.05 });
+      /* units: two per floor either side of a central stair well */
+      for (const ux of [x0 + 1, x0 + 8]) {
+        fillB(ux, fy, z0 + 5, ux + 5, fy + 6, z0 + 5, L.stucco, { j: 0.03 });      // bedroom wall
+        clearB(ux + 2, fy, z0 + 5, ux + 3, fy + 4, z0 + 5); markDoor(ux + 2, fy, z0 + 5, ux + 3, fy + 4, z0 + 5);
+        fillB(ux, fy, z0 + 1, ux + 2, fy, z0 + 3, 0x8a5e33, { j: 0.05 });          // bed
+        fillB(ux, fy + 1, z0 + 1, ux + 2, fy + 1, z0 + 3, [0x6a4a72, 0x2f8f8a][(ux + fy) % 2], { j: 0.06 });
+        V(ux, fy + 2, z0 + 1, 0xf2eee4, { j: 0 });
+        fillB(ux + 4, fy, z0 + 1, ux + 5, fy + 2, z0 + 2, L.woodDk, { j: 0.04 });  // wardrobe
+        fillB(ux, fy, z0 + 8, ux + 1, fy + 1, z0 + 9, 0x4a5e6a, { j: 0.04 });      // kitchen run
+        fillB(ux, fy + 2, z0 + 8, ux + 1, fy + 2, z0 + 9, 0xd9d4c8, { j: 0.03 });
+        V(ux + 2, fy, z0 + 9, 0xb8bcc2, { j: 0.02 });
+        fillB(ux + 3, fy, z0 + 11, ux + 5, fy + 1, z0 + 12, L.coral, { j: 0.05 }); // sofa
+        fillB(ux + 3, fy + 2, z0 + 6, ux + 4, fy + 4, z0 + 6, 0x0c0c10, { j: 0.02 });
+        V(ux + 2, fy + 5, z0 + 10, L.lampWarm, { t: 3, j: 0 });
+        // balcony onto the street
+        clearB(ux + 1, fy, z1, ux + 3, fy + 4, z1);
+        fillB(ux + 1, fy, z1, ux + 3, fy + 4, z1, L.glass, { t: 1, j: 0.02 });
+        clearB(ux + 2, fy, z1, ux + 2, fy + 3, z1); markDoor(ux + 2, fy, z1, ux + 2, fy + 3, z1 + 1);
+        fillB(ux, fy - 1, z1 + 1, ux + 5, fy - 1, z1 + 2, 0xbdb4a4, { j: 0.05 });
+        for (let x = ux; x <= ux + 5; x++) { V(x, fy, z1 + 2, L.tealTrim, { j: 0.04 }); V(x, fy + 1, z1 + 2, L.tealTrim, { j: 0.04 }); }
+        V(ux + 4, fy, z1 + 1, 0xb06a3c, { j: 0.05 }); fillB(ux + 4, fy + 1, z1 + 1, ux + 4, fy + 2, z1 + 1, 0x3a5c30, { j: 0.14 });
+      }
+    }
+    /* the outside stair up the middle, and the roof */
+    for (const [f, t] of [[2, 9], [9, 17], [17, 25], [25, 33]]) bstair0(f + DY, t + DY, x0 + 5, z0 + 15, -1);
+    fillB(x0, 33, z0, x1, 33, z1, 0xd8d2c4, { j: 0.04 });
+    for (let x = x0; x <= x1; x++) { V(x, 34, z0, L.stuccoWarm, { j: 0.04 }); V(x, 34, z1, L.stuccoWarm, { j: 0.04 }); }
+    for (let z = z0; z <= z1; z++) { V(x0, 34, z, L.stuccoWarm, { j: 0.04 }); V(x1, 34, z, L.stuccoWarm, { j: 0.04 }); }
+    fillB(x0 + 2, 34, z0 + 3, x0 + 4, 36, z0 + 5, L.steel, { j: 0.03 });         // rooftop plant
+    V(x0 + 3, 37, z0 + 4, 0x8c8c90, { j: 0.04 });
+    fillB(x0 + 9, 34, z0 + 2, x0 + 12, 35, z0 + 3, 0xb8bcc2, { j: 0.03 });
+
+    bperson(x0 + 3, 10, z1 + 1, 0x49d8ff, 0xf6efe0);
+  }
+
+
+  /* ============ 7. THE OFFICE TOWER ============
+     Glass-and-steel downtown slab: double-height lobby, three
+     walkable floors, a crown of mechanical louvres and a mast. */
+  {
+    const x0 = 78, x1 = 96, z0 = 6, z1 = 24, DY = flattenPad(x0 - 3, z0 - 3, x1 + 3, z1 + 3) - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const bstair = (f, t, xa, zb, s) => bstair0(f + DY, t + DY, xa, zb, s);
+    const bperson = (a, b, c, d, e) => bperson0(a, b + DY, c, d, e);
+    // plaza
+    for (let x = x0 - 3; x <= x1 + 3; x++) for (let z = z0 - 3; z <= z1 + 3; z++)
+      if (x < x0 || x > x1 || z < z0 || z > z1) V(x, 2, z, ((x + z) % 2 === 0) ? 0xd0cabc : 0xc2bcae, { j: 0.03 });
+    /* the shaft: mullions every third column, spandrels at each slab */
+    for (let y = 3; y <= 58; y++) {
+      const slab = (y - 3) % 8 === 7;
+      for (let x = x0; x <= x1; x++) for (const z of [z0, z1]) {
+        const m = (x - x0) % 3 === 0 || slab;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+      for (let z = z0 + 1; z <= z1 - 1; z++) for (const x of [x0, x1]) {
+        const m = (z - z0) % 3 === 0 || slab;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+      for (const [cx, cz] of [[x0, z0], [x0, z1], [x1, z0], [x1, z1]]) V(cx, y, cz, L.steel, { j: 0.03 });
+    }
+    // floor slabs: lobby y2 (feet 3..12), then 13, 23, 33
+    for (const sy of [2, 13, 23, 33]) for (let x = x0 + 1; x <= x1 - 1; x++) for (let z = z0 + 1; z <= z1 - 1; z++)
+      V(x, sy, z, sy === 2 ? (((x % 4 < 2) === (z % 4 < 2)) ? 0xe4e0d4 : 0x8a8478) : (((x + (z >> 2)) % 2 === 0) ? 0x9a9a96 : 0x8e8e8a), { j: 0.04 });
+    // entrance on the plaza side
+    clearB(85, 3, z1, 89, 8, z1);
+    fillB(85, 3, z1, 89, 7, z1, L.iron, { j: 0.03 });
+    fillB(86, 4, z1, 88, 7, z1, L.glass, { t: 1, j: 0.02 });
+    markDoor(85, 3, z1, 89, 7, z1 + 1);
+    fillB(84, 9, z1 + 1, 90, 9, z1 + 2, L.white, { j: 0.03 });
+    /* lobby: reception, turnstiles, a core, seating, a big ficus */
+    fillB(84, 3, z0 + 3, 90, 5, z0 + 4, L.woodDk, { j: 0.04 });
+    fillB(84, 6, z0 + 3, 90, 6, z0 + 4, 0xd9d4c8, { j: 0.03 });
+    V(87, 7, z0 + 4, 0xd8b437, { t: 2, j: 0 });
+    bperson(88, 3, z0 + 5, 0x2a3a55, 0x23262a);
+    for (const tx of [83, 86, 90, 93]) fillB(tx, 3, z0 + 9, tx, 5, z0 + 9, L.steel, { j: 0.02 });
+    for (const gx of [84, 91]) V(gx, 5, z0 + 9, 0x40e080, { t: 2, j: 0 });
+    fillB(86, 3, z0 + 12, 92, 12, z0 + 14, 0x3a4048, { j: 0.03 });                 // lift core
+    for (const ex of [87, 89, 91]) { fillB(ex, 3, z0 + 12, ex, 7, z0 + 12, 0xc9a227, { j: 0.02 }); V(ex, 8, z0 + 12, 0xffa028, { t: 2, j: 0 }); }
+    fillB(80, 2, z0 + 12, 84, 2, z0 + 16, 0x7a3b30, { j: 0.05 });
+    fillB(80, 3, z0 + 16, 83, 4, z0 + 16, 0x2f5f5a, { j: 0.05 });
+    fillB(80, 3, z0 + 12, 83, 4, z0 + 12, 0x2f5f5a, { j: 0.05 });
+    V(81, 3, z0 + 14, 0xb06a3c, { j: 0.05 }); fillB(81, 4, z0 + 14, 81, 8, z0 + 14, 0x3a5c30, { j: 0.15 });
+    /* stairs: south-west, then north-east, then south-west again */
+    bstair(2, 13, 80, z0 + 1, 1);
+    fillB(80, 3, z0 + 8, 83, 7, z0 + 9, 0x8a8478, { j: 0.05 });                    // seal under the landing
+    bstair(13, 23, 92, z0 + 1, 1);
+    bstair(23, 33, 80, z1 - 1, -1);
+    const reopen = (yF, yT, xa, zb, sd) => {
+      const H = yT - yF, hA = Math.ceil(H / 2), hB = H - hA, zi = i => zb + sd * i;
+      clearB(xa, yT, zi(hA - 1), xa + 1, yT, zi(hA + 2));
+      clearB(xa + 2, yT, zi(hA + 3 - hB), xa + 3, yT, zi(hA + 2));
+    };
+    reopen(2, 13, 80, z0 + 1, 1); reopen(13, 23, 92, z0 + 1, 1); reopen(23, 33, 80, z1 - 1, -1);
+    /* the three office floors, each a bit different */
+    for (const [fy, kind] of [[14, 'desks'], [24, 'meeting'], [34, 'exec']]) {
+      fillB(86, fy, z0 + 12, 92, fy + 8, z0 + 14, 0x3a4048, { j: 0.03 });           // core stub
+      for (const ex of [88, 90]) fillB(ex, fy, z0 + 12, ex, fy + 4, z0 + 12, 0xc9a227, { j: 0.02 });
+      if (kind === 'desks') {
+        for (const [dx, dz] of [[81, z0 + 3], [81, z0 + 14], [93, z0 + 8], [86, z0 + 3]]) {
+          for (const lx of [dx, dx + 3]) for (const lz of [dz, dz + 1]) V(lx, fy, lz, L.steel, { j: 0.02 });
+          fillB(dx, fy + 1, dz, dx + 3, fy + 1, dz + 1, L.white, { j: 0.03 });
+          V(dx + 1, fy + 2, dz, 0x17171a, { j: 0 }); V(dx + 1, fy + 3, dz, 0x49d8ff, { t: 2, j: 0 });
+          V(dx + 2, fy + 2, dz + 1, 0x17171a, { j: 0 }); V(dx + 2, fy + 3, dz + 1, 0x9fd8ff, { t: 2, j: 0 });
+        }
+      } else if (kind === 'meeting') {
+        fillB(80, fy, z0 + 3, 80, fy + 5, z0 + 9, L.glass, { t: 1, j: 0.02 });
+        fillB(81, fy, z0 + 9, 86, fy + 5, z0 + 9, L.glass, { t: 1, j: 0.02 });
+        clearB(83, fy, z0 + 9, 84, fy + 4, z0 + 9);
+        fillB(81, fy, z0 + 5, 85, fy + 1, z0 + 7, L.woodDk, { j: 0.04 });
+        for (const cx of [81, 83, 85]) { V(cx, fy, z0 + 4, 0x2a4a8a, { j: 0.05 }); V(cx, fy, z0 + 8, 0x2a4a8a, { j: 0.05 }); }
+        fillB(81, fy + 3, z0 + 3, 84, fy + 4, z0 + 3, 0xf2efe6, { j: 0.02 });
+        fillB(93, fy, z0 + 14, 94, fy + 1, z0 + 16, 0xdcdcd4, { j: 0.04 });
+        V(93, fy + 2, z0 + 14, 0x8a8e94, { j: 0.04 });
+      } else {
+        fillB(80, fy - 1, z0 + 3, 86, fy - 1, z0 + 9, 0x2f4858, { j: 0.05 });
+        fillB(80, fy, z0 + 9, 84, fy + 1, z0 + 9, 0x8a4a2e, { j: 0.05 });
+        fillB(80, fy, z0 + 3, 84, fy + 1, z0 + 3, 0x8a4a2e, { j: 0.05 });
+        fillB(81, fy, z0 + 6, 83, fy, z0 + 7, L.wood, { j: 0.04 });
+        fillB(92, fy, z0 + 3, 94, fy + 1, z0 + 4, L.woodDk, { j: 0.04 });
+        V(93, fy + 2, z0 + 3, 0x49d8ff, { t: 2, j: 0 });
+        V(94, fy, z0 + 7, 0x3a2e22, { j: 0 }); V(94, fy + 1, z0 + 7, 0x4a7aa0, { j: 0.08 });
+        fillB(90, fy, z0 + 16, 93, fy + 2, z0 + 16, 0x2a4a8a, { j: 0.05 });
+      }
+      if (fy < 34) for (const lz of [z0 + 4, z0 + 10, z0 + 16]) { V(87, fy + 7, lz, L.lampWhite, { t: 3, j: 0 }); V(87, fy + 8, lz, L.iron, { j: 0 }); }
+    }
+    /* crown: louvred plant deck, mast, aircraft beacon */
+    fillB(x0, 59, z0, x1, 59, z1, L.steel, { j: 0.03 });
+    for (let y = 60; y <= 65; y++) for (let x = x0 + 1; x <= x1 - 1; x++) for (const z of [z0 + 1, z1 - 1])
+      if ((y + x) % 2 === 0) V(x, y, z, L.steel, { j: 0.04 });
+    fillB(x0 + 1, 66, z0 + 1, x1 - 1, 66, z1 - 1, L.steel, { j: 0.03 });
+    fillB(86, 67, 14, 88, 74, 16, L.white, { j: 0.03 });
+    fillB(87, 75, 15, 87, 82, 15, L.steel, { j: 0.02 });
+    V(87, 83, 15, 0xff3030, { t: 2, j: 0 });
+  }
+
+  /* ============ 8. THE HILLSIDE MANSION ============
+     A modern glass box cut into the mesa's east shoulder: a
+     terrace pad, an infinity pool on the lip, an open living
+     floor, bedrooms above, and a carport off the canyon road. */
+  {
+    const x0 = 78, x1 = 100, z0 = -34, z1 = -18;
+    const PAD = flattenPad(x0 - 4, z0 - 3, x1 + 4, z1 + 4, 12);   // a terrace the canyon road can actually reach
+    const DY = PAD - 2;
+    const V = (x, y, z, c, o) => V0(x, y + DY, z, c, o);
+    const fillB = (a, b, c, d, e, f, g, o) => fillB0(a, b + DY, c, d, e + DY, f, g, o);
+    const clearB = (a, b, c, d, e, f) => clearB0(a, b + DY, c, d, e + DY, f);
+    const markDoor = (a, b, c, d, e, f) => markDoor0(a, b + DY, c, d, e + DY, f);
+    const bstair = (f, t, xa, zb, s) => bstair0(f + DY, t + DY, xa, zb, s);
+    const bperson = (a, b, c, d, e) => bperson0(a, b + DY, c, d, e);
+    // the terrace deck
+    for (let x = x0 - 4; x <= x1 + 4; x++) for (let z = z0 - 3; z <= z1 + 4; z++)
+      V(x, 2, z, ((x + z) % 2 === 0) ? 0xdcd6c6 : 0xcfc8b6, { j: 0.04 });
+    /* lower floor: glass living box, feet 3..10 */
+    for (let y = 3; y <= 10; y++) {
+      for (let x = x0; x <= x1; x++) for (const z of [z0, z1]) {
+        const m = (x - x0) % 6 === 0 || y === 10;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+      for (let z = z0 + 1; z <= z1 - 1; z++) for (const x of [x0, x1]) {
+        const m = (z - z0) % 6 === 0 || y === 10;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+    }
+    fillB(x0, 11, z0, x1, 11, z1, 0xe4e0d6, { j: 0.03 });                         // first-floor slab
+    /* upper floor: a narrower white bar set back, feet 12..19 */
+    for (let y = 12; y <= 19; y++) {
+      for (let x = x0 + 4; x <= x1 - 4; x++) for (const z of [z0 + 2, z1 - 2]) {
+        const m = (x - x0) % 5 === 0 || y === 19;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+      for (let z = z0 + 3; z <= z1 - 3; z++) for (const x of [x0 + 4, x1 - 4]) {
+        const m = (z - z0) % 5 === 0 || y === 19;
+        V(x, y, z, m ? L.white : L.glass, m ? { j: 0.03 } : { t: 1, j: 0.02 });
+      }
+    }
+    fillB(x0 + 4, 20, z0 + 2, x1 - 4, 20, z1 - 2, 0xe4e0d6, { j: 0.03 });         // upper roof
+    // the roof terrace balustrade over the lower box
+    for (let x = x0; x <= x1; x++) for (const z of [z0, z1]) V(x, 12, z, L.glassDk, { t: 1, j: 0.02 });
+    for (let z = z0; z <= z1; z++) for (const x of [x0, x1]) V(x, 12, z, L.glassDk, { t: 1, j: 0.02 });
+    /* sliding doors onto the pool deck (south face) */
+    clearB(x0 + 8, 3, z1, x0 + 13, 8, z1);
+    fillB(x0 + 8, 3, z1, x0 + 13, 8, z1, L.glass, { t: 1, j: 0.02 });
+    markDoor(x0 + 8, 3, z1, x0 + 13, 8, z1 + 1);
+    /* living floor: kitchen island, seating, dining, a fire ribbon */
+    for (let x = x0 + 1; x <= x1 - 1; x++) for (let z = z0 + 1; z <= z1 - 1; z++)
+      V(x, 2, z, ((x + (z >> 2)) % 2 === 0) ? 0xbfae94 : 0xb2a189, { j: 0.04 });
+    fillB(x0 + 2, 3, z0 + 2, x0 + 8, 4, z0 + 3, 0x2c3238, { j: 0.03 });            // kitchen run
+    fillB(x0 + 2, 5, z0 + 2, x0 + 8, 5, z0 + 3, 0xe8e4da, { j: 0.03 });
+    V(x0 + 4, 6, z0 + 2, 0x8a8e94, { j: 0.03 });
+    fillB(x0 + 3, 3, z0 + 6, x0 + 8, 4, z0 + 7, L.woodDk, { j: 0.04 });            // island
+    fillB(x0 + 3, 5, z0 + 6, x0 + 8, 5, z0 + 7, 0xe8e4da, { j: 0.03 });
+    for (const sx of [x0 + 4, x0 + 6]) V(sx, 3, z0 + 8, L.iron, { j: 0.03 });
+    fillB(x0 + 12, 3, z0 + 3, x0 + 18, 4, z0 + 4, 0x3a4048, { j: 0.05 });          // long sofa
+    fillB(x0 + 12, 5, z0 + 3, x0 + 18, 5, z0 + 3, 0x3a4048, { j: 0.05 });
+    fillB(x0 + 14, 3, z0 + 7, x0 + 16, 3, z0 + 8, L.wood, { j: 0.04 });
+    fillB(x0 + 12, 3, z0 + 11, x0 + 18, 3, z0 + 11, 0x2c3238, { j: 0.03 });        // fire ribbon
+    for (let x = x0 + 13; x <= x0 + 17; x += 2) V(x, 4, z0 + 11, 0xff8c2a, { t: 2, j: 0 });
+    fillB(x1 - 6, 3, z0 + 9, x1 - 2, 4, z0 + 10, L.woodDk, { j: 0.04 });           // dining
+    for (const cx of [x1 - 6, x1 - 4, x1 - 2]) { V(cx, 3, z0 + 8, 0x8a5e33, { j: 0.05 }); V(cx, 3, z0 + 11, 0x8a5e33, { j: 0.05 }); }
+    V(x0 + 10, 9, z0 + 6, L.lampWarm, { t: 3, j: 0 }); V(x0 + 10, 10, z0 + 6, L.iron, { j: 0 });
+    V(x1 - 4, 9, z0 + 9, L.lampWarm, { t: 3, j: 0 }); V(x1 - 4, 10, z0 + 9, L.iron, { j: 0 });
+    /* stair up to the bedrooms, tucked against the north wall */
+    bstair(2, 11, x0 + 2, z0 + 12, 1);
+    { const zi = i => z0 + 12 + i;
+      clearB(x0 + 2, 11, zi(4), x0 + 3, 11, zi(7));
+      clearB(x0 + 4, 11, zi(3), x0 + 5, 11, zi(7)); }
+    /* bedrooms: two suites either side of a landing */
+    fillB(x0 + 10, 12, z0 + 3, x0 + 10, 18, z1 - 3, L.white, { j: 0.03 });
+    clearB(x0 + 10, 12, z0 + 8, x0 + 10, 16, z0 + 9); markDoor(x0 + 10, 12, z0 + 8, x0 + 10, 16, z0 + 9);
+    for (const [bx, dir] of [[x0 + 5, 1], [x0 + 12, 1]]) {
+      fillB(bx, 12, z0 + 4, bx + 3, 12, z0 + 7, 0x8a5e33, { j: 0.05 });
+      fillB(bx, 13, z0 + 4, bx + 3, 13, z0 + 7, 0xe8e4da, { j: 0.03 });
+      fillB(bx + 1, 13, z0 + 5, bx + 3, 13, z0 + 7, [0x6a4a72, 0x2f8f8a][dir], { j: 0.05 });
+      V(bx, 14, z0 + 5, 0xf2eee4, { j: 0 }); V(bx, 14, z0 + 6, 0xf2eee4, { j: 0 });
+      V(bx - 1 + 0, 12, z0 + 8, L.woodDk, { j: 0.04 }); V(bx, 13, z0 + 8, L.lampWarm, { t: 3, j: 0 });
+      fillB(bx, 12, z1 - 5, bx + 2, 15, z1 - 5, L.woodDk, { j: 0.04 });
+    }
+    V(x0 + 8, 18, z0 + 8, L.lampWhite, { t: 3, j: 0 });
+    /* the infinity pool on the terrace lip, and the deck furniture */
+    for (let x = x0 + 4; x <= x1 - 4; x++) for (let z = z1 + 2; z <= z1 + 4; z++) {
+      clearB(x, 2, z, x, 2, z);
+      fillB(x, 0, z, x, 1, z, 0x9fd6e0, { j: 0.03 });
+      V(x, 2, z, (z === z1 + 4) ? L.poolW : L.poolWDk, { t: 1, j: 0.03 });
+    }
+    for (let x = x0 + 3; x <= x1 - 3; x++) V(x, 2, z1 + 5, L.white, { j: 0.03 });   // the lip
+    for (const [lx, lz] of [[x0 + 2, z1 + 3], [x1 - 3, z1 + 3]]) {
+      fillB(lx, 3, lz, lx, 3, lz + 1, L.white, { j: 0.03 });
+      V(lx, 4, lz, L.white, { j: 0.03 });
+    }
+    fillB(x0 + 14, 3, z1 + 2, x0 + 16, 3, z1 + 2, L.wood, { j: 0.05 });
+    V(x0 + 15, 4, z1 + 2, L.coral, { j: 0.06 });
+    /* carport off the canyon road, and a hedge along the drive */
+    fillB(x1 + 1, 2, z1 - 2, x1 + 4, 2, z1 + 2, 0x9a9a96, { j: 0.05 });
+    for (const px of [x1 + 1, x1 + 4]) fillB(px, 3, z1 - 2, px, 7, z1 - 2, L.white, { j: 0.03 });
+    fillB(x1 + 1, 8, z1 - 3, x1 + 4, 8, z1 + 2, L.white, { j: 0.03 });
+    fillB(x1 + 1, 3, z1, x1 + 3, 4, z1 + 1, 0xb01c28, { j: 0.05 });                // the car
+    fillB(x1 + 1, 5, z1, x1 + 2, 5, z1 + 1, L.glass, { t: 1, j: 0.02 });
+    for (let z = z1 - 3; z <= z1 + 4; z += 2) bush(x1 + 6, z);
+    bperson(x0 + 12, 3, z1 + 6, L.white, 0x2a2d32);
+  }
+
+
+  /* ============ 9. PALMS, TRAFFIC AND STREET LIFE ============ */
+  // very tall palms line the boulevard and the beach front
+  for (const [px, pz, h] of [
+    [12, 40, 26], [16, 30, 30], [20, 20, 27], [22, 8, 31], [26, -4, 28],
+    [8, 46, 24], [2, 36, 29], [-2, 28, 25],
+    [40, -12, 30], [52, -12, 27], [66, -12, 31], [78, -12, 28], [96, -10, 30],
+    [40, 2, 26], [56, 2, 29], [72, 2, 27],
+    [62, 20, 28], [62, 36, 25], [50, 44, 27], [30, 46, 30], [14, 44, 26],
+    [104, 4, 29], [104, 22, 26], [72, 30, 28],
+  ]) palm(px, pz, h);
+  for (const [bx, bz] of [[10, 12], [28, 6], [44, 6], [60, 40], [24, 44], [-6, 44], [70, 24], [100, 30]]) bush(bx, bz);
+
+  /* ---- cars along the boulevard ---- */
+  function laCar(x0, z0, hex, alongX, conv) {
+    const P2 = alongX ? (u, v) => [x0 + u, z0 + v] : (u, v) => [x0 + v, z0 + u];
+    const g = groundAt(...P2(5, 2));
+    if (g === undefined) return;
+    const box = (ua, ya, va, ub, yb, vb, c, o) => {
+      const [xa, za] = P2(ua, va), [xb, zb] = P2(ub, vb);
+      fillB0(Math.min(xa, xb), g + ya, Math.min(za, zb), Math.max(xa, xb), g + yb, Math.max(za, zb), c, o);
+    };
+    for (const wu of [1, 8]) for (const wv of [0, 4]) box(wu, 1, wv, wu + 1, 1, wv, 0x141416, { j: 0.04 });
+    box(0, 1, 0, 10, 2, 4, 0x1c1c1e, { j: 0.04 });
+    box(0, 2, 0, 10, 3, 4, hex, { j: 0.05 });
+    if (!conv) { box(3, 4, 1, 7, 5, 3, L.glass, { t: 1, j: 0.02 }); box(3, 6, 1, 7, 6, 3, hex, { j: 0.05 }); }
+    else { box(3, 4, 1, 4, 4, 3, 0x2a2226, { j: 0.04 }); }
+    const [fx, fz] = P2(10, 1), [rx, rz] = P2(0, 1);
+    V0(fx, g + 3, fz, 0xf6f1cf, { j: 0 }); V0(rx, g + 3, rz, 0x8a1414, { j: 0 });
+  }
+  laCar(30, -10, 0xe4664e, true, false);
+  laCar(48, -10, 0xf6efe0, true, true);
+  laCar(70, -10, 0x49d8ff, true, false);
+  laCar(90, -3, 0x2a2d32, true, false);
+  laCar(60, 12, 0xf0d040, false, true);
+  laCar(60, 34, 0xd8d8da, false, false);
+  laCar(6, 26, 0xe4664e, false, false);
+  // a couple tucked under the apartment carport
+  laCar(46, 18, 0x8a2f5a, true, false);
+  laCar(46, 26, 0x49a06a, true, false);
+
+  /* ---- people, gulls, a bus bench ---- */
+  bperson0(34, 3, -2, L.neonPink, 0xf6efe0);
+  bperson0(76, 3, -2, 0x49d8ff, 0x2a2d32);
+  bperson0(62, 3, 28, 0xf0d040, 0x2a2d32);
+  for (const [bx, bz] of [[40, -2], [72, 28]]) {
+    const g = groundAt(bx, bz);
+    if (g === undefined) continue;
+    fillB0(bx, g + 1, bz, bx + 2, g + 1, bz, L.wood, { j: 0.06 });
+    fillB0(bx, g + 2, bz + 1, bx + 2, g + 2, bz + 1, L.woodDk, { j: 0.06 });
+  }
+  for (const [gx, gz] of [[4, 40], [-4, 32], [18, 44]]) {
+    const g = groundAt(gx, gz);
+    if (g === undefined) continue;
+    V0(gx, g + 1, gz, 0xd8dce0, { j: 0.04 }); V0(gx, g + 2, gz, 0xf0f4f6, { j: 0.03 });
+  }
+  /* ---- the signal at the downtown corner (live bulbs hang here) ---- */
+  { const g = groundAt(60, -2);
+    if (g !== undefined) {
+      fillB0(60, g + 1, -2, 60, g + 12, -2, 0x2a2d32, { j: 0.03 });
+      fillB0(60, g + 13, -2, 60, g + 15, -2, 0x1f2226, { j: 0.02 });
+    } }
+
+  /* ---- street lamps along the boulevard ---- */
+  for (const [lx, lz] of [[22, 14], [26, 0], [44, -2], [68, -2], [92, -2], [64, 14], [64, 34], [20, 34]]) {
+    const g = groundAt(lx, lz);
+    if (g === undefined) continue;
+    fillB0(lx, g + 1, lz, lx, g + 9, lz, 0x2a2d32, { j: 0.03 });
+    V0(lx, g + 10, lz, L.lampWarm, { t: 3, j: 0 });
+    V0(lx, g + 11, lz, 0x2a2d32, { j: 0.03 });
+  }
+}
+
+
 function buildSeattle(long = false) {
   const SEA = {
     water: 0x2e6e8e, seabed: 0x2a3038, granite: 0x6a6e72, coping: 0x6f7b84,
@@ -11482,6 +12320,7 @@ let playXMin = X0 + 0.5, playZMin = -55.5;
 // safe sidewalk per scene, for un-burying the player after resets
 const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
   : sceneId === 'sanjose' ? [76.5, 4, 2.5]
+  : sceneId === 'la' ? [24.5, 3, 4.5]
   : sceneId === 'sf' ? [25.5, 3, 16.5]
   : sceneId === 'seattlelong' ? [29.5, 4, 0.5]
   : sceneId === 'seattle' ? [45.5, 11, 14.5] : [21.5, 2, 17.5];
@@ -12623,7 +13462,7 @@ document.getElementById('reset').addEventListener('click', () => {
 /* ---- scene selection (synced when online) ---- */
 const sceneSel = document.getElementById('scene');
 function setSceneLocal(id) {
-  if (!['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose', 'sf'].includes(id)) return;
+  if (!['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose', 'sf', 'la'].includes(id)) return;
   sceneSel.value = id;
   if (id === sceneId) return;
   sceneId = id;
@@ -12852,6 +13691,22 @@ const sfLights = [
   roomLight(37, 10, -32, 70, 0xfff4e0, 9),      // alcatraz cellhouse
   roomLight(-11, 6, 27, 50, 0xffd9a0, 7),       // turntable hut
 ];
+const laLights = [
+  roomLight(26, 8, 22, 90, 0xffd9a0, 12),       // motel walkway
+  roomLight(26, 17, 22, 90, 0xffd9a0, 12),      // motel upper rooms
+  roomLight(26, 30, 16, 110, 0xff4d8d, 20),     // the MOTEL neon
+  roomLight(51, 14, 22, 90, 0xffd9a0, 12),      // apartment floor 1
+  roomLight(51, 30, 22, 90, 0xffd9a0, 12),      // apartment floor 3
+  roomLight(87, 8, 12, 120, 0xfff4e0, 18),      // tower lobby
+  roomLight(87, 28, 15, 100, 0xcfe8ff, 14),     // tower offices
+  roomLight(87, 40, 15, 100, 0xffd9a0, 14),     // tower exec floor
+  roomLight(89, 8, -26, 110, 0xffd9a0, 16),     // mansion living
+  roomLight(89, 17, -26, 90, 0xffd9a0, 12),     // mansion bedrooms
+  roomLight(-30, 22, 20, 130, 0x49d8ff, 22),    // the Ferris wheel
+  roomLight(-18, 8, 15, 90, 0xff4d8d, 14),      // the arcade
+  roomLight(20, 42, -30, 120, 0xfff4e0, 18),    // the sign, lit from below
+];
+interiorLights.push(...laLights);
 interiorLights.push(...techLights, ...longLights, ...bostonLights, ...bostonLongLights, ...seattleLights, ...seattleLongLights, ...sanjoseLights, ...sfLights);
 for (const l of techLights) l.visible = false;
 for (const l of longLights) l.visible = false;
@@ -12861,6 +13716,7 @@ for (const l of seattleLights) l.visible = false;
 for (const l of seattleLongLights) l.visible = false;
 for (const l of sanjoseLights) l.visible = false;
 for (const l of sfLights) l.visible = false;
+for (const l of laLights) l.visible = false;
 
 /* ---- Seattle rain: a quiet field of drops over the whole map ---- */
 const rainGroup = new THREE.Group();
@@ -13042,6 +13898,8 @@ function worldRect() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong';
   const bos = sceneId === 'boston', blong = sceneId === 'bostonlong', sea = sceneId === 'seattle';
   const slong = sceneId === 'seattlelong', sj = sceneId === 'sanjose', sf = sceneId === 'sf';
+  const la = sceneId === 'la';
+  if (la) return { x0: -46, x1: 126, z0: -66, z1: 66 };
   return {
     x0: sf ? -64 : sj ? -60 : slong ? -74 : X0, x1: sf ? 124 : sj ? 120 : slong ? 132 : long ? 152 : blong ? 142 : sea ? 110 : bos ? 90 : 60,
     z0: sf ? -72 : (slong || sj) ? -64 : -56, z1: sf ? 56 : sj ? 48 : slong ? 80 : tech ? 102 : (bos || blong || sea) ? 74 : 54,
@@ -13213,7 +14071,8 @@ function applySceneEnv() {
   const tech = sceneId === 'tech', long = sceneId === 'techlong', bos = sceneId === 'boston';
   const blong = sceneId === 'bostonlong', sea = sceneId === 'seattle';
   const slong = sceneId === 'seattlelong', sj = sceneId === 'sanjose', sf = sceneId === 'sf';
-  const ext = sf ? 205 : slong ? 185 : (long || blong || sea || sj) ? 165 : (tech || bos) ? 135 : 95;
+  const la = sceneId === 'la';
+  const ext = la ? 190 : sf ? 205 : slong ? 185 : (long || blong || sea || sj) ? 165 : (tech || bos) ? 135 : 95;
   sun.shadow.camera.left = -ext; sun.shadow.camera.right = ext;
   sun.shadow.camera.top = ext; sun.shadow.camera.bottom = -ext;
   sun.shadow.camera.updateProjectionMatrix();
@@ -13226,18 +14085,19 @@ function applySceneEnv() {
   for (const l of seattleLongLights) l.visible = slong;
   for (const l of sanjoseLights) l.visible = sj;
   for (const l of sfLights) l.visible = sf;
+  for (const l of laLights) l.visible = la;
   sonicGroup.visible = sj;
-  sfSea.visible = sf && !pitBox.checked;
+  sfSea.visible = (sf || la) && !pitBox.checked;
   rainGroup.visible = sea || slong;
   elev.on = sea || slong;
   if (elev.group) elev.group.visible = sea || slong;
-  controls.maxDistance = sf ? 480 : (slong || sj) ? 430 : (tech || long || bos || blong || sea) ? 360 : 260;
-  playZMax = sf ? 56.5 : sj ? 48.5 : slong ? 80.5 : tech ? 101.5 : (bos || blong || sea) ? 74.5 : 54.5;
-  playXMax = sf ? 124.5 : sj ? 120.5 : slong ? 132.5 : long ? 152.5 : blong ? 141.5 : sea ? 110.5 : bos ? 89.5 : 60.5;
-  playXMin = sf ? -63.5 : sj ? -59.5 : slong ? -73.5 : X0 + 0.5;
-  playZMin = sf ? -71.5 : (slong || sj) ? -63.5 : -55.5;
+  controls.maxDistance = la ? 460 : sf ? 480 : (slong || sj) ? 430 : (tech || long || bos || blong || sea) ? 360 : 260;
+  playZMax = la ? 66.5 : sf ? 56.5 : sj ? 48.5 : slong ? 80.5 : tech ? 101.5 : (bos || blong || sea) ? 74.5 : 54.5;
+  playXMax = la ? 126.5 : sf ? 124.5 : sj ? 120.5 : slong ? 132.5 : long ? 152.5 : blong ? 141.5 : sea ? 110.5 : bos ? 89.5 : 60.5;
+  playXMin = la ? -46.5 : sf ? -63.5 : sj ? -59.5 : slong ? -73.5 : X0 + 0.5;
+  playZMin = la ? -66.5 : sf ? -71.5 : (slong || sj) ? -63.5 : -55.5;
   // the live traffic-light bulbs follow each scene's signal head
-  const [tx, tz] = sf ? [-26, 24] : sj ? [10, -5] : slong ? [22, -4] : sea ? [48, 39] : bos ? [44, 31] : [51, 31];
+  const [tx, tz] = la ? [60, -2] : sf ? [-26, 24] : sj ? [10, -5] : slong ? [22, -4] : sea ? [48, 39] : bos ? [44, 31] : [51, 31];
   tlRed.position.set(tx + 0.5, 15.5, tz + 0.5);
   tlAmber.position.set(tx + 0.5, 14.5, tz + 0.5);
   tlGreen.position.set(tx + 0.5, 13.5, tz + 0.5);
@@ -13464,6 +14324,12 @@ const CAT_ITEMS = [   // walls: has an interior worth peeling open
   { id: 'turntable',   name: 'The Powell Turntable',   scene: 'sf', box: [-19, 0, 10, 31],     walls: false },
   { id: 'wharf',       name: 'The Wharf + Sea Lions',  scene: 'sf', box: [-4, 22, -12, 14],    walls: false },
   { id: 'alcatraz',    name: 'Alcatraz',               scene: 'sf', box: [28, 46, -41, -20],   walls: true },
+  { id: 'hellosign',  name: 'The HELL_ WORLD Sign',    scene: 'la', box: [-6, 76, -44, -18],   walls: false },
+  { id: 'smpier',     name: 'Santa Monica Pier',       scene: 'la', box: [-44, -6, 8, 32],     walls: true },
+  { id: 'lamotel',    name: 'The Sunset Motel',        scene: 'la', box: [10, 42, 10, 38],     walls: true },
+  { id: 'laapts',     name: 'The Apartment Block',     scene: 'la', box: [40, 62, 10, 36],     walls: true },
+  { id: 'latower',    name: 'The Office Tower',        scene: 'la', box: [74, 100, 2, 28],     walls: true },
+  { id: 'lamansion',  name: 'The Hillside Mansion',    scene: 'la', box: [72, 106, -38, -12],  walls: true },
 ];
 const sideBox = {
   n: document.getElementById('side-n'), s: document.getElementById('side-s'),

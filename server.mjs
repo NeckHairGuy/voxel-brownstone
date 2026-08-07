@@ -150,6 +150,8 @@ const SPAWNS = {
   // Every Seattle Long spawn opens onto street/water/promenade — never nose-to-wall.
   seattlelong: [[-38.5, 3, -4.5, 3.14], [8.5, 3, -4.5, 3.14], [30.5, 3, 11.5, -1.57], [43.5, 3, -4.5, 3.14],
                 [88.5, 3, -4.5, 3.14], [105.5, 3, -4.5, 3.14], [90.5, 3, 26.5, 3.14], [75.5, 3, 44.5, 3.14]],
+  la: [[24.5, 3, 4.5, 0], [40.5, 3, -2.5, -1.57], [70.5, 3, -2.5, -1.57], [12.5, 3, 26.5, 0],
+    [50.5, 3, 8.5, 3.14], [-14.5, 4, 20.5, -1.57], [88.5, 3, 26.5, 0], [4.5, 2, 38.5, -1.57]],
   sf: [[-32.5, 3, 18.5, 0], [-32.5, 3, -30.5, 0], [24.5, 3, 27.5, -1.57], [70.5, 3, 27.5, -1.57],
     [101.5, 3, 10.5, 0], [101.5, 3, -30.5, 0], [-8.5, 3, 40.5, 3.14], [33.5, 3, -8.5, 0]],
   sanjose: [[-20.5, 3, -6.5, 3.14], [28.5, 3, -6.5, 3.14], [76.5, 3, -6.5, 3.14], [110.5, 3, -6.5, 3.14],
@@ -171,6 +173,11 @@ const PICKUP_SPOTS = {
     { kind: 'sticker', name: 'green lady roof', x: -37.5, y: 33.5, z: -25.5 },
     { kind: 'sticker', name: 'alcatraz roof', x: 37.5, y: 16.5, z: -32.5 },
     { kind: 'tshirt', name: 'pyramid sky deck', x: 61.5, y: 45.5, z: 38.5 },
+  ],
+  la: [
+    { kind: 'sticker', name: 'ferris wheel hub', x: -29.5, y: 23.5, z: 20.5 },
+    { kind: 'sticker', name: 'the fallen O', x: 65.5, y: 36.5, z: -26.5 },
+    { kind: 'tshirt', name: 'tower exec floor', x: 87.5, y: 35.5, z: 15.5 },
   ],
   sanjose: [
     { kind: 'sticker', name: 'basilica dome', x: 63.5, y: 27, z: -22.5 },
@@ -446,7 +453,7 @@ function onMessage(conn, m) {
       break;
     case 'scene': // any seated player may switch scenes (corpo-only in show mode)
       if (p && CORPO_KEY && p.role !== 'corpo') { conn.send({ t: 'msg', text: 'show mode — only the corpo can switch scenes' }); break; }
-      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose', 'sf'].includes(m.scene) && m.scene !== scene) {
+      if (p && ['default', 'tech', 'techlong', 'boston', 'bostonlong', 'seattle', 'seattlelong', 'sanjose', 'sf', 'la'].includes(m.scene) && m.scene !== scene) {
         scene = m.scene;
         clearBots();
         booms.length = 0;
