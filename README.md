@@ -94,8 +94,25 @@ An interactive multiplayer voxel-art scene built with three.js, contained in a s
   little Golden Gate across the bay mouth (walk the deck, or hop the
   midspan rail and climb the main cable to the saddles), Alcatraz
   mid-bay (barred cells, the escape hole, lighthouse, dock), a
-  walk-through Powell cable car with its turntable plaza, and a wharf
-  pier with a crab shack, sea lions on floats, and the sailboat
+  walk-through Powell cable car with its turntable plaza, a wharf
+  pier with a crab shack, sea lions on floats, and the sailboat, plus
+  the angled TECH ROAST SHOW billboard on the coast between Coit and
+  the pyramid; and **Los Angeles** — a sandstone mesa across the north
+  carrying the HELL_ WORLD sign (each letter footed on its own legs,
+  the fallen O lying below the stumps, a zigzag fire road cut into the
+  face to reach it), Santa Monica pier over the water with the R=15
+  Pacific wheel (12 hanging gondolas, boarding platform, queue), a
+  terrace cafe with umbrella tables and string lights, the PLAY
+  arcade, a kiddie coaster and a bait shack; the Sunset Motel (two
+  10-wide rooms per floor with queen beds and full bathrooms, office
+  with key rack, kidney pool, googie pylon and an oversized rooftop
+  neon board), the Capri dingbat (carport on stilts, a real 1-bed
+  flat wrapped round the stair on each floor, starburst + gold name),
+  a glass office tower (double-height lobby, three furnished office
+  floors + exec floor on one stair core, helipad roof) with a striped
+  parking lot, and a hillside mansion on a cut terrace — 18-long
+  infinity pool spilling over the lip, floating stair to the roof
+  deck, and a graded driveway climbing from the canyon road
 - **Isometric camera** toggle for the orbit/corpo view
 - Collapsible control panels (handy on mobile)
 - **The Catalogue** (`?catalog`, or the "building catalogue" button in the
