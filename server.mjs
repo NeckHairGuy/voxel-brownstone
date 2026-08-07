@@ -175,9 +175,13 @@ const PICKUP_SPOTS = {
     { kind: 'tshirt', name: 'pyramid sky deck', x: 61.5, y: 45.5, z: 38.5 },
   ],
   la: [
-    { kind: 'sticker', name: 'ferris wheel hub', x: -29.5, y: 26.5, z: 21.5 },
-    { kind: 'sticker', name: 'the fallen O', x: 65.5, y: 38.5, z: -42.5 },
-    { kind: 'tshirt', name: 'tower exec floor', x: 85.5, y: 38.5, z: 16.5 },
+    { kind: 'tshirt', name: 'tower floor 3', x: 80.5, y: 30.5, z: 12.5 },
+    { kind: 'sticker', name: 'the O overhang', x: 73.5, y: 38.5, z: -45.5 },
+    { kind: 'sticker', name: 'capri roof', x: 50.5, y: 28.5, z: 24.5 },
+    { kind: 'sticker', name: 'motel bath, room 1', x: 21.5, y: 4.5, z: 15.5 },
+    { kind: 'sticker', name: 'motel bath, upstairs', x: 32.5, y: 13.5, z: 15.5 },
+    { kind: 'sticker', name: 'stack bedroom', x: 8.5, y: 31.5, z: -32.5 },
+    { kind: 'tshirt', name: 'the sailboat', x: -31.5, y: 5.5, z: 55.5 },
   ],
   sanjose: [
     { kind: 'sticker', name: 'basilica dome', x: 63.5, y: 27, z: -22.5 },

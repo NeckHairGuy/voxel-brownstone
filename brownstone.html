@@ -7647,8 +7647,21 @@ function buildLA() {
           V(legx, g + 7, -42, L.iron, { j: 0.03 });
         }
       } }
-    // ...and the O itself, dropped flat in its own slot east of the Ls
-    flatLetter('O', 65, -43, 3, 3, L.white);
+    // ...and the O itself: level and unbroken on the plateau band just
+    // north of its slot, the east arc hanging out over the drop
+    {
+      const tops = [];
+      for (let x = 65; x <= 73; x++) for (let z = -49; z <= -41; z++) {
+        const t = groundAt(x, z);
+        if (t !== undefined) tops.push(t);
+      }
+      tops.sort((a, b) => a - b);
+      const base = tops[Math.floor(tops.length * 0.8)];         // rests on the high band
+      const rows = FONT['O'];
+      for (let ry = 0; ry < 3; ry++) for (let cx = 0; cx < 3; cx++)
+        if (rows[ry][cx] === '#')
+          fillB(65 + cx * 3, base, -49 + ry * 3, 67 + cx * 3, base + 1, -47 + ry * 3, L.white, { j: 0.02 });
+    }
     // lower row: WORLD, one bench down — W is wide, so gaps stay real
     { let lx = 19;
       for (const ch of 'WORLD') lx += bigLetter(ch, lx, -32, SX, SY, L.white) + 1; }
@@ -8103,7 +8116,8 @@ function buildLA() {
     /* the stair, wrapped by the flat on each floor */
     fillB(48, 3, 17, 48, 25, 25, L.stucco, { j: 0.03 });               // hall partition, all floors
     clearB(48, 3, 23, 48, 6, 24); markDoor(48, 3, 23, 48, 6, 24);      // ground opening at the stair foot
-    for (const [f, t] of [[2, 10], [10, 18], [18, 26]]) bstair(f, t, 44, 24, -1);
+    for (const [f, t] of [[2, 10], [10, 18]]) bstair(f, t, 44, 24, -1);
+    // no roof stair: the only way up there is across the palm crowns
     fillB(44, 3, 18, 47, 5, 19, 0x8e8e8a, { j: 0.05 });                // seal under the landing
     for (const fy of [11, 19]) {
       fillB(X0, fy, 25, 47, fy + 6, 25, L.stucco, { j: 0.03 });        // hall walls above carport wall
@@ -8167,15 +8181,15 @@ function buildLA() {
       V(43, fy, 27, P.terracotta); fillB(42, fy + 1, 27, 44, fy + 2, 27, P.leafB, { j: 0.15 });
       V(49, fy + 6, 32, L.lampWhite, { t: 3, j: 0 });
       /* corridor east of the stair: closet + full bathroom */
-      fillB(49, fy, 18, 49, fy + 5, 24, L.stucco, { j: 0.03 });
-      clearB(49, fy, 22, 49, fy + 3, 23); markDoor(49, fy, 22, 49, fy + 3, 23);
-      fillB(50, fy, 24, 55, fy + 1, 24, L.woodDk, { j: 0.04 });        // vanity run
+      fillB(50, fy, 18, 50, fy + 5, 24, L.stucco, { j: 0.03 });        // bath wall east of the little corridor
+      clearB(50, fy, 21, 50, fy + 3, 22); markDoor(50, fy, 21, 50, fy + 3, 22);
+      fillB(51, fy, 24, 55, fy + 1, 24, L.woodDk, { j: 0.04 });        // vanity run
       V(51, fy + 2, 24, 0xb8bcc2, { j: 0.03 }); V(54, fy + 2, 24, 0xb8bcc2, { j: 0.03 });
       fillB(51, fy + 3, 24, 54, fy + 4, 24, 0xbcd8e0, { j: 0.02 });
       fillB(53, fy, 20, 55, fy + 4, 20, L.glass, { t: 1, j: 0.02 });   // shower screen
       fillB(53, fy, 18, 55, fy, 18, 0xdcdcd4, { j: 0.03 });
       V(55, fy + 4, 19, 0x8a8e94, { j: 0.03 });
-      V(50, fy, 18, 0xf2efe6, { j: 0.02 }); fillB(50, fy + 1, 18, 50, fy + 2, 18, 0xe8e8e2, { j: 0.02 });
+      V(51, fy, 18, 0xf2efe6, { j: 0.02 }); fillB(51, fy + 1, 18, 51, fy + 2, 18, 0xe8e8e2, { j: 0.02 });
       V(52, fy + 5, 21, L.lampWhite, { t: 3, j: 0 });
       /* rear half: the bedroom on the boulevard side */
       fillB(43, fy, 11, 48, fy, 14, 0x8a5e33, { j: 0.05 });
@@ -8275,7 +8289,9 @@ function buildLA() {
         if (d >= 4) V(x, yT, z, 0x8e8e8a, { j: 0.04 });
         else if (d === 3) fillB(x, yT + 1, z, x, yT + 2, z, 0x2a2d32, { j: 0.02 });
       }
+      fillB(95, yT + 1, 10, 95, yT + 2, 15, 0x4a5058, { j: 0.03 });   // fence the east strip off the well
     }
+    fillB(92, 13, 13, 92, 14, 13, 0x2a2d32, { j: 0.02 });             // last lobby well entry, barred
     clearB(90, 3, 9, 90, 6, 10); markDoor(90, 3, 9, 90, 6, 10);       // lobby door to the stair
     for (const fy of [13, 21, 29, 37]) { clearB(90, fy, 8, 90, fy + 3, 9); markDoor(90, fy, 8, 90, fy + 3, 9); }
     /* lobby: reception, turnstiles, lifts, lounge, kiosk */
@@ -8841,6 +8857,29 @@ function buildLA() {
     fillB(lx, g + 1, lz, lx, g + 9, lz, 0x2a2d32, { j: 0.03 });
     V(lx, g + 10, lz, L.lampWarm, { t: 3, j: 0 });
     V(lx, g + 11, lz, 0x2a2d32, { j: 0.03 });
+  }
+
+  /* ---- a sailboat at anchor, far off the south-west shore ---- */
+  {
+    const BX = -34, BZ = 54;
+    fillB(BX - 4, 1, BZ - 1, BX + 4, 1, BZ + 1, 0xf4f2ec, { j: 0.04 });
+    fillB(BX - 3, 2, BZ - 1, BX + 4, 2, BZ + 1, 0xf4f2ec, { j: 0.04 });
+    V(BX + 5, 2, BZ, 0xf4f2ec, { j: 0.04 });
+    fillB(BX - 3, 3, BZ - 1, BX + 3, 3, BZ + 1, 0xb08a56, { j: 0.05 });   // teak deck
+    fillB(BX - 3, 4, BZ - 1, BX - 2, 5, BZ + 1, 0xe8e4da, { j: 0.04 });   // cabin
+    V(BX - 2, 4, BZ, 0x9fc6da, { t: 1, j: 0 });
+    fillB(BX, 4, BZ, BX, 17, BZ, 0x8a6a3e, { j: 0.03 });                  // mast
+    fillB(BX + 1, 6, BZ, BX + 4, 6, BZ, 0x8a6a3e, { j: 0.03 });           // boom
+    for (let y = 7; y <= 15; y++) {
+      const w = Math.max(0, Math.floor((15 - y) / 2));
+      fillB(BX + 1, y, BZ, BX + 1 + w, y, BZ, 0xf4f2ec, { j: 0.03 });
+    }
+    for (let y = 6; y <= 11; y++) {
+      const w = Math.max(0, Math.floor((11 - y) / 2));
+      fillB(BX - 1 - w, y, BZ, BX - 1, y, BZ, 0xe8dcae, { j: 0.03 });
+    }
+    V(BX, 18, BZ, 0xd82818, { t: 2, j: 0 });                              // pennant
+    V(BX + 8, 1, BZ + 3, 0xc03028, { j: 0.04 });                          // the mooring buoy
   }
 }
 
