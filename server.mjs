@@ -176,7 +176,7 @@ const PICKUP_SPOTS = {
   ],
   la: [
     { kind: 'sticker', name: 'ferris wheel hub', x: -29.5, y: 26.5, z: 21.5 },
-    { kind: 'sticker', name: 'the fallen O', x: 36.5, y: 50.5, z: -47.5 },
+    { kind: 'sticker', name: 'the fallen O', x: 65.5, y: 38.5, z: -42.5 },
     { kind: 'tshirt', name: 'tower exec floor', x: 85.5, y: 38.5, z: 16.5 },
   ],
   sanjose: [

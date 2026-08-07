@@ -7597,8 +7597,8 @@ function buildLA() {
       }
     };
     trail(
-      [[76, -14], [20, -32], [20, -38], [54, -43], [44, -47]],
-      [2, 30, 36, 44, 47]
+      [[76, -14], [20, -32], [20, -38], [54, -43], [64, -40]],
+      [2, 30, 36, 44, 36]
     );
     // trailhead marker where the fire road leaves the boulevard
     fillB(77, 3, -12, 77, 5, -12, L.woodDk, { j: 0.05 });
@@ -7647,8 +7647,8 @@ function buildLA() {
           V(legx, g + 7, -42, L.iron, { j: 0.03 });
         }
       } }
-    // ...and the O itself, face-up on the flat of the summit
-    flatLetter('O', 36, -51, 3, 3, L.white);
+    // ...and the O itself, dropped flat in its own slot east of the Ls
+    flatLetter('O', 65, -43, 3, 3, L.white);
     // lower row: WORLD, one bench down — W is wide, so gaps stay real
     { let lx = 19;
       for (const ch of 'WORLD') lx += bigLetter(ch, lx, -32, SX, SY, L.white) + 1; }
@@ -7741,7 +7741,6 @@ function buildLA() {
       fillB(CX + 6, D + 1, 24, CX + 7, D + 4, 25, L.tealTrim, { j: 0.04 });
       fillB(CX + 6, D + 2, 24, CX + 6, D + 3, 24, L.glass, { t: 1, j: 0.02 });
       V(CX + 7, D + 5, 25, L.lampWarm, { t: 3, j: 0 });
-      bperson(CX + 9, D + 1, 21, 0xf0d040, 0x2a2d32);
     }
 
     /* ---- the arcade shed on the north side ---- */
@@ -7782,8 +7781,6 @@ function buildLA() {
       clearB(-32, D + 2, z0 + 4, -32, D + 4, z0 + 4);
       fillB(-32, D + 2, z0 + 4, -32, D + 4, z0 + 4, L.glass, { t: 1, j: 0.02 });
       V(-32, D + 5, z0 + 5, L.lampWarm, { t: 3, j: 0 });
-      bperson(-30, D + 1, z0 + 4, L.coral, 0x2a2d32);
-      bperson(-22, D + 1, z0 + 5, 0x49d8ff, 0xf0e6d2);
       V(-20, D + 8, z0 + 3, P.iron, { j: 0 }); V(-20, D + 7, z0 + 3, L.lampWarm, { t: 3, j: 0 });
     }
 
@@ -7878,8 +7875,6 @@ function buildLA() {
       V(gx, D + 1, gz, 0xd8dce0, { j: 0.04 }); V(gx, D + 2, gz, 0xf0f4f6, { j: 0.03 });
       V(gx + 1, D + 2, gz, 0xe08820, { j: 0 });
     }
-    bperson(-20, D + 1, 23, 0x49d8ff, 0xf0e6d2);
-    bperson(-34, D + 1, 21, L.neonPink, 0xf6efe0);
   }
 
   /* ---- beach life: towels, umbrellas, a lifeguard tower ---- */
@@ -7904,8 +7899,6 @@ function buildLA() {
       fillB(-7, lg + 10, 37, -2, lg + 10, 42, L.coral, { j: 0.04 });
       V(-4, lg + 6, 40, L.coral, { j: 0 }); V(-5, lg + 6, 40, 0xe8641e, { j: 0.05 });
     }
-    bperson(8, 2, 42, L.neonPink, 0x2a2d32);
-    bperson(-1, 2, 33, 0xf6efe0, 0x49d8ff);
   }
 
   /* a sign that reads correctly for a viewer standing at LOWER z
@@ -8034,7 +8027,6 @@ function buildLA() {
     fillB(22, 3, 41, 22, 5, 41, L.wood, { j: 0.05 });
     for (const by of [4, 5]) V(22, by, 40, [0xd85a7a, 0x49d8ff][by % 2], { j: 0.08 });
     V(18, 3, 36, 0x2a2a2e); V(18, 4, 36, 0x6e4a28);
-    bperson(19, 3, 39, L.stuccoPink, 0x2a2d32);
     V(18, 9, 39, L.lampWarm, { t: 3, j: 0 }); V(18, 10, 39, P.iron, { j: 0 });
     /* googie pylon at the kerb: stacked letters + starburst, facing south */
     fillB(25, 3, 39, 26, 24, 40, L.steel, { j: 0.03 });
@@ -8225,8 +8217,6 @@ function buildLA() {
     for (let x = 44; x <= 54; x++) for (let y = 16; y <= 17; y++)
       if ((x + y) % 2 === 0) V(x, y, 7, L.cream, { j: 0.04 });
     for (const fx of [45, 51]) fillB(fx, 11, 7, fx, 25, 7, L.stucco, { j: 0.03 });
-    bperson(46, 11, 40, 0x49d8ff, 0xf6efe0);
-    bperson(53, 3, 34, 0xf0d040, 0x2a2d32);
   }
 
   /* ============ 7. THE OFFICE TOWER ============
@@ -8274,13 +8264,24 @@ function buildLA() {
     fillB(91, 3, 16, 95, 43, 16, 0x4a5058, { j: 0.03 });
     for (const [f, t] of [[2, 12], [12, 20], [20, 28], [28, 36], [36, 44]]) bstair(f, t, 91, 8, 1);
     fillB(91, 3, 14, 94, 6, 15, 0x8a8478, { j: 0.05 });               // seal under the first landing
+    /* grate the stairwell: patch every well cell with a deep drop under
+       it (the surface below keeps its 4 of headroom), bar the shallow
+       ones (climbers pass beneath), leave landing hop-downs open */
+    for (const yT of [12, 20, 28, 36, 44]) {
+      for (let x = 91; x <= 94; x++) for (let z = 9; z <= 15; z++) {
+        if (getV(x, yT, z)) continue;
+        let d = 0;
+        while (d < 20 && !getV(x, yT - 1 - d, z)) d++;
+        if (d >= 4) V(x, yT, z, 0x8e8e8a, { j: 0.04 });
+        else if (d === 3) fillB(x, yT + 1, z, x, yT + 2, z, 0x2a2d32, { j: 0.02 });
+      }
+    }
     clearB(90, 3, 9, 90, 6, 10); markDoor(90, 3, 9, 90, 6, 10);       // lobby door to the stair
     for (const fy of [13, 21, 29, 37]) { clearB(90, fy, 8, 90, fy + 3, 9); markDoor(90, fy, 8, 90, fy + 3, 9); }
     /* lobby: reception, turnstiles, lifts, lounge, kiosk */
     fillB(83, 3, 10, 89, 4, 11, L.woodDk, { j: 0.04 });
     fillB(83, 5, 10, 89, 5, 11, 0xd9d4c8, { j: 0.03 });
     V(86, 6, 11, 0x49d8ff, { t: 2, j: 0 }); V(84, 6, 10, 0xd8b437, { t: 2, j: 0 });
-    bperson(86, 3, 13, 0x2a3a55, 0x23262a);
     for (const px of [80, 82, 84, 86, 88]) fillB(px, 3, 15, px, 4, 15, L.steel, { j: 0.02 });
     for (const px of [81, 83, 85, 87]) fillB(px, 3, 15, px, 4, 15, L.glass, { t: 1, j: 0.02 });
     markDoor(80, 3, 15, 88, 4, 15);
@@ -8620,8 +8621,6 @@ function buildLA() {
     /* carport off the court */
     for (const [px, pz] of [[100, -32], [100, -20], [104, -32], [104, -20]]) fillB(px, 13, pz, px, 17, pz, L.white, { j: 0.03 });
     fillB(99, 18, -33, 104, 18, -19, L.white, { j: 0.03 });
-    bperson(90, 13, -22, L.white, 0x2a2d32);
-    bperson(101, 13, -25, 0x49d8ff, 0x2a2d32);
   }
 
   /* ============ 9B. THE STACK — a second mansion halfway up ============
@@ -8740,7 +8739,6 @@ function buildLA() {
     fillB(11, 21, -24, 12, 21, -21, L.white, { j: 0.04 });
     fillB(11, 22, -21, 12, 22, -21, L.coral, { j: 0.06 });
     fillB(14, 21, -23, 15, 21, -22, 0x9a6a3a, { j: 0.05 }); V(14, 21, -24, 0x2a2a2e); V(15, 21, -21, 0x2a2a2e);
-    bperson(14, 21, -27, L.white, 0x2a2d32);
   }
 
   /* ============ 10. PALMS, TRAFFIC AND STREET LIFE ============ */
@@ -8750,9 +8748,30 @@ function buildLA() {
     [8, 46, 24], [2, 36, 29], [-2, 34, 25],
     [40, -12, 30], [52, -12, 27], [66, -12, 31], [78, -12, 28], [96, -10, 30],
     [40, 2, 26], [56, 2, 29], [72, 2, 27],
-    [62, 20, 28], [62, 36, 25], [50, 44, 27], [30, 46, 30], [14, 44, 26],
+    [50, 44, 27], [30, 46, 30], [14, 44, 26],
     [104, 4, 29], [104, 22, 26], [72, 30, 28],
   ]) palm(px, pz, h);
+  /* ---- the parkour palms: three leaning trunks between the tower and
+     the Capri, crowns grouped so you can hop roof -> head -> head ->
+     head -> roof, always dropping. Dense frond pads to land on. ---- */
+  function leanPalm(x, z, h, dx, dz) {
+    const b = groundAt(x, z);
+    if (b === undefined) return;
+    let px = x, pz = z;
+    for (let i = 1; i <= h; i++) {
+      px = x + Math.round(dx * i / h); pz = z + Math.round(dz * i / h);
+      V(px, b + i, pz, (i % 4 === 0) ? L.palmDk : L.palmTrunk, { j: 0.09 });
+    }
+    const cy = b + h;
+    for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) V(px + ox, cy + 1, pz + oz, L.frondC, { j: 0.1 });
+    for (const [ox, oz] of [[1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) V(px + ox, cy + 1, pz + oz, L.frondA, { j: 0.12 });
+    for (const [ox, oz] of [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2]]) V(px + ox, cy, pz + oz, L.frondB, { j: 0.12 });
+    for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) V(px + ox * 2, cy - 1, pz + oz * 2, L.frondC, { j: 0.14 });
+  }
+  leanPalm(71, 16, 40, -2, 0);      // head over x69: two off the tower parapet
+  leanPalm(59, 20, 33, 3, 0);       // head over x62: the middle hop
+  leanPalm(58, 26, 28, 2, -2);      // head over x60,z24: last hop to the Capri
+
   for (const [bx, bz] of [[10, 12], [28, 6], [44, 6], [60, 40], [24, 44], [-6, 44], [100, 30]]) bush(bx, bz);
 
   /* ---- cars: kerbside, carports and the parking lot ---- */
@@ -8791,9 +8810,6 @@ function buildLA() {
   laCar(100, -31, 0x8a1a20, false, false);
 
   /* ---- people, gulls, a bus bench, parking meters ---- */
-  bperson(34, 3, -2, L.neonPink, 0xf6efe0);
-  bperson(76, 3, -2, 0x49d8ff, 0x2a2d32);
-  bperson(62, 3, 28, 0xf0d040, 0x2a2d32);
   for (const [bx, bz] of [[45, -2], [72, 28]]) {
     const g = groundAt(bx, bz);
     if (g === undefined) continue;
