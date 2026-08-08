@@ -318,6 +318,10 @@ if (new URLSearchParams(location.search).has('catalog'))
     </select>
     <div class="help">scene — swap the map (switches it for everyone online)</div>
     <div class="row">
+      <label>human seats <input id="maxseats" type="number" min="1" max="80" step="1" value="50" style="width:58px"></label>
+    </div>
+    <div class="help">seats — the live human cap; lowering it never kicks anyone until their next layoff</div>
+    <div class="row">
       <label><input id="iso" type="checkbox"> isometric camera</label>
     </div>
     <div class="help">isometric — flat angled city view</div>
@@ -353,7 +357,7 @@ if (new URLSearchParams(location.search).has('catalog'))
       <label>fog <input id="fogcol" type="color" value="#5a1410"></label>
       <label><input id="fogauto" type="checkbox"> auto</label>
     </div>
-    <div class="help">fog — tint the haze; auto follows the sky (your view only)</div>
+    <div class="help">fog — tint the haze; the corpo's tint syncs to the whole room</div>
     <div class="row">
       <label><input id="qrshow" type="checkbox"> join QR</label>
     </div>
@@ -8016,7 +8020,7 @@ function buildLA() {
       V(rx + 6, fy + 2, 13, 0xb8bcc2, { j: 0.03 });
       fillB(rx + 5, fy + 3, 13, rx + 8, fy + 4, 13, 0xbcd8e0, { j: 0.02 });
       V(rx + 3, fy, 13, 0xf2efe6, { j: 0.02 }); fillB(rx + 3, fy + 1, 13, rx + 3, fy + 2, 13, 0xe8e8e2, { j: 0.02 });
-      fillB(rx + 2, fy, 14, rx + 2, fy + 4, 16, L.glass, { t: 1, j: 0.02 });
+      fillB(rx + 2, fy, 14, rx + 2, fy + 4, 15, L.glass, { t: 1, j: 0.02 });   // screen stops short of the door lane
       V(rx, fy + 4, 15, 0x8a8e94, { j: 0.03 });
       fillB(rx + 4, fy + 3, 16, rx + 5, fy + 3, 16, [0xd85a7a, 0x49d8ff][(rx + fy) % 2], { j: 0.05 });
       V(rx + 5, fy + 6, 15, L.lampWhite, { t: 3, j: 0 }); V(rx + 5, fy + 7, 15, P.iron, { j: 0 });
@@ -13103,6 +13107,20 @@ const HOME = () => sceneId === 'boston' ? [10.5, 2, 17.5]
 // and when looking down; its own head is backface-culled from inside)
 const playerGroup = new THREE.Group();
 const figDetail = { on: localStorage.getItem('vb-pmodel') === '1' };
+// shared figure resources: one geometry per size, one material per color —
+// 50 figures reuse a handful of GPU objects instead of creating ~900
+const figGeos = new Map(), figMats = new Map();
+function figGeo(w, h, d) {
+  const k = w + '|' + h + '|' + d;
+  let g = figGeos.get(k);
+  if (!g) { g = new THREE.BoxGeometry(w, h, d); figGeos.set(k, g); }
+  return g;
+}
+function figMat(hex) {
+  let m = figMats.get(hex);
+  if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); figMats.set(hex, m); }
+  return m;
+}
 let selfColor = 0xff2424;
 /* one builder, two silhouettes — children are always [legs, torso, arms, head]
    so the crouch/FPV visibility toggles keep working on both */
@@ -13111,7 +13129,7 @@ function buildFigureInto(group, color, pid, detailed = figDetail.on) {
   const mats = { shirt: new THREE.MeshLambertMaterial({ color }) };
   const tag = m => { if (pid != null) m.userData.pid = pid; m.castShadow = true; return m; };
   if (!detailed) {
-    const geo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+    const geo = figGeo(0.95, 0.95, 0.95);
     for (let i = 0; i < 4; i++) {
       const cube = tag(new THREE.Mesh(geo, mats.shirt));
       cube.position.y = i + 0.5;
@@ -13122,34 +13140,34 @@ function buildFigureInto(group, color, pid, detailed = figDetail.on) {
     return;
   }
   const dark = new THREE.Color(color).multiplyScalar(0.42).getHex();
-  const pants = new THREE.MeshLambertMaterial({ color: dark });
-  const skin = new THREE.MeshLambertMaterial({ color: 0xe8b088 });
-  const hairM = new THREE.MeshLambertMaterial({ color: 0x3a2a1c });
-  const eyeM = new THREE.MeshLambertMaterial({ color: 0x17171a });
+  const pants = figMat(dark);
+  const skin = figMat(0xe8b088);
+  const hairM = figMat(0x3a2a1c);
+  const eyeM = figMat(0x17171a);
   const legs = new THREE.Group();
   for (const sx of [-0.26, 0.26]) {
-    const leg = tag(new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.9, 0.5), pants));
+    const leg = tag(new THREE.Mesh(figGeo(0.42, 1.9, 0.5), pants));
     leg.position.set(sx, 0.95, 0);
     legs.add(leg);
   }
-  const torso = tag(new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.5, 0.62), mats.shirt));
+  const torso = tag(new THREE.Mesh(figGeo(1.1, 1.5, 0.62), mats.shirt));
   torso.position.y = 2.65;
   const arms = new THREE.Group();
   for (const sx of [-0.72, 0.72]) {
-    const arm = tag(new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.4, 0.45), mats.shirt));
+    const arm = tag(new THREE.Mesh(figGeo(0.32, 1.4, 0.45), mats.shirt));
     arm.position.set(sx, 2.6, 0);
     arms.add(arm);
-    const hand = tag(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.4), skin));
+    const hand = tag(new THREE.Mesh(figGeo(0.3, 0.3, 0.4), skin));
     hand.position.set(sx, 1.78, 0);
     arms.add(hand);
   }
   const head = new THREE.Group();
-  const skull = tag(new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.82, 0.82), skin));
-  const hair = tag(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.9), hairM));
+  const skull = tag(new THREE.Mesh(figGeo(0.82, 0.82, 0.82), skin));
+  const hair = tag(new THREE.Mesh(figGeo(0.9, 0.28, 0.9), hairM));
   hair.position.y = 0.42;
   head.add(skull, hair);
   for (const sx of [-0.2, 0.2]) {
-    const eye = tag(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.06), eyeM));
+    const eye = tag(new THREE.Mesh(figGeo(0.12, 0.14, 0.06), eyeM));
     eye.position.set(sx, 0.06, -0.43);
     head.add(eye);
   }
@@ -13161,6 +13179,12 @@ function buildFigureInto(group, color, pid, detailed = figDetail.on) {
 buildFigureInto(playerGroup, selfColor, null, false);   // own body stays slim — never clips the FPV lens
 playerGroup.visible = false;
 scene.add(playerGroup);
+const maxSeatsEl = document.getElementById('maxseats');
+maxSeatsEl.addEventListener('change', () => {
+  const n = Math.max(1, Math.min(80, Math.round(+maxSeatsEl.value || 0) || maxHumans));
+  maxSeatsEl.value = n;
+  if (net.online && net.role === 'corpo') nsend({ t: 'maxh', n });
+});
 const pmodelBox = document.getElementById('pmodel');
 pmodelBox.checked = figDetail.on;
 pmodelBox.addEventListener('change', () => {
@@ -13609,6 +13633,22 @@ mpNameEl.value = localStorage.getItem('vb-name') || '';
 
 function nsend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
 
+// compact movement frames: 0xB1, then per player id u16 | x,y,z i16 (x10) | yaw i16 (x1000)
+function decodePoss(buf) {
+  const dv = new DataView(buf);
+  if (dv.byteLength < 11 || dv.getUint8(0) !== 0xb1) return;
+  for (let o = 1; o + 10 <= dv.byteLength; o += 10) {
+    const id = dv.getUint16(o);
+    if (id === net.id) continue;
+    const r = remotes.get(id);
+    if (!r) continue;
+    r.tx = dv.getInt16(o + 2) / 10;
+    r.ty = dv.getInt16(o + 4) / 10;
+    r.tz = dv.getInt16(o + 6) / 10;
+    r.tyaw = dv.getInt16(o + 8) / 1000;
+  }
+}
+
 function wsConnect() {
   if (CATALOG) { sandbox = true; return; }   // the catalogue never takes a seat
   if (!location.host) { sandbox = true; mpStatus.textContent = 'offline sandbox (open via the server for multiplayer)'; return; }
@@ -13661,7 +13701,9 @@ function wsConnect() {
     mpTitleEl.textContent = 'players';
     if (retry) setTimeout(wsConnect, 3000);
   };
+  ws.binaryType = 'arraybuffer';
   ws.onmessage = ev => {
+    if (ev.data instanceof ArrayBuffer) { decodePoss(ev.data); return; }
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     handleNet(m);
   };
@@ -13693,7 +13735,8 @@ function handleNet(m) {
       setWatch(m.w);
       if (m.time) handleNet({ t: 'time', ...m.time });
       if (m.marquee !== undefined) marqueeEl.value = m.marquee;
-      if (m.maxh) maxHumans = m.maxh;
+      if (m.maxh) { maxHumans = m.maxh; maxSeatsEl.value = m.maxh; }
+      if (m.sky) handleNet({ t: 'sky', ...m.sky });
       if (m.pk) handleNet({ t: 'pickupstate', ...m.pk });
       // the host link claims (or reclaims) the corpo seat automatically
       if (HOST_KEY && !AUDIENCE && !net.role && !hostStandDown) doJoin('corpo');
@@ -13704,6 +13747,18 @@ function handleNet(m) {
         playChk.checked = !!m.play;
         updateSun(+m.m);
       }
+      break;
+    case 'sky': // the corpo's fog/sky tint, applied to every follower
+      if (net.role !== 'corpo') {
+        if (m.c) fogPick.value = m.c;
+        fogAuto.checked = !!m.auto;
+        if (fogAuto.checked) updateSun(+timeSlider.value); else applyFogPick();
+      }
+      break;
+    case 'maxh':
+      maxHumans = m.n || maxHumans;
+      maxSeatsEl.value = maxHumans;
+      updateRoster(lastRoster);
       break;
     case 'scene':
       setSceneLocal(m.scene);
@@ -13849,13 +13904,26 @@ function makeRemote(p) {
 function updateRoster(list) {
   lastRoster = list;
   applyTimeLock();
-  // sync remote figures (every human that isn't us)
+  // sync remote figures (every human that isn't us). In a crowd, detail
+  // and shadows back off so the corpo view stays fluid at 50 seats.
+  const crowd = list.filter(p => p.role === 'human').length;
+  const wantDetail = figDetail.on && crowd <= 24;
+  const wantShadow = crowd <= 16;
   const seen = new Set();
   for (const p of list) {
     if (p.role !== 'human' || p.id === net.id) continue;
     seen.add(p.id);
     let r = remotes.get(p.id);
     if (!r) { r = makeRemote(p); remotes.set(p.id, r); }
+    if (r.fDetail !== wantDetail) {
+      r.fDetail = wantDetail;
+      buildFigureInto(r.group, p.color, p.id, wantDetail);
+      r.fShadow = undefined;
+    }
+    if (r.fShadow !== wantShadow) {
+      r.fShadow = wantShadow;
+      r.group.traverse(o => { if (o.isMesh) o.castShadow = wantShadow; });
+    }
     r.alive = p.alive;
     r.group.visible = p.alive;
   }
@@ -13944,6 +14012,9 @@ function applyTimeLock() {
   const follower = net.online && net.role !== 'corpo' && lastRoster.some(p => p.role === 'corpo');
   timeSlider.disabled = follower;
   playChk.disabled = follower;
+  fogPick.disabled = follower;
+  fogAuto.disabled = follower;
+  maxSeatsEl.disabled = follower;
 }
 
 /* ---- the Sonic Runway: 8 near-circle rings built from unit voxel
@@ -14194,7 +14265,7 @@ function stepElev(dt) {
   elev.group.position.y = elev.y;
 }
 
-window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick,
+window.__vb = { player, keys, camera, controls, enterFPV, exitFPV, setCam3, net, touchStick, renderer, remotes,
   voxelRayHit,
   tick: dt => { stepPlayer(dt); stepElev(dt); }, boxFree, voxAt: (x, y, z) => vox.get(x + '|' + y + '|' + z),
   render: () => renderer.render(scene, activeCam), debrisCount: () => debris.length,
@@ -14983,9 +15054,13 @@ function applyFogPick() {
   scene.fog.color.set(fogPick.value);
   scene.background = scene.fog.color;
 }
-fogPick.addEventListener('input', () => { fogAuto.checked = false; applyFogPick(); });
+function sendSky() {
+  if (net.online && net.role === 'corpo') nsend({ t: 'sky', c: fogPick.value, auto: fogAuto.checked });
+}
+fogPick.addEventListener('input', () => { fogAuto.checked = false; applyFogPick(); sendSky(); });
 fogAuto.addEventListener('change', () => {
   if (fogAuto.checked) updateSun(+slider.value); else applyFogPick();
+  sendSky();
 });
 if (!fogAuto.checked) applyFogPick();   // manual tint from the first frame
 

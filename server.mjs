@@ -129,7 +129,7 @@ server.on('upgrade', (req, socket) => {
   socket.on('close', () => dropConn(conn));
   socket.on('error', () => dropConn(conn));
 
-  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined, pk: pkState(), maxh: MAX_HUMANS });
+  conn.send({ t: 'hello', scene, booms, players: roster(), w: sockets.size, time: timeState || undefined, marquee: marqueeText || undefined, pk: pkState(), maxh: maxHumans, sky: skyState || undefined });
 });
 
 /* ============================================================
@@ -137,6 +137,7 @@ server.on('upgrade', (req, socket) => {
    Humans: +1 point per second alive. Corpo: +50 per layoff.
    ============================================================ */
 const MAX_HUMANS = +(process.env.MAX_HUMANS || 50);
+let maxHumans = MAX_HUMANS;   // live cap — the corpo can change it mid-show
 const COLORS = [0xff2424, 0x2486ff, 0xffd724, 0xb35cff, 0x2ad4a8, 0xff7a24,
                 0x24c8ff, 0xff4fa3, 0x8fd820, 0xd0d0d8, 0xa86a32, 0x7a8cff];
 const SPAWNS = {
@@ -165,6 +166,7 @@ const booms = [];          // [x,y,z] history, replayed to new connections
 let nextId = 1;
 let scene = 'default';     // 'default' | 'tech' | 'techlong' — all clients build the same scene
 let timeState = null;      // { m, play } — the corpo's time of day, followed by everyone
+let skyState = null;       // { c, auto } — the corpo's sky/fog tint, followed by everyone
 let marqueeText = '';      // the corpo's line to the room, shown top-center everywhere
 let pickups = [];          // merch drops: [{id, kind, x, y, z, code, foundBy}]
 let pickupsOn = false;
@@ -175,7 +177,7 @@ const PICKUP_SPOTS = {
     { kind: 'tshirt', name: 'pyramid sky deck', x: 61.5, y: 45.5, z: 38.5 },
   ],
   la: [
-    { kind: 'tshirt', name: 'tower floor 3', x: 80.5, y: 30.5, z: 12.5 },
+    { kind: 'tshirt', name: 'tower floor 3', x: 81.5, y: 30.5, z: 24.5 },
     { kind: 'sticker', name: 'the O overhang', x: 73.5, y: 38.5, z: -52.5 },
     { kind: 'sticker', name: 'capri roof', x: 50.5, y: 28.5, z: 24.5 },
     { kind: 'sticker', name: 'motel bath, room 1', x: 21.5, y: 4.5, z: 15.5 },
@@ -254,7 +256,7 @@ function dropConn(conn) {
 const bots = [];
 function spawnBot(i) {
   const humans = [...players.values()].filter(q => q.role === 'human').length;
-  if (humans >= MAX_HUMANS) return false;
+  if (humans >= maxHumans) return false;
   const id = nextId++;
   const spawn = randomSpawn();
   const stub = { send: () => {}, socket: {} };
@@ -329,7 +331,7 @@ function onMessage(conn, m) {
         }
         role = 'corpo';
       } else {
-        if (humans >= MAX_HUMANS) { conn.send({ t: 'denied', reason: 'all human seats are full' }); return; }
+        if (humans >= maxHumans) { conn.send({ t: 'denied', reason: 'all human seats are full' }); return; }
         role = 'human';
       }
       const id = nextId++;
@@ -359,6 +361,23 @@ function onMessage(conn, m) {
       if (p && p.role === 'corpo') {
         timeState = { m: Math.max(0, Math.min(1439, +m.m || 0)), play: !!m.play };
         broadcast({ t: 'time', ...timeState }, conn);
+      }
+      break;
+    case 'sky': // the corpo's fog/sky tint is authoritative for the whole lobby
+      if (p && p.role === 'corpo') {
+        const c = /^#[0-9a-fA-F]{6}$/.test(String(m.c || '')) ? m.c : '#5a1410';
+        skyState = { c, auto: !!m.auto };
+        broadcast({ t: 'sky', ...skyState }, conn);
+      }
+      break;
+    case 'maxh': // corpo resizes the human headcount live; never kicks the seated
+      if (p && p.role === 'corpo') {
+        const n = Math.round(+m.n || 0);
+        if (n >= 1 && n <= 80) {
+          maxHumans = n;
+          console.log(`human seats set to ${n} by ${p.name}`);
+          broadcast({ t: 'maxh', n: maxHumans });
+        }
       }
       break;
     case 'spot': // corpo's night searchlight aim + beam origin, relayed to everyone else
@@ -435,6 +454,15 @@ function onMessage(conn, m) {
           console.log(`layoff: ${tgt.name} by ${p.name}`);
           broadcast({ t: 'layoff', id: tgt.id, by: p.id, x: tgt.x, y: tgt.y, z: tgt.z });
           pushPlayers();
+          // seats were cut below the current headcount: a layoff is final
+          const humansNow = [...players.values()].filter(q => q.role === 'human').length;
+          if (humansNow > maxHumans) {
+            console.log(`over cap (${humansNow}/${maxHumans}) — ${tgt.name}'s layoff is final`);
+            tgt.conn.send({ t: 'msg', text: 'seats were cut mid-show — that layoff was final' });
+            tgt.conn.send({ t: 'evicted' });
+            dropConn(tgt.conn);
+            tgt.conn.socket.end();
+          }
         }
       }
       break;
@@ -495,22 +523,36 @@ function onMessage(conn, m) {
   }
 }
 
-// movement tick: every moved human's position goes out in ONE frame
+// movement tick: every moved human's position goes out in ONE compact
+// binary frame (10 bytes/player vs ~50 of JSON) — with 50 movers that is
+// the difference between ~0.4 and ~2 MB/s of relay traffic at the venue
+const clamp16 = v => Math.max(-32768, Math.min(32767, Math.round(v)));
 setInterval(() => {
-  const l = [];
+  const moved = [];
   for (const q of players.values())
-    if (q.role === 'human' && q.alive && q.moved) {
-      q.moved = false;
-      l.push({ id: q.id, x: q.x, y: q.y, z: q.z, yaw: q.yaw });
-    }
-  if (l.length && sockets.size) broadcast({ t: 'poss', l });
+    if (q.role === 'human' && q.alive && q.moved) { q.moved = false; moved.push(q); }
+  if (!moved.length || !sockets.size) return;
+  const buf = Buffer.allocUnsafe(1 + moved.length * 10);
+  buf[0] = 0xb1;
+  let o = 1;
+  for (const q of moved) {
+    buf.writeUInt16BE(q.id & 0xffff, o);
+    buf.writeInt16BE(clamp16(q.x * 10), o + 2);
+    buf.writeInt16BE(clamp16(q.y * 10), o + 4);
+    buf.writeInt16BE(clamp16(q.z * 10), o + 6);
+    buf.writeInt16BE(clamp16((((q.yaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI) * 1000), o + 8);
+    o += 10;
+  }
+  const s = frame(buf, 2);
+  for (const c of sockets) if (!c.socket.destroyed) c.socket.write(s);
 }, 66);
 
-// survival pay: +1/sec to every living human; the once-a-second push also
-// keeps every client's scoreboard and connected head-count fresh
+// survival pay: +1/sec to every living human. The full-roster push (the
+// heavy packet) now goes out every 5s; joins/layoffs still push instantly.
+let scoreTicks = 0;
 setInterval(() => {
   for (const p of players.values()) if (p.role === 'human' && p.alive) p.score++;
-  if (sockets.size) pushPlayers();
+  if (sockets.size && ++scoreTicks % 5 === 0) pushPlayers();
 }, 1000);
 
 // protocol-level keepalive so idle proxies don't drop us
